@@ -5,7 +5,7 @@ toc: false
 hero:
   title: 原生速度。
   accent: 熟悉的规则。
-  description: 用 Zig 原生引擎检查 JavaScript 和 TypeScript。沿用熟悉的规则名称，使用 TypeScript 编写配置，从本地终端到 CI，高效发现并修复代码问题。
+  description: 用 Zig 加速 JavaScript 与 TypeScript 代码检查。
 ---
 
 <ProductHome />

@@ -321,16 +321,14 @@ function verifyHomepageActions(html, quickStartText, quickStartHref) {
     }
 
     quickStartFound ||= text === quickStartText && href === quickStartHref;
-    githubFound ||=
-      text.startsWith('GitHub') &&
-      href === 'https://github.com/utooland/utoo-lint';
+    githubFound ||= href === 'https://github.com/utooland/utoo-lint';
   }
 
   if (!quickStartFound) {
     throw new Error('docs index is missing the localized Quick Start hero CTA');
   }
   if (!githubFound) {
-    throw new Error('docs index is missing the GitHub hero CTA');
+    throw new Error('docs index is missing its GitHub repository link');
   }
   if (linkCount < 1) {
     throw new Error('docs index is missing its native Playground link');

@@ -2,6 +2,7 @@ import { Link, useLocale } from 'dumi';
 import React from 'react';
 import SourceCode from '../SourceCode';
 import BenchmarkChart from '../../components/BenchmarkChart';
+import AutofixExample from '../../components/AutofixExample';
 import NativeLink from '../../components/NativeLink';
 import benchmark from '../../../../public/benchmarks/2026-08-30.json';
 
@@ -207,15 +208,18 @@ export default function ProductHome() {
         className="product-container product-features"
         aria-label={chinese ? '核心能力' : 'Core capabilities'}
       >
-        {t.features.map(([title, description], index) => (
-          <article key={title}>
-            <span className="product-feature-icon" aria-hidden="true">
-              {['↯', '{ }', '>_'][index]}
-            </span>
-            <h2>{title}</h2>
-            <p>{description}</p>
-          </article>
-        ))}
+        <div className="product-feature-list">
+          {t.features.map(([title, description], index) => (
+            <article key={title}>
+              <span className="product-feature-icon" aria-hidden="true">
+                {['↯', '{ }', '>_'][index]}
+              </span>
+              <h2>{title}</h2>
+              <p>{description}</p>
+            </article>
+          ))}
+        </div>
+        <AutofixExample />
       </section>
       <section
         id="performance"
