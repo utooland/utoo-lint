@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import { resolveBinary } from "./lib/binary.js";
 import { createLegacyConfigResolver } from "./lib/legacy-config.cjs";
+import { formatESLintResults } from "./lib/stylish-formatter.cjs";
 import {
   findConfigPath as findConfigPathFromDirectory,
   readConfig
@@ -629,7 +630,7 @@ export class UtooLint {
       format(results) {
         return formatResultsByName(results, name, {
           rulesMeta: (results) => eslint.getRulesMetaForResults(results)
-        });
+        }, eslint.options);
       }
     };
   }
@@ -2603,7 +2604,7 @@ export class CLIEngine {
 
   getFormatter(name = "stylish") {
     return (results) => {
-      return formatResultsByName(results, name);
+      return formatResultsByName(results, name, {}, this.options);
     };
   }
 
@@ -5007,31 +5008,7 @@ function maybeFilterQuietResults(results, options = {}) {
   return results;
 }
 
-function formatESLintResults(results) {
-  const lines = [];
-  let errorCount = 0;
-  let warningCount = 0;
-
-  for (const result of results) {
-    if (result.messages.length === 0) continue;
-    lines.push(result.filePath);
-    for (const message of result.messages) {
-      const severity = message.severity === 2 ? "error" : "warning";
-      lines.push(`  ${message.line}:${message.column}  ${severity}  ${message.message}  ${message.ruleId}`);
-    }
-    errorCount += result.errorCount;
-    warningCount += result.warningCount;
-  }
-
-  if (errorCount || warningCount) {
-    lines.push("");
-    lines.push(`x ${errorCount + warningCount} problem${errorCount + warningCount === 1 ? "" : "s"} (${errorCount} error${errorCount === 1 ? "" : "s"}, ${warningCount} warning${warningCount === 1 ? "" : "s"})`);
-  }
-
-  return lines.join("\n");
-}
-
-function formatResultsByName(input, name = "stylish", metadata = {}) {
+function formatResultsByName(input, name = "stylish", metadata = {}, options = {}) {
   const results = formatterResults(input);
   if (name === "json") {
     return JSON.stringify(input);
@@ -5050,7 +5027,7 @@ function formatResultsByName(input, name = "stylish", metadata = {}) {
   if (name === "unix") {
     return formatUnixResults(results);
   }
-  return formatESLintResults(results);
+  return formatESLintResults(results, options);
 }
 
 function formatterResults(input) {
