@@ -244,6 +244,20 @@ const results = await eslint.lintFiles(["src"]);
 await ESLint.outputFixes(results);
 ```
 
+`await eslint.loadFormatter()` and `cliEngine.getFormatter()` default to an
+ESLint-style `stylish` report: aligned columns, blank lines between files,
+diagnostics sorted by line and column, and a summary of fixable errors and
+warnings. Rule messages (including punctuation), result arrays, and exit codes
+are unchanged. Only actual autofixes count toward the `--fix` hint, not editor
+suggestions; missing JSX keys still need a manually chosen stable, unique key.
+
+The stylish formatter detects color support on stdout. Pass `color: true` or
+`color: false` to the `ESLint` or `CLIEngine` constructor to override detection.
+Otherwise, `NO_COLOR` or `NODE_DISABLE_COLORS` disables color; `FORCE_COLOR`
+forces it (`0` disables), followed by `CLICOLOR_FORCE` and stdout TTY detection
+(`TERM=dumb` disables automatic color). Constructor `env` overrides also apply.
+JSON, JSON-with-metadata, compact, unix, and native CLI text formats are unchanged.
+
 Raw reports include active diagnostics, suppressed diagnostics, fixed outputs,
 and an exit code. The compatibility layer also exports `Linter`, `CLIEngine`,
 `RuleTester`, and `SourceCode` APIs.
