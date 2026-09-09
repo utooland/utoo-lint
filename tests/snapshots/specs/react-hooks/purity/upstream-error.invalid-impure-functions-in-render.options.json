@@ -1,0 +1,5 @@
+{
+  "expect": "diagnostics",
+  "diagnostic_count": 3,
+  "fixes": "forbidden"
+}

@@ -1,0 +1,35 @@
+---
+fixture: "tests/snapshots/specs/react-hooks/purity/indirect.js"
+rule: "react-hooks/purity"
+---
+
+# Input
+
+```js
+const {useMemo: memo} = require('react');
+const random = Math.random;
+const calculate = () => random();
+function Component() {
+  return memo(calculate, []);
+}
+```
+
+# Diagnostics
+
+count: 1
+
+## Diagnostic 1
+
+- rule: "react-hooks/purity"
+- severity: "error"
+- message: "Cannot call an impure function during render; move it to an event handler, effect, or lazy state initializer."
+- byte span: 94..102
+- start: 3:25
+- end: 3:33
+- source: "random()"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

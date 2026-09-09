@@ -1,0 +1,59 @@
+---
+fixture: "tests/snapshots/specs/react-hooks/purity/upstream-error.invalid-impure-functions-in-render.js"
+rule: "react-hooks/purity"
+---
+
+# Input
+
+```js
+// @validateNoImpureFunctionsInRender
+
+function Component() {
+  const date = Date.now();
+  const now = performance.now();
+  const rand = Math.random();
+  return <Foo date={date} now={now} rand={rand} />;
+}
+```
+
+# Diagnostics
+
+count: 3
+
+## Diagnostic 1
+
+- rule: "react-hooks/purity"
+- severity: "error"
+- message: "Cannot call an impure function during render; move it to an event handler, effect, or lazy state initializer."
+- byte span: 77..87
+- start: 4:16
+- end: 4:26
+- source: "Date.now()"
+- fixes: 0
+
+## Diagnostic 2
+
+- rule: "react-hooks/purity"
+- severity: "error"
+- message: "Cannot call an impure function during render; move it to an event handler, effect, or lazy state initializer."
+- byte span: 103..120
+- start: 5:15
+- end: 5:32
+- source: "performance.now()"
+- fixes: 0
+
+## Diagnostic 3
+
+- rule: "react-hooks/purity"
+- severity: "error"
+- message: "Cannot call an impure function during render; move it to an event handler, effect, or lazy state initializer."
+- byte span: 137..150
+- start: 6:16
+- end: 6:29
+- source: "Math.random()"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0
