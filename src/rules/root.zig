@@ -342,6 +342,7 @@ pub const react_hooks_exhaustive_deps = @import("react_hooks_exhaustive_deps.zig
 pub const react_hooks_rules_of_hooks = @import("react_hooks_rules_of_hooks.zig");
 pub const react_hooks_use_memo = @import("react_hooks_use_memo.zig");
 pub const react_hooks_void_use_memo = @import("react_hooks_void_use_memo.zig");
+pub const react_hooks_purity = @import("react_hooks_purity.zig");
 pub const radix = @import("radix.zig");
 pub const require_await = @import("require_await.zig");
 pub const require_atomic_updates = @import("require_atomic_updates.zig");
@@ -894,6 +895,10 @@ fn runSemanticBeforeIo(
 
     if (options.react_hooks_void_use_memo) {
         try react_hooks_void_use_memo.run(allocator, diagnostics, tree, semantic_result.symbol_table);
+    }
+
+    if (options.react_hooks_purity) {
+        try react_hooks_purity.run(allocator, diagnostics, tree, semantic_result.symbol_table);
     }
 
     if (options.react_no_forward_ref) {

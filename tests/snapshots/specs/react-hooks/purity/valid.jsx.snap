@@ -1,0 +1,22 @@
+---
+fixture: "tests/snapshots/specs/react-hooks/purity/valid.jsx"
+rule: "react-hooks/purity"
+---
+
+# Input
+
+```jsx
+function Component() {
+  const [time] = useState(() => Date.now());
+  return <button onClick={() => console.log(Math.random())}>{time}</button>;
+}
+```
+
+# Diagnostics
+
+count: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

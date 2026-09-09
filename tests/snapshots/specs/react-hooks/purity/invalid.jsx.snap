@@ -1,0 +1,43 @@
+---
+fixture: "tests/snapshots/specs/react-hooks/purity/invalid.jsx"
+rule: "react-hooks/purity"
+---
+
+# Input
+
+```jsx
+function Component() {
+  return <div>{Math.random() + Date.now()}</div>;
+}
+```
+
+# Diagnostics
+
+count: 2
+
+## Diagnostic 1
+
+- rule: "react-hooks/purity"
+- severity: "error"
+- message: "Cannot call an impure function during render; move it to an event handler, effect, or lazy state initializer."
+- byte span: 38..51
+- start: 2:16
+- end: 2:29
+- source: "Math.random()"
+- fixes: 0
+
+## Diagnostic 2
+
+- rule: "react-hooks/purity"
+- severity: "error"
+- message: "Cannot call an impure function during render; move it to an event handler, effect, or lazy state initializer."
+- byte span: 54..64
+- start: 2:32
+- end: 2:42
+- source: "Date.now()"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0
