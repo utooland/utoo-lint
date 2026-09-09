@@ -215,7 +215,8 @@ npx utoo-lint --rules=no-debugger,react/jsx-no-target-blank src
 ```json
 {
   "rules": {
-    "react-hooks/use-memo": "error"
+    "react-hooks/use-memo": "error",
+    "react-hooks/void-use-memo": "error"
   }
 }
 ```

@@ -1,0 +1,34 @@
+---
+fixture: "tests/snapshots/specs/react-hooks/void-use-memo/indirect.js"
+rule: "react-hooks/void-use-memo"
+---
+
+# Input
+
+```js
+const {useMemo: memo} = require('react');
+function Component() {
+  const calculate = () => {};
+  return memo(calculate, []);
+}
+```
+
+# Diagnostics
+
+count: 1
+
+## Diagnostic 1
+
+- rule: "react-hooks/void-use-memo"
+- severity: "error"
+- message: "useMemo callbacks must return a value; use an effect or event handler for side effects."
+- byte span: 85..93
+- start: 3:21
+- end: 3:29
+- source: "() => {}"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

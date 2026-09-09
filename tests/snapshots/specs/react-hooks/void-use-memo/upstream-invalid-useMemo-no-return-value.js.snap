@@ -1,0 +1,55 @@
+---
+fixture: "tests/snapshots/specs/react-hooks/void-use-memo/upstream-invalid-useMemo-no-return-value.js"
+rule: "react-hooks/void-use-memo"
+---
+
+# Input
+
+```js
+// @validateNoVoidUseMemo @loggerTestOnly
+function Component() {
+  const value = useMemo(() => {
+    console.log('computing');
+  }, []);
+  const value2 = React.useMemo(() => {
+    console.log('computing');
+  }, []);
+  return (
+    <div>
+      {value}
+      {value2}
+    </div>
+  );
+}
+```
+
+# Diagnostics
+
+count: 2
+
+## Diagnostic 1
+
+- rule: "react-hooks/void-use-memo"
+- severity: "error"
+- message: "useMemo callbacks must return a value; use an effect or event handler for side effects."
+- byte span: 89..130
+- start: 3:25
+- end: 5:4
+- source: "() => {\n    console.log('computing');\n  }"
+- fixes: 0
+
+## Diagnostic 2
+
+- rule: "react-hooks/void-use-memo"
+- severity: "error"
+- message: "useMemo callbacks must return a value; use an effect or event handler for side effects."
+- byte span: 168..209
+- start: 6:32
+- end: 8:4
+- source: "() => {\n    console.log('computing');\n  }"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

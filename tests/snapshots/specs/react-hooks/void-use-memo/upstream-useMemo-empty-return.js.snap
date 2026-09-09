@@ -1,0 +1,25 @@
+---
+fixture: "tests/snapshots/specs/react-hooks/void-use-memo/upstream-useMemo-empty-return.js"
+rule: "react-hooks/void-use-memo"
+---
+
+# Input
+
+```js
+// @validateNoVoidUseMemo
+function Component() {
+  const value = useMemo(() => {
+    return;
+  }, []);
+  return <div>{value}</div>;
+}
+```
+
+# Diagnostics
+
+count: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0
