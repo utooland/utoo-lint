@@ -1,0 +1,37 @@
+---
+fixture: "tests/snapshots/specs/react-hooks/set-state-in-render/indirect.js"
+rule: "react-hooks/set-state-in-render"
+---
+
+# Input
+
+```js
+const {useState: state} = require('react');
+function Component() {
+  const [, setter] = state(0);
+  const update = setter;
+  for (let i = 0; i < 3; i++) {}
+  update(1);
+  return null;
+}
+```
+
+# Diagnostics
+
+count: 1
+
+## Diagnostic 1
+
+- rule: "react-hooks/set-state-in-render"
+- severity: "error"
+- message: "Calling a state setter unconditionally during render can cause an infinite render loop."
+- byte span: 158..167
+- start: 6:3
+- end: 6:12
+- source: "update(1)"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

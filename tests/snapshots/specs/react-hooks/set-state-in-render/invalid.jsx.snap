@@ -1,0 +1,34 @@
+---
+fixture: "tests/snapshots/specs/react-hooks/set-state-in-render/invalid.jsx"
+rule: "react-hooks/set-state-in-render"
+---
+
+# Input
+
+```jsx
+function Component() {
+  const [count, setCount] = useState(0);
+  setCount(1);
+  return <div>{count}</div>;
+}
+```
+
+# Diagnostics
+
+count: 1
+
+## Diagnostic 1
+
+- rule: "react-hooks/set-state-in-render"
+- severity: "error"
+- message: "Calling a state setter unconditionally during render can cause an infinite render loop."
+- byte span: 66..77
+- start: 3:3
+- end: 3:14
+- source: "setCount(1)"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

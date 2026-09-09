@@ -402,6 +402,7 @@ const BUILTIN_RULE_IDS = [
   "react-hooks/rules-of-hooks",
   "react-hooks/use-memo",
   "react-hooks/void-use-memo",
+  "react-hooks/set-state-in-render",
   "react-hooks/purity",
   "unused-imports/no-unused-imports",
   "@typescript-eslint/adjacent-overload-signatures",

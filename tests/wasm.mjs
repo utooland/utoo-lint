@@ -487,6 +487,16 @@ test("React Compiler purity works in WebAssembly", () => {
   assert.ok(!disabled.diagnostics.some((item) => item.ruleId === ruleId));
 });
 
+test("React Compiler set-state-in-render works in WebAssembly", () => {
+  const ruleId = "react-hooks/set-state-in-render";
+  const source = "import {useState as state} from 'react'; function Component() { const [,update] = state(0); update(1); return null; }";
+  const result = linter.lint(source, { filePath: "component.tsx", rules: { [ruleId]: "warn" } });
+  assert.equal(result.diagnostics.length, 1);
+  assert.ok(result.diagnostics.every((item) => item.ruleId === ruleId && item.severity === "warning" && item.fixes.length === 0));
+  const disabled = linter.lint(source, { filePath: "component.tsx" });
+  assert.ok(!disabled.diagnostics.some((item) => item.ruleId === ruleId));
+});
+
 test("React Compiler use-memo resolves CommonJS and indirect values in WebAssembly", () => {
   const ruleId = "react-hooks/use-memo";
   const result = linter.lint("const {useMemo: memo} = require('react'); const calc = async value => value; function Component() { return memo(calc, []); }", { filePath: "component.tsx", rules: { [ruleId]: "error" } });
@@ -504,6 +514,13 @@ test("React Compiler void-use-memo resolves CommonJS and indirect values in WebA
 test("React Compiler purity resolves CommonJS and indirect values in WebAssembly", () => {
   const ruleId = "react-hooks/purity";
   const result = linter.lint("const {useMemo: memo} = require('react'); const random = Math.random; const calc = () => random(); function Component() { return memo(calc, []); }", { filePath: "component.tsx", rules: { [ruleId]: "error" } });
+  assert.equal(result.diagnostics.length, 1);
+  assert.ok(result.diagnostics.every((item) => item.ruleId === ruleId));
+});
+
+test("React Compiler set-state-in-render resolves CommonJS and indirect values in WebAssembly", () => {
+  const ruleId = "react-hooks/set-state-in-render";
+  const result = linter.lint("const {useState: state} = require('react'); function Component() { const [,setter] = state(0); const update = setter; for (let i=0; i<3; i++) {} update(1); return null; }", { filePath: "component.tsx", rules: { [ruleId]: "error" } });
   assert.equal(result.diagnostics.length, 1);
   assert.ok(result.diagnostics.every((item) => item.ruleId === ruleId));
 });
