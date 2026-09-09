@@ -1,0 +1,50 @@
+---
+fixture: "tests/snapshots/specs/react-hooks/set-state-in-render/upstream-error.invalid-unconditional-set-state-in-render.js"
+rule: "react-hooks/set-state-in-render"
+---
+
+# Input
+
+```js
+// @validateNoSetStateInRender
+function Component(props) {
+  const [x, setX] = useState(0);
+  const aliased = setX;
+
+  setX(1);
+  aliased(2);
+
+  return x;
+}
+```
+
+# Diagnostics
+
+count: 2
+
+## Diagnostic 1
+
+- rule: "react-hooks/set-state-in-render"
+- severity: "error"
+- message: "Calling a state setter unconditionally during render can cause an infinite render loop."
+- byte span: 119..126
+- start: 6:3
+- end: 6:10
+- source: "setX(1)"
+- fixes: 0
+
+## Diagnostic 2
+
+- rule: "react-hooks/set-state-in-render"
+- severity: "error"
+- message: "Calling a state setter unconditionally during render can cause an infinite render loop."
+- byte span: 130..140
+- start: 7:3
+- end: 7:13
+- source: "aliased(2)"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

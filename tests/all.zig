@@ -1294,6 +1294,7 @@ comptime {
     _ = @import("rules/react_hooks_use_memo.zig");
     _ = @import("rules/react_hooks_void_use_memo.zig");
     _ = @import("rules/react_hooks_purity.zig");
+    _ = @import("rules/react_hooks_set_state_in_render.zig");
 }
 
 comptime {

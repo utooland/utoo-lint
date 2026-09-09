@@ -1,0 +1,51 @@
+---
+fixture: "tests/snapshots/specs/react-hooks/set-state-in-render/upstream-error.invalid-setState-in-useMemo.js"
+rule: "react-hooks/set-state-in-render"
+---
+
+# Input
+
+```js
+function useKeyedState({key, init}) {
+  const [prevKey, setPrevKey] = useState(key);
+  const [state, setState] = useState(init);
+
+  useMemo(() => {
+    setPrevKey(key);
+    setState(init);
+  }, [key, init]);
+
+  return state;
+}
+```
+
+# Diagnostics
+
+count: 2
+
+## Diagnostic 1
+
+- rule: "react-hooks/set-state-in-render"
+- severity: "error"
+- message: "Calling a state setter unconditionally during render can cause an infinite render loop."
+- byte span: 152..167
+- start: 6:5
+- end: 6:20
+- source: "setPrevKey(key)"
+- fixes: 0
+
+## Diagnostic 2
+
+- rule: "react-hooks/set-state-in-render"
+- severity: "error"
+- message: "Calling a state setter unconditionally during render can cause an infinite render loop."
+- byte span: 173..187
+- start: 7:5
+- end: 7:19
+- source: "setState(init)"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

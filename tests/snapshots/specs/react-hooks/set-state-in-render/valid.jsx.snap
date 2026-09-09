@@ -1,0 +1,23 @@
+---
+fixture: "tests/snapshots/specs/react-hooks/set-state-in-render/valid.jsx"
+rule: "react-hooks/set-state-in-render"
+---
+
+# Input
+
+```jsx
+function Component({items}) {
+  const [previous, setPrevious] = useState(items);
+  if (items !== previous) setPrevious(items);
+  return <button onClick={() => setPrevious([])} />;
+}
+```
+
+# Diagnostics
+
+count: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

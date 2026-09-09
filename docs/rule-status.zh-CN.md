@@ -369,6 +369,7 @@
 | [`react-hooks/use-memo`](https://react.dev/reference/eslint-plugin-react-hooks/lints/use-memo) | 按需开启；检查内联和可静态解析的具名 `useMemo` 回调的参数、async/generator 和对捕获变量的直接重赋值；允许回调内部局部变量重赋值，暂不分析嵌套闭包写入 |
 | [`react-hooks/void-use-memo`](https://github.com/facebook/react/blob/e92bda78750136493cb324e98df1726f62ba8e92/compiler/packages/babel-plugin-react-compiler/src/Validation/ValidateUseMemo.ts) | 按需开启；检查没有返回值的内联和可静态解析的具名回调，嵌套函数的 return 不计入；同时检查表达式语句中被丢弃的结果；接受显式 return（包括空 return）、表达式函数体和含 throw 的回调，暂不做全路径返回值或返回类型推断 |
 | [`react-hooks/purity`](https://react.dev/reference/eslint-plugin-react-hooks/lints/purity) | 按需开启；检查渲染、内联/具名 `useMemo` 和同步 IIFE 中调用全局 `Math.random`、`Date.now`、`Date()`、无参 `new Date`、`crypto.randomUUID`、`performance.now` 及其稳定别名；跳过延迟回调、惰性初始化函数和被局部变量遮蔽的全局对象 |
+| [`react-hooks/set-state-in-render`](https://react.dev/reference/eslint-plugin-react-hooks/lints/set-state-in-render) | 按需开启；检查 `useState` setter 及其稳定别名在渲染期间被无条件调用，覆盖内联/具名 `useMemo`、同步 IIFE，以及正常结束的循环和分支之后的调用；跳过条件更新、可能提前退出的前置语句、重新赋值的 setter 和延迟回调 |
 
 这些按需开启的规则是 React Compiler 相关检查的原生实现子集，并未运行 React Compiler 诊断引擎。
 支持 ES 模块及字面量 `require("react")` 导入、稳定局部别名和局部变量遮蔽，通过组件/Hook 命名以及 React `memo`/`forwardRef` 包装识别渲染函数。
