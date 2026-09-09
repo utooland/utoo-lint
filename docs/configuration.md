@@ -271,3 +271,27 @@ For one-off focused runs, `--rules` disables every rule first, then enables only
 ```bash
 npx utoo-lint --rules=no-debugger,react/jsx-no-target-blank src
 ```
+
+## React Compiler-related checks
+
+Enable the native React Compiler-related checks explicitly in `utlint.config.json`:
+
+```json
+{
+  "rules": {
+    "react-hooks/use-memo": "error"
+  }
+}
+```
+
+These rules are disabled by default and are not added to the `frontend` preset.
+They run in both native and WebAssembly builds without installing React Compiler.
+They cover a documented subset of the upstream rules; enabling them does not prove
+that a component can be compiled. See [rule status](rule-status.md#react-hooks-rules)
+for supported patterns and limitations.
+
+Rule names follow React main at `e92bda78750136493cb324e98df1726f62ba8e92`: `use-memo`
+checks callback signatures and captured assignments; `void-use-memo` checks missing
+returns and unused results and is in upstream `recommended-latest`. The selected
+upstream fixtures and their coverage boundaries are recorded in each rule’s
+`tests/snapshots/specs/react-hooks/<rule>/UPSTREAM.md`.

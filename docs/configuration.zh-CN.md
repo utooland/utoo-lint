@@ -207,3 +207,23 @@ npx utoo-lint --config=utlint.config.json --no-console=off src
 ```bash
 npx utoo-lint --rules=no-debugger,react/jsx-no-target-blank src
 ```
+
+## React Compiler 相关检查
+
+在 `utlint.config.json` 中显式开启原生 React Compiler 相关检查：
+
+```json
+{
+  "rules": {
+    "react-hooks/use-memo": "error"
+  }
+}
+```
+
+这些规则默认关闭，`frontend` 预设也不会自动开启；原生和 WebAssembly 构建均支持，
+无需安装 React Compiler。当前覆盖上游规则的部分场景，通过检查不代表组件一定能被 Compiler 编译。
+支持范围与限制见[规则状态](rule-status.zh-CN.md)。
+
+规则划分参照 React 主线 `e92bda78750136493cb324e98df1726f62ba8e92`：`use-memo` 检查回调签名和捕获变量赋值；
+`void-use-memo` 检查缺失返回值和未使用的结果，上游将其放在 `recommended-latest` 中。
+每条规则的 `tests/snapshots/specs/react-hooks/<rule>/UPSTREAM.md` 记录选取的上游测试与覆盖边界。

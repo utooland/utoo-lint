@@ -1,0 +1,21 @@
+---
+fixture: "tests/snapshots/specs/react-hooks/use-memo/valid.jsx"
+rule: "react-hooks/use-memo"
+---
+
+# Input
+
+```jsx
+function Component() {
+  return useMemo(() => 42, []);
+}
+```
+
+# Diagnostics
+
+count: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

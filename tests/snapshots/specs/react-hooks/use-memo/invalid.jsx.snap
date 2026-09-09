@@ -1,0 +1,43 @@
+---
+fixture: "tests/snapshots/specs/react-hooks/use-memo/invalid.jsx"
+rule: "react-hooks/use-memo"
+---
+
+# Input
+
+```jsx
+function Component() {
+  return useMemo(async (value) => value, []);
+}
+```
+
+# Diagnostics
+
+count: 2
+
+## Diagnostic 1
+
+- rule: "react-hooks/use-memo"
+- severity: "error"
+- message: "useMemo callbacks must not accept parameters; capture the values needed for the calculation instead."
+- byte span: 46..53
+- start: 2:24
+- end: 2:31
+- source: "(value)"
+- fixes: 0
+
+## Diagnostic 2
+
+- rule: "react-hooks/use-memo"
+- severity: "error"
+- message: "useMemo callbacks must be synchronous and must not be async or generator functions."
+- byte span: 40..62
+- start: 2:18
+- end: 2:40
+- source: "async (value) => value"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

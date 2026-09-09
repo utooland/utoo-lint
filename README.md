@@ -118,6 +118,10 @@ visible without blocking adoption:
 | `error` | `react-hooks/rules-of-hooks`, `react/jsx-key`, `react/no-children-prop`, `react/no-danger-with-children`, `react/void-dom-elements-no-children`, `no-script-url`, `promise/no-nesting` |
 | `warn` | `react-hooks/exhaustive-deps`, `react/no-array-index-key`, `react/no-unstable-nested-components`, `react/no-forward-ref`, `unused-imports/no-unused-imports`, `@typescript-eslint/no-unused-vars`, `@typescript-eslint/ban-types` |
 
+React Compiler-related `react-hooks/use-memo`
+checks are also available as opt-in rules. See
+[configuration and coverage](docs/configuration.md#react-compiler-related-checks).
+
 Override project-specific rules after spreading `frontend.rules`, and append
 framework-generated directories to `frontend.ignores`, as shown above.
 

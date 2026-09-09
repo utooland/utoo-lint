@@ -1,0 +1,45 @@
+---
+fixture: "tests/snapshots/specs/react-hooks/use-memo/indirect.js"
+rule: "react-hooks/use-memo"
+---
+
+# Input
+
+```js
+const {useMemo: memo} = require('react');
+const calculate = async value => value;
+function Component() {
+  return memo(calculate, []);
+}
+```
+
+# Diagnostics
+
+count: 2
+
+## Diagnostic 1
+
+- rule: "react-hooks/use-memo"
+- severity: "error"
+- message: "useMemo callbacks must not accept parameters; capture the values needed for the calculation instead."
+- byte span: 66..71
+- start: 2:25
+- end: 2:30
+- source: "value"
+- fixes: 0
+
+## Diagnostic 2
+
+- rule: "react-hooks/use-memo"
+- severity: "error"
+- message: "useMemo callbacks must be synchronous and must not be async or generator functions."
+- byte span: 60..80
+- start: 2:19
+- end: 2:39
+- source: "async value => value"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

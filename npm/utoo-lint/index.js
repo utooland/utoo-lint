@@ -400,6 +400,7 @@ const BUILTIN_RULE_IDS = [
   "react/void-dom-elements-no-children",
   "react-hooks/exhaustive-deps",
   "react-hooks/rules-of-hooks",
+  "react-hooks/use-memo",
   "unused-imports/no-unused-imports",
   "@typescript-eslint/adjacent-overload-signatures",
   "@typescript-eslint/array-type",

@@ -340,6 +340,7 @@ pub const react_self_closing_comp = @import("react_self_closing_comp.zig");
 pub const react_void_dom_elements_no_children = @import("react_void_dom_elements_no_children.zig");
 pub const react_hooks_exhaustive_deps = @import("react_hooks_exhaustive_deps.zig");
 pub const react_hooks_rules_of_hooks = @import("react_hooks_rules_of_hooks.zig");
+pub const react_hooks_use_memo = @import("react_hooks_use_memo.zig");
 pub const radix = @import("radix.zig");
 pub const require_await = @import("require_await.zig");
 pub const require_atomic_updates = @import("require_atomic_updates.zig");
@@ -884,6 +885,10 @@ fn runSemanticBeforeIo(
             semantic_result.symbol_table,
             options.react_hooks_exhaustive_deps_additional_hooks,
         );
+    }
+
+    if (options.react_hooks_use_memo) {
+        try react_hooks_use_memo.run(allocator, diagnostics, tree, semantic_result.symbol_table);
     }
 
     if (options.react_no_forward_ref) {

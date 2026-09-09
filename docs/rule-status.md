@@ -367,6 +367,16 @@ instead of being rewritten.
 | --- | --- |
 | [`react-hooks/exhaustive-deps`](https://react.dev/reference/eslint-plugin-react-hooks/lints/exhaustive-deps) | Implements dependency-array validation for built-in hooks and `additionalHooks` literal, alternation, anchor, and wildcard patterns; reports missing, duplicate, unnecessary, complex, and unstable dependencies without type information |
 | [`react-hooks/rules-of-hooks`](https://legacy.reactjs.org/docs/hooks-rules.html) | Implemented for top-level, ordinary function, class method, callback, conditional branch, and loop checks |
+| [`react-hooks/use-memo`](https://react.dev/reference/eslint-plugin-react-hooks/lints/use-memo) | Opt-in; rejects parameters, async/generator callbacks, and direct writes to captured bindings in inline and statically resolved named `useMemo` callbacks. Callback-local reassignment is allowed; nested closure writes are not analyzed |
+
+These opt-in checks are native approximations of React Compiler-related
+lints, not the React Compiler diagnostic engine. React imports (ES modules and literal `require("react")`), stable local aliases,
+and local shadowing are resolved. Component/hook names and React `memo`/`forwardRef`
+wrappers identify render functions. Named memo callbacks are connected to render
+invocations. Dynamic reassignment, arbitrary interprocedural analysis, and compiler
+data-flow/configuration analysis are not covered. Rules such as
+`refs`, `immutability`, `preserve-manual-memoization`, `config`, and `gating` remain
+unsupported. See [configuration](configuration.md#react-compiler-related-checks).
 
 ## Unused Imports rules
 

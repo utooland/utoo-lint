@@ -3872,3 +3872,52 @@ for (const filename of ["utlint.config.ts", "utlint.config.json"]) {
     assert.equal(result.status, 0, result.stderr);
   });
 }
+
+test("React Compiler use-memo supports ESM/CommonJS configuration and suppression", (t) => {
+  const project = createProject(t);
+  const ruleId = "react-hooks/use-memo";
+  write(join(project, "utlint.config.json"), JSON.stringify({ rules: { [ruleId]: "error" } }));
+  const source = "import {useMemo as calculate} from 'react'; function Component() { return calculate(async (value) => value, []); }";
+  const options = { cwd: project, binary: testBinary(), encoding: "utf8" };
+  for (const extension of ["js", "jsx", "ts", "tsx"]) {
+    const sourcePath = write(join(project, `component.${extension}`), source);
+    for (const execute of [runCli, commonJSRunCli]) {
+      const result = execute(["--json", sourcePath], options);
+      assert.equal(result.status, 1, result.stderr);
+      const diagnostics = JSON.parse(result.stdout).diagnostics;
+      assert.equal(diagnostics.length, 2);
+      assert.ok(diagnostics.every((item) => item.ruleId === ruleId && item.severity === "error" && item.fixes.length === 0));
+    }
+  }
+  const sourcePath = write(join(project, "suppressed.js"), `// utlint-ignore-all ${ruleId}: fixture\n${source}`);
+  for (const execute of [runCli, commonJSRunCli]) {
+    const result = execute(["--json", sourcePath], options);
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout).diagnostics, []);
+  }
+});
+
+test("migrator recognizes React Compiler use-memo", (t) => {
+  const project = createProject(t);
+  const ruleId = "react-hooks/use-memo";
+  const config = write(join(project, ".eslintrc.json"), JSON.stringify({ rules: { [ruleId]: "error", "react-hooks/refs": "error" } }));
+  const result = spawnSync(process.execPath, [cliPath, "migrate", "eslint", `--from=${config}`, "--print", "--report=json"], { cwd: project, encoding: "utf8" });
+  assert.equal(result.status, 1, result.stderr);
+  const report = JSON.parse(result.stderr);
+  assert.deepEqual(report.supportedRules, [ruleId]);
+  assert.deepEqual(report.unsupportedRules, ["react-hooks/refs"]);
+});
+
+test("React Compiler use-memo resolves CommonJS and indirect values through both wrappers", (t) => {
+  const project = createProject(t);
+  const ruleId = "react-hooks/use-memo";
+  write(join(project, "utlint.config.json"), JSON.stringify({ rules: { [ruleId]: "error" } }));
+  const sourcePath = write(join(project, "component.tsx"), "const {useMemo: memo} = require('react'); const calc = async value => value; function Component() { return memo(calc, []); }");
+  for (const execute of [runCli, commonJSRunCli]) {
+    const result = execute(["--json", sourcePath], { cwd: project, binary: testBinary(), encoding: "utf8" });
+    assert.equal(result.status, 1, result.stderr);
+    const diagnostics = JSON.parse(result.stdout).diagnostics;
+    assert.equal(diagnostics.length, 2);
+    assert.ok(diagnostics.every((item) => item.ruleId === ruleId));
+  }
+});
