@@ -1,0 +1,38 @@
+---
+fixture: "tests/snapshots/specs/react-hooks/use-memo/upstream-error.useMemo-callback-generator.js"
+rule: "react-hooks/use-memo"
+---
+
+# Input
+
+```js
+function Component(a, b) {
+  // we don't handle generators at all so this test isn't
+  // useful for now, but adding this test in case we do
+  // add support for generators in the future.
+  let x = useMemo(function* () {
+    yield a;
+  }, []);
+  return x;
+}
+```
+
+# Diagnostics
+
+count: 1
+
+## Diagnostic 1
+
+- rule: "react-hooks/use-memo"
+- severity: "error"
+- message: "useMemo callbacks must be synchronous and must not be async or generator functions."
+- byte span: 206..237
+- start: 5:19
+- end: 7:4
+- source: "function* () {\n    yield a;\n  }"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

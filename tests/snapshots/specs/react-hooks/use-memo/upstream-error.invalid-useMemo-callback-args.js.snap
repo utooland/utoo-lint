@@ -1,0 +1,33 @@
+---
+fixture: "tests/snapshots/specs/react-hooks/use-memo/upstream-error.invalid-useMemo-callback-args.js"
+rule: "react-hooks/use-memo"
+---
+
+# Input
+
+```js
+function Component(a, b) {
+  let x = useMemo(c => a, []);
+  return x;
+}
+```
+
+# Diagnostics
+
+count: 1
+
+## Diagnostic 1
+
+- rule: "react-hooks/use-memo"
+- severity: "error"
+- message: "useMemo callbacks must not accept parameters; capture the values needed for the calculation instead."
+- byte span: 45..46
+- start: 2:19
+- end: 2:20
+- source: "c"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

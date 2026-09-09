@@ -456,3 +456,20 @@ test("supports empty and repeated calls across memory growth", () => {
     assert.equal(result.ok, true);
   }
 });
+
+test("React Compiler use-memo works in WebAssembly", () => {
+  const ruleId = "react-hooks/use-memo";
+  const source = "import {useMemo as calculate} from 'react'; function Component() { return calculate(async (value) => value, []); }";
+  const result = linter.lint(source, { filePath: "component.tsx", rules: { [ruleId]: "warn" } });
+  assert.equal(result.diagnostics.length, 2);
+  assert.ok(result.diagnostics.every((item) => item.ruleId === ruleId && item.severity === "warning" && item.fixes.length === 0));
+  const disabled = linter.lint(source, { filePath: "component.tsx" });
+  assert.ok(!disabled.diagnostics.some((item) => item.ruleId === ruleId));
+});
+
+test("React Compiler use-memo resolves CommonJS and indirect values in WebAssembly", () => {
+  const ruleId = "react-hooks/use-memo";
+  const result = linter.lint("const {useMemo: memo} = require('react'); const calc = async value => value; function Component() { return memo(calc, []); }", { filePath: "component.tsx", rules: { [ruleId]: "error" } });
+  assert.equal(result.diagnostics.length, 2);
+  assert.ok(result.diagnostics.every((item) => item.ruleId === ruleId));
+});

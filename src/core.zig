@@ -3162,6 +3162,7 @@ pub const Options = struct {
     react_hooks_exhaustive_deps: bool = true,
     react_hooks_exhaustive_deps_additional_hooks: ReactHooksAdditionalHooksPattern = .{},
     react_hooks_rules_of_hooks: bool = true,
+    react_hooks_use_memo: bool = false,
     unused_imports_no_unused_imports: bool = false,
     radix: bool = true,
     radix_style: RadixStyle = .always,
