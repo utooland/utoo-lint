@@ -265,6 +265,7 @@ fn hasSemanticRules(options: Options) bool {
         options.alipay_ant_exhaustive_deps or
         options.react_hooks_exhaustive_deps or
         options.react_hooks_use_memo or
+        options.react_hooks_void_use_memo or
         options.alipay_ant_prefer_click_with_debounce or
         options.no_buffer_constructor or
         options.no_console or

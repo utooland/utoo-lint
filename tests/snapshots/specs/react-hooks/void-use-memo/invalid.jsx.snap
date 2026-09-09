@@ -1,0 +1,32 @@
+---
+fixture: "tests/snapshots/specs/react-hooks/void-use-memo/invalid.jsx"
+rule: "react-hooks/void-use-memo"
+---
+
+# Input
+
+```jsx
+function Component() {
+  return useMemo(() => { console.log('render'); }, []);
+}
+```
+
+# Diagnostics
+
+count: 1
+
+## Diagnostic 1
+
+- rule: "react-hooks/void-use-memo"
+- severity: "error"
+- message: "useMemo callbacks must return a value; use an effect or event handler for side effects."
+- byte span: 40..72
+- start: 2:18
+- end: 2:50
+- source: "() => { console.log('render'); }"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

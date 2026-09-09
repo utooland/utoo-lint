@@ -367,6 +367,7 @@
 | [`react-hooks/exhaustive-deps`](https://react.dev/reference/eslint-plugin-react-hooks/lints/exhaustive-deps) | 已实现内置 Hook 和 `additionalHooks` 字面量、分支、锚点及通配符模式的依赖数组验证；无需类型信息即可报告缺失、重复、不必要、复杂和不稳定的依赖 |
 | [`react-hooks/rules-of-hooks`](https://legacy.reactjs.org/docs/hooks-rules.html) | 已实现顶层、普通函数、类方法、回调、条件分支和循环检查 |
 | [`react-hooks/use-memo`](https://react.dev/reference/eslint-plugin-react-hooks/lints/use-memo) | 按需开启；检查内联和可静态解析的具名 `useMemo` 回调的参数、async/generator 和对捕获变量的直接重赋值；允许回调内部局部变量重赋值，暂不分析嵌套闭包写入 |
+| [`react-hooks/void-use-memo`](https://github.com/facebook/react/blob/e92bda78750136493cb324e98df1726f62ba8e92/compiler/packages/babel-plugin-react-compiler/src/Validation/ValidateUseMemo.ts) | 按需开启；检查没有返回值的内联和可静态解析的具名回调，嵌套函数的 return 不计入；同时检查表达式语句中被丢弃的结果；接受显式 return（包括空 return）、表达式函数体和含 throw 的回调，暂不做全路径返回值或返回类型推断 |
 
 这些按需开启的规则是 React Compiler 相关检查的原生实现子集，并未运行 React Compiler 诊断引擎。
 支持 ES 模块及字面量 `require("react")` 导入、稳定局部别名和局部变量遮蔽，通过组件/Hook 命名以及 React `memo`/`forwardRef` 包装识别渲染函数。

@@ -279,7 +279,8 @@ Enable the native React Compiler-related checks explicitly in `utlint.config.jso
 ```json
 {
   "rules": {
-    "react-hooks/use-memo": "error"
+    "react-hooks/use-memo": "error",
+    "react-hooks/void-use-memo": "error"
   }
 }
 ```
