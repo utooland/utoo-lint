@@ -93,7 +93,7 @@ const plugin = {
                 context.report({
                   node: variable.identifiers[0],
                   messageId: "unused",
-                  data: { name: context.options[0].prefix + variable.name }
+                  data: { name: ((context.options[0] ?? {}).prefix ?? "") + variable.name }
                 });
               }
             }
@@ -139,6 +139,19 @@ const plugin = {
         return {
           Program() {
             throw new Error("boom");
+          }
+        };
+      }
+    },
+    "needs-debugger": {
+      meta: { fixable: "code" },
+      create(context) {
+        return {
+          Program(node) {
+            if (node.body.some((statement) => statement.type === "DebuggerStatement")) {
+              return;
+            }
+            context.report({ node, message: "Add a debugger", fix: (fixer) => fixer.insertTextBeforeRange([0, 0], "debugger;\\n") });
           }
         };
       }
@@ -265,6 +278,50 @@ test("--fix writes plugin fixes and --fix-dry-run reports them as outputs", (t) 
   assert.equal(readFileSync(source, "utf8"), "const bar = 1;\nbar();\n");
 });
 
+test("--rules selects plugin rules the same way it selects native rules", (t) => {
+  const project = writePluginProject(t, { rules: { "example/no-foo": "error", "example/unused-function": "off", "no-debugger": "error" } });
+  write(join(project, "src", "index.js"), "function helper() {}\nconst foo = 1;\ndebugger;\n");
+
+  const onlyPlugin = cliJson(project, ["--rules=example/no-foo", "src"]);
+  assert.deepEqual(summarize(onlyPlugin.report.diagnostics), ["example/no-foo@2:7:warning"]);
+
+  const onlyNative = cliJson(project, ["--rules=no-debugger", "src"]);
+  assert.deepEqual(summarize(onlyNative.report.diagnostics), ["no-debugger@3:1:warning"]);
+
+  const enabledByFlag = cliJson(project, ["--rules=example/unused-function", "src"]);
+  assert.deepEqual(summarize(enabledByFlag.report.diagnostics), ["example/unused-function@1:10:warning"]);
+});
+
+test("native rules are re-run on text changed by plugin fixes", async (t) => {
+  const project = writePluginProject(t, { rules: { "example/needs-debugger": "error", "no-debugger": "error" } });
+  const source = write(join(project, "src", "index.js"), "const value = 1;\n");
+
+  const dryRun = cliJson(project, ["--fix-dry-run", "src"]);
+  assert.deepEqual(summarize(dryRun.report.diagnostics), ["no-debugger@1:1:error"]);
+  assert.deepEqual(dryRun.report.outputs, [{ filePath: source, output: "debugger;\nconst value = 1;\n" }]);
+  assert.equal(readFileSync(source, "utf8"), "const value = 1;\n");
+
+  const written = cliJson(project, ["--fix", "src"]);
+  assert.equal(written.status, 1);
+  assert.deepEqual(summarize(written.report.diagnostics), ["no-debugger@1:1:error"]);
+  assert.equal(readFileSync(source, "utf8"), "debugger;\nconst value = 1;\n");
+
+  write(source, "const value = 1;\n");
+  const eslint = new ESLint({
+    cwd: project,
+    fix: true,
+    overrideConfigFile: true,
+    overrideConfig: [{
+      files: ["**/*.js"],
+      plugins: { inline: { rules: { "needs-debugger": { meta: { fixable: "code" }, create: (context) => ({ Program(node) { if (!node.body.some((statement) => statement.type === "DebuggerStatement")) context.report({ node, message: "Add a debugger", fix: (fixer) => fixer.insertTextBeforeRange([0, 0], "debugger;\n") }); } }) } } } },
+      rules: { "inline/needs-debugger": "error", "no-debugger": "error" }
+    }]
+  });
+  const results = await eslint.lintFiles(["src"]);
+  assert.deepEqual(results[0].messages.map((message) => [message.ruleId, message.line, message.severity]), [["no-debugger", 1, 2]]);
+  assert.equal(results[0].output, "debugger;\nconst value = 1;\n");
+});
+
 test("TypeScript and TSX files get scope analysis and suggestions", (t) => {
   const project = writePluginProject(t);
   write(join(project, "src", "types.ts"), "interface Shape { size: number }\nfunction unused(shape: Shape): Shape { return shape; }\nfunction used(): Shape { return { size: 1 }; }\nused();\n");
@@ -313,7 +370,7 @@ test("config loader serializes circular plugin objects for the native engine", (
   const config = readConfig(join(project, "utlint.config.ts"), project);
 
   assert.equal(Array.isArray(config), true);
-  assert.deepEqual(Object.keys(config[0].plugins.example.rules).sort(), ["no-empty-element", "no-foo", "no-parens-call", "throws", "unused-function"]);
+  assert.deepEqual(Object.keys(config[0].plugins.example.rules).sort(), ["needs-debugger", "no-empty-element", "no-foo", "no-parens-call", "throws", "unused-function"]);
   assert.equal(config[0].plugins.example.rules["no-foo"].meta.docs.url, "https://example.test/no-foo");
   assert.equal("create" in config[0].plugins.example.rules["no-foo"], false);
 });

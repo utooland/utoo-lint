@@ -871,10 +871,20 @@ function pluginRulesForConfig(config, filePath, cwd) {
   return rules;
 }
 
+const pluginRuleIdsByConfig = new WeakMap();
+
 function jsPluginRuleIdsFromConfigs(...configs) {
   const ids = new Set();
   for (const config of configs) {
-    for (const ruleId of pluginRulesForConfig(config).keys()) {
+    if (!config || typeof config !== "object") {
+      continue;
+    }
+    let ruleIds = pluginRuleIdsByConfig.get(config);
+    if (!ruleIds) {
+      ruleIds = [...pluginRulesForConfig(config).keys()];
+      pluginRuleIdsByConfig.set(config, ruleIds);
+    }
+    for (const ruleId of ruleIds) {
       ids.add(ruleId);
     }
   }
@@ -908,6 +918,31 @@ function configDeclaresPlugins(config) {
   );
 }
 
+// Cheap pre-check so runs without plugins skip the per-file plugin work. Every
+// config the native run consulted was read through `options.configCache`.
+function anyConfigDeclaresPlugins(options) {
+  if (configDeclaresPlugins(options.baseConfig) || configDeclaresPlugins(options.overrideConfig)) {
+    return true;
+  }
+  if (options.noConfig) {
+    return false;
+  }
+  let sawConfig = false;
+  for (const config of options.configCache?.values() ?? []) {
+    if (config && typeof config === "object") {
+      sawConfig = true;
+      if (configDeclaresPlugins(config)) {
+        return true;
+      }
+    }
+  }
+  if (sawConfig) {
+    return false;
+  }
+  const configPath = configPathForOptions(options);
+  return Boolean(configPath) && configDeclaresPlugins(readConfig(configPath, options.cwd, options.configCache));
+}
+
 // The native engine receives the JSON form of a config module. Plugin objects
 // (and their `create()` functions) only survive an in-process import, so a
 // config module that mounts plugins is loaded again in this process.
@@ -919,17 +954,22 @@ function liveConfigForPath(configPath, options) {
   return configModule.readConfigModule(configPath, options.cwd);
 }
 
+function pluginConfigPathForFile(options, matchPath, perFileConfig = true) {
+  if (options.noConfig) {
+    return undefined;
+  }
+  return perFileConfig && matchPath ? configPathForFile(options, matchPath) : configPathForOptions(options);
+}
+
 function pluginConfigSourcesForFile(options, matchPath, perFileConfig = true) {
   const cwd = options.cwd ?? process.cwd();
   const sources = [];
   if (options.baseConfig) {
     sources.push({ config: options.baseConfig, cwd });
   }
-  if (!options.noConfig) {
-    const configPath = perFileConfig && matchPath ? configPathForFile(options, matchPath) : configPathForOptions(options);
-    if (configPath) {
-      sources.push({ config: liveConfigForPath(configPath, options), cwd: dirname(configPath) });
-    }
+  const configPath = pluginConfigPathForFile(options, matchPath, perFileConfig);
+  if (configPath) {
+    sources.push({ config: liveConfigForPath(configPath, options), cwd: dirname(configPath) });
   }
   if (options.overrideConfig) {
     sources.push({ config: options.overrideConfig, cwd });
@@ -977,6 +1017,13 @@ function pluginRuleEntriesForFile(options, matchPath, ruleMap, perFileConfig = t
         options: Array.isArray(ruleConfig) ? ruleConfig.slice(1) : []
       });
     }
+  }
+  if (options.rules) {
+    // `--rules` disables everything first and then enables only the listed
+    // rules, keeping configured severities and options like the native path.
+    return Object.keys(rulesFromNativeRuleList(options.rules))
+      .filter((ruleId) => ruleMap.has(ruleId))
+      .map((ruleId) => entries.get(ruleId) ?? { ruleId, rule: ruleMap.get(ruleId), severity: 1, options: [] });
   }
   return [...entries.values()];
 }
@@ -1047,11 +1094,72 @@ function appendCustomLintTextMessages(results, code, filePath, config, rules, op
     result = emptyESLintResult(filePath, effectiveCode);
     results.push(result);
   }
+  if (relintAfterCustomFixes(result, effectiveCode, filePath, customRules, config, rules, options)) {
+    return results;
+  }
   result.messages = sortLintMessages([...result.messages, ...filtered.messages]);
   result.suppressedMessages.push(...filtered.suppressedMessages);
   applyResultFixes(result, effectiveCode, options);
   finalizeESLintResult(result);
   return results;
+}
+
+// When custom fixes change a file, the native messages computed earlier are
+// stale. Re-lint the fixed text with native rules and custom rules together
+// until neither changes it, then rebuild the result from that final pass.
+function relintAfterCustomFixes(result, code, filePath, customRules, config, rules, options) {
+  if (!options.fix) {
+    return false;
+  }
+  const nativeOptions = {
+    ...lintOptionsWithoutCustomRules(options, rules),
+    filePath,
+    filename: undefined,
+    fix: true,
+    useDefaultConfigTargets: undefined,
+    pluginTextFilePath: undefined
+  };
+  const parserOptions = { ...parserOptionsForConfig(config, filePath, options.cwd), requireParser: true };
+  const customLintOptions = {
+    cwd: options.cwd,
+    filename: filePath,
+    config: calculatedConfig({ cwd: options.cwd, noConfig: true, baseConfig: options.baseConfig, overrideConfig: options.overrideConfig }, filePath)
+  };
+  const lintCustom = (text) => {
+    const sourceCode = createLinterSourceCode(text, null, parserOptions);
+    return applyDisableDirectives(runCustomLinterRules(customRules, sourceCode, customLintOptions), sourceCode);
+  };
+
+  let output = code;
+  let custom = lintCustom(output);
+  let fixedOutput = applyMessageFixes(output, custom.messages);
+  if (fixedOutput === output) {
+    return false;
+  }
+  let nativeReport;
+  for (let pass = 0; pass < MAX_AUTOFIX_PASSES && fixedOutput !== output; pass += 1) {
+    nativeReport = lintText(fixedOutput, nativeOptions);
+    output = nativeReport.outputs?.find((fixed) => fixed.filePath === filePath)?.output ?? fixedOutput;
+    custom = lintCustom(output);
+    fixedOutput = applyMessageFixes(output, custom.messages);
+  }
+  if (output !== fixedOutput) {
+    output = fixedOutput;
+    nativeReport = lintText(output, nativeOptions);
+    custom = lintCustom(output);
+  }
+
+  const nativeResult = reportToESLintResults(nativeReport, {
+    source: result.source,
+    filePath,
+    includeEmptyTextResult: true,
+    ruleSeverityForFile: (path) => ruleSeverityMapForOptions(nativeOptions, path)
+  })[0];
+  result.messages = sortLintMessages([...(nativeResult?.messages ?? []), ...custom.messages]);
+  result.suppressedMessages = [...(nativeResult?.suppressedMessages ?? []), ...custom.suppressedMessages];
+  result.output = output;
+  finalizeESLintResult(result);
+  return true;
 }
 
 function appendCustomLintFileMessages(results, config, options) {
@@ -1078,6 +1186,9 @@ function appendCustomLintFileMessages(results, config, options) {
     });
     const filtered = applyDisableDirectives(messages, sourceCode);
     if (filtered.messages.length === 0 && filtered.suppressedMessages.length === 0) {
+      continue;
+    }
+    if (relintAfterCustomFixes(result, code, filePath, customRules, config, rules, options)) {
       continue;
     }
     result.messages = sortLintMessages([...result.messages, ...filtered.messages]);
@@ -3237,7 +3348,7 @@ function appendPluginRuleDiagnostics(report, options, { perFileConfig = true } =
     return report;
   }
   const filePaths = report.filePaths ?? [];
-  if (filePaths.length === 0) {
+  if (filePaths.length === 0 || !anyConfigDeclaresPlugins(options)) {
     return report;
   }
   const cwd = options.cwd ?? process.cwd();
@@ -3284,6 +3395,7 @@ function appendPluginRuleDiagnostics(report, options, { perFileConfig = true } =
     };
 
     let filtered = lintOnce(code);
+    let relintedFromReport = false;
     if (fixMode) {
       let changed = false;
       for (let pass = 0; pass < MAX_AUTOFIX_PASSES; pass += 1) {
@@ -3296,6 +3408,32 @@ function appendPluginRuleDiagnostics(report, options, { perFileConfig = true } =
         filtered = lintOnce(code);
       }
       if (changed) {
+        // Plugin fixes changed the text, so the native diagnostics for this
+        // file describe stale source. Re-lint the fixed text through the whole
+        // pipeline (native rules, plugin rules, further fixes) and replace this
+        // file's diagnostics with the result.
+        const depth = options.pluginFixDepth ?? 0;
+        if (depth < MAX_AUTOFIX_PASSES) {
+          const relinted = lintText(code, {
+            ...options,
+            filePath: matchPath,
+            filename: undefined,
+            config: pluginConfigPathForFile(options, matchPath, perFileConfig) ?? options.config,
+            fix: true,
+            extraArgs: (options.extraArgs ?? []).filter((arg) => arg !== "--fix" && arg !== "--fix-dry-run"),
+            useDefaultConfigTargets: undefined,
+            pluginTextFilePath: undefined,
+            pluginFixDepth: depth + 1
+          });
+          code = relinted.outputs?.find((fixed) => fixed.filePath === matchPath)?.output ?? code;
+          filtered = {
+            messages: relinted.diagnostics ?? [],
+            suppressedMessages: relinted.suppressedDiagnostics ?? []
+          };
+          report.diagnostics = (report.diagnostics ?? []).filter((diagnostic) => diagnostic.filePath !== filePath);
+          report.suppressedDiagnostics = (report.suppressedDiagnostics ?? []).filter((diagnostic) => diagnostic.filePath !== filePath);
+          relintedFromReport = true;
+        }
         if (fixMode === "write") {
           writeFileSync(absolutePath, code);
         } else if (outputIndex === -1) {
@@ -3306,6 +3444,20 @@ function appendPluginRuleDiagnostics(report, options, { perFileConfig = true } =
       }
     }
 
+    if (relintedFromReport) {
+      // Already native-shaped diagnostics from the nested lint; only the
+      // file path needs to match this report.
+      report.diagnostics = [
+        ...(report.diagnostics ?? []),
+        ...filtered.messages.map((diagnostic) => ({ ...diagnostic, filePath }))
+      ];
+      report.suppressedDiagnostics = [
+        ...(report.suppressedDiagnostics ?? []),
+        ...filtered.suppressedMessages.map((diagnostic) => ({ ...diagnostic, filePath }))
+      ];
+      appended = true;
+      continue;
+    }
     if (filtered.messages.length === 0 && filtered.suppressedMessages.length === 0) {
       continue;
     }
