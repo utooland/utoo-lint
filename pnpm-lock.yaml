@@ -44,8 +44,8 @@ importers:
         specifier: workspace:*
         version: link:../../npm/@utoo/lint-wasm
       '@yuku-parser/wasm':
-        specifier: 0.9.1
-        version: 0.9.1
+        specifier: 0.10.1
+        version: 0.10.1
       monaco-editor:
         specifier: 0.56.0
         version: 0.56.0
@@ -2923,14 +2923,11 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@yuku-parser/wasm@0.9.1':
-    resolution: {integrity: sha512-/LDyPG/jNGZ2OSvVR2PDODop2076FsFx6SGqIgAjLiVw4uLIMGUQ1R0GSfO6jdFPgvxIXZhqONdoh0A9VP8Eyg==}
+  '@yuku-parser/wasm@0.10.1':
+    resolution: {integrity: sha512-aErQbjwSuRnOTvYmf4BxT2+CMvL7LMDt2Z2obz/naqwfc4YGP8xqwZjyyMTSeRrnja/KYZlSjhIs5dFeE0Qacw==}
 
   '@yuku-toolchain/types@0.10.1':
     resolution: {integrity: sha512-nZqE/tf118GLFyuPDD68u3Sal9f2w/bS9s2f+UvS9W+31BuZ9EW4xcOVIhZtJcvUSpdBYL3gJVXV6ky2gxuDgg==}
-
-  '@yuku-toolchain/types@0.9.1':
-    resolution: {integrity: sha512-GhfAIaKmtC4fCKJVnzP6bdGhWZSd7U9Sk7/lexEfROQPDNzuFE9lZKrcIWqzgGVcIMqKvtvFxnfEIaZ5WiroyQ==}
 
   accepts@1.3.8:
     resolution: {integrity: sha512-PYAthTa2m2VKxuvSD3DPC/Gy+U+sOA1LAuT8mkmRuvw+NACSaeXEQ+NHcVF7rONl6qcaxV3Uuemwawk+7+SJLw==}
@@ -7560,9 +7557,6 @@ packages:
   yuku-ast@0.10.1:
     resolution: {integrity: sha512-uxQ9wMKPfFmKXwCwrcYUnp8xQ6HltLN3ifzBZfjgoACu9sQrxlqiyibeINSqR3VNoHPJMkUmD69hWOoO5TUqtQ==}
 
-  yuku-ast@0.9.1:
-    resolution: {integrity: sha512-JN45kc3sxzv/bDGug063IsIHu6LTkL1vDQUL/m1zvIFBIvMRtYivyRp5LjtMbZtIWnNjV6jaAvHPA1f70yD6gg==}
-
   yuku-parser@0.10.1:
     resolution: {integrity: sha512-c2rfzmcMHIKBxoHlIsJ20UHqi6IjGJxLGobqKtmsCegWW+eMcgPtqtk731J5rMFxyrRu0ZeTQThcwgrkmmRAHg==}
 
@@ -10175,14 +10169,12 @@ snapshots:
   '@yuku-parser/binding-win32-x64@0.10.1':
     optional: true
 
-  '@yuku-parser/wasm@0.9.1':
+  '@yuku-parser/wasm@0.10.1':
     dependencies:
-      '@yuku-toolchain/types': 0.9.1
-      yuku-ast: 0.9.1
+      '@yuku-toolchain/types': 0.10.1
+      yuku-ast: 0.10.1
 
   '@yuku-toolchain/types@0.10.1': {}
-
-  '@yuku-toolchain/types@0.9.1': {}
 
   accepts@1.3.8:
     dependencies:
@@ -15778,10 +15770,6 @@ snapshots:
   yuku-ast@0.10.1:
     dependencies:
       '@yuku-toolchain/types': 0.10.1
-
-  yuku-ast@0.9.1:
-    dependencies:
-      '@yuku-toolchain/types': 0.9.1
 
   yuku-parser@0.10.1:
     dependencies:
