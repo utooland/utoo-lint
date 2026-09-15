@@ -10,7 +10,7 @@
 
 - 检查 JavaScript、JSX、TypeScript 或 TSX 源文件。
 - ESLint 配置可以归纳为可序列化为 JSON 的 `files`、`ignores` 和 `rules` 配置项。
-- 大多数已启用规则来自 ESLint 核心，或来自 utoo-lint 已支持的 `@typescript-eslint`、`eslint-plugin-react`、`eslint-plugin-import`、`eslint-plugin-jsx-a11y`、`eslint-plugin-react-hooks`、`eslint-plugin-eslint-comments`。
+- 大多数已启用规则来自 ESLint 核心，或来自 utoo-lint 已支持的 `@typescript-eslint`、`eslint-plugin-react`、`eslint-plugin-import`、`eslint-plugin-jsx-a11y`、`eslint-plugin-react-hooks`、`eslint-plugin-eslint-comments`。其他插件的规则可以通过 [ESLint 插件桥接](/zh-CN/configuration#eslint-插件) 继续运行。
 - 格式化已经由 Prettier、Biome 或 ESLint 之外的其他格式化工具处理。
 - CI 和 pre-commit 脚本可以在短期验证阶段同时运行 ESLint 与 `utoo-lint`。
 
@@ -23,8 +23,8 @@
 | 项目形态 | 预计成本 | 通常需要处理的工作 |
 | --- | --- | --- |
 | 主要使用已支持规则的简单应用或包 | 低，通常不到半天 | 安装包、生成 `utlint.config.json`、更新脚本、对比诊断结果 |
-| 使用多个插件预设和覆盖项的前端应用 | 中等，约 1–2 天 | 扁平化配置、检查未支持的插件规则、确定暂时保留在 ESLint 中的规则 |
-| 使用自定义 ESLint 插件、处理器、类型化解析器服务或依赖自动修复工作流的 monorepo | 高，数天或更久 | 保留双 lint 任务、移植自定义规则、替换处理器、审计类型感知规则行为 |
+| 使用多个插件预设和覆盖项的前端应用 | 中等，约 1–2 天 | 扁平化配置、挂载没有原生实现的插件规则、确定暂时保留在 ESLint 中的规则 |
+| 使用自定义 ESLint 插件、处理器、类型化解析器服务或依赖自动修复工作流的 monorepo | 高，数天或更久 | 在 `utlint.config.ts` 中挂载自定义插件、为处理器和类型感知规则保留双 lint 任务、审计自动修复覆盖 |
 
 主要成本不在于修改文件语法，而在于决定如何处理目前还没有原生等价实现的 ESLint 能力。
 
@@ -37,8 +37,8 @@
 
 常见的中高成本项目：
 
-- 不受支持的插件规则需要原生 `utoo-lint` 规则、替代规则，或临时保留 ESLint 任务。
-- 动态 JavaScript 配置值、函数、Symbol、解析器对象和不可序列化的插件对象会被迁移器移除。
+- 没有原生实现的插件规则可以把插件挂载到 `utlint.config.ts` 中继续运行，见 [ESLint 插件](/zh-CN/configuration#eslint-插件)；它们运行在 JavaScript 中，有原生实现时优先使用原生规则。
+- 动态 JavaScript 配置值、函数、Symbol、解析器对象和不可序列化的插件对象会被迁移器移除。需要这些插件的规则时，请在 TypeScript 配置中手动补回 `plugins`。
 - Markdown、Vue SFC、MDX 等非 JS 文件处理器，目前不能直接迁移到原生实现。
 - 依赖自动修复的工作流需要明确检查覆盖情况。`utoo-lint` 会为受支持的规则应用安全修复；对于[规则支持状态](/zh-CN/rule-status)中未标记为可修复的转换，请继续使用 ESLint 或其他工具。
 - 依赖 TypeScript 类型检查器服务的规则需要人工审计。`utoo-lint` 是原生解析器和语义 linter，并不是围绕 `@typescript-eslint/parser` 构建的 ESLint 运行时。
@@ -328,4 +328,4 @@ console.log(cli.getFormatter("stylish")(report.results));
 - `utlint.config.json` 中的目标和忽略模式与旧 lint 范围一致。
 - 已审查所选规则集的并行诊断结果。
 - 格式化仍是独立步骤；所需自动修复已有原生覆盖或已记录的后备方案。
-- 自定义 ESLint 插件、处理器和类型感知规则仍保留在 ESLint 任务中，或已经有可跟踪的原生替换计划。
+- 自定义 ESLint 插件已挂载到 `utlint.config.ts`；处理器和类型感知规则仍保留在 ESLint 任务中，或已经有可跟踪的原生替换计划。

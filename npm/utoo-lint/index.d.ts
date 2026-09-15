@@ -62,8 +62,15 @@ export interface Formatter {
 export type RuleSeverity = "off" | "warn" | "warning" | "error" | 0 | 1 | 2 | false | true;
 export type RuleConfig = RuleSeverity | [RuleSeverity, ...unknown[]];
 
+/**
+ * An ESLint plugin object. Rules provided by a mounted plugin run in Node.js
+ * alongside the native rules; see the "ESLint Plugins" section of the
+ * configuration docs.
+ */
 export interface PluginObject {
+  meta?: { name?: string; version?: string; [key: string]: unknown };
   rules?: Record<string, unknown>;
+  configs?: Record<string, unknown>;
   [key: string]: unknown;
 }
 
@@ -187,6 +194,10 @@ export class SourceCode {
   lines: string[];
   comments: SourceRange[];
   tokens: SourceRange[];
+  parserServices: unknown;
+  /** Scope manager from `eslint-scope` (JavaScript) or `@typescript-eslint/scope-manager` (TypeScript). */
+  scopeManager: unknown;
+  visitorKeys: Record<string, readonly string[]> | null;
   getText(node?: SourceRange, beforeCount?: number, afterCount?: number): string;
   getLines(): string[];
   getAllComments(): SourceRange[];

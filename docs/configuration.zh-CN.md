@@ -194,6 +194,66 @@ npx utoo-lint
 
 未知规则名称会被拒绝，避免拼写错误被静默放过。已实现的规则列表请参阅[规则支持状态](/zh-CN/rule-status)。
 
+## ESLint 插件
+
+`utoo-lint` 可以在原生规则之外运行社区 ESLint 插件。在 TypeScript 或 JavaScript
+配置模块中把插件挂载到一个命名空间下，然后以 `<命名空间>/<规则>` 的形式启用规则：
+
+```ts
+import { defineConfig } from "@utoo/lint/config";
+import unicorn from "eslint-plugin-unicorn";
+
+export default defineConfig({
+  files: ["**/*.{js,jsx,ts,tsx}"],
+  plugins: { unicorn },
+  rules: {
+    "no-debugger": "error",
+    "unicorn/prefer-string-slice": "error",
+    "unicorn/catch-error-name": ["warn", { name: "err" }]
+  }
+});
+```
+
+插件诊断会和原生诊断合并到同一份报告中并按位置排序，CLI、`fishlint` 以及 JavaScript
+API（`lintFiles`、`lintText`、`ESLint`、`Linter`、`RuleTester`）行为一致。`eslint-disable`
+注释和 `utlint-ignore` 对插件规则同样生效；插件的自动修复和建议会由 `--fix` 应用、由
+`--fix-dry-run` 报告。
+
+工作方式：
+
+- 原生引擎先检查每个文件。插件提供的规则不会传给原生二进制，因此不需要原生实现。
+- 每个启用了插件规则的文件会在 Node.js 中用
+  [`yuku-parser`](https://www.npmjs.com/package/yuku-parser)（原生引擎所基于的解析器）
+  再解析一次，得到 ESTree / TypeScript-ESTree 语法树；规则通过 ESLint 兼容的 `context`
+  和 `sourceCode` 在这棵树上运行。
+- 插件对象会在当前进程中从配置模块加载，因此插件必须从 `utlint.config.ts`（或
+  `.js`、`.mjs`、`.cjs`、`.mts`、`.cts`）挂载；JSON 配置无法挂载插件。
+
+原生规则优先。当挂载的插件提供了 `utoo-lint` 已原生实现的规则（例如 `eslint-plugin-react`
+的 `react/jsx-key`）时，运行的是原生实现，插件中的同名规则会被跳过；只有没有原生实现的
+规则 ID 才会交给插件。这样从 ESLint 复制过来的配置仍然保持原生速度。原生规则列表见
+[规则支持状态](/zh-CN/rule-status)。
+
+支持的规则 API：
+
+- `context.report`，支持 `message` 或 `messageId`、`data`、`loc`、`fix`、`suggest`。
+- `context.options`，包含 `meta.defaultOptions` 以及对已提供选项对象应用 JSON Schema 的
+  `default` 值。
+- `context.settings`、`context.languageOptions`（`sourceType`、`ecmaVersion`、`globals`、
+  `parserOptions.ecmaFeatures`）、`context.filename`、`context.cwd`。
+- esquery 选择器，包括 `:exit`、属性、子代、后代、`:has`、`:matches`、`:not`。
+- `sourceCode` 的文本、行、token、注释、`getAncestors`，以及作用域分析（`getScope`、
+  `getDeclaredVariables`、`markVariableAsUsed`）：JavaScript 文件使用 `eslint-scope`，
+  TypeScript 文件使用 `@typescript-eslint/scope-manager`。ECMAScript 内置全局、CommonJS
+  全局以及 `languageOptions.globals` 都会声明在全局作用域中。
+
+不支持：`sourceCode.parserServices`（类型感知规则）、自定义 `languageOptions.parser`、
+`processor`，以及 `onCodePathStart` 等代码路径分析事件。依赖这些能力的规则可以正常加载，
+但对应功能不会产生任何报告。
+
+插件规则运行在 JavaScript 中，比原生规则慢；请用 `files` 把它们限定在需要的源码范围内。
+运行插件规则需要 Node.js 20.19 或更高版本（或 22.12 及以上）。
+
 ## CLI 优先级
 
 与规则相关的 CLI 选项会在配置文件之后应用：

@@ -89,7 +89,12 @@
   "dependencies": {
     "@eslint/eslintrc": "2.1.4",
     "@eslint/js": "8.57.1",
-    "jiti": "2.7.0"
+    "@typescript-eslint/scope-manager": "8.61.0",
+    "@typescript-eslint/visitor-keys": "8.61.0",
+    "eslint-scope": "9.1.2",
+    "esquery": "1.7.0",
+    "jiti": "2.7.0",
+    "yuku-parser": "0.10.1"
   },
   "publishConfig": {
     "access": "public",

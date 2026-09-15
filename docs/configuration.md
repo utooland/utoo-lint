@@ -258,6 +258,78 @@ Use canonical ESLint rule names in `rules`:
 
 Unknown rule names are rejected so typos do not silently pass. See [Rule status](rule-status.md) for the implemented rule list.
 
+## ESLint Plugins
+
+`utoo-lint` can run community ESLint plugins alongside its native rules. Mount
+the plugin under a namespace in a TypeScript or JavaScript config module and
+enable its rules as `<namespace>/<rule>`:
+
+```ts
+import { defineConfig } from "@utoo/lint/config";
+import unicorn from "eslint-plugin-unicorn";
+
+export default defineConfig({
+  files: ["**/*.{js,jsx,ts,tsx}"],
+  plugins: { unicorn },
+  rules: {
+    "no-debugger": "error",
+    "unicorn/prefer-string-slice": "error",
+    "unicorn/catch-error-name": ["warn", { name: "err" }]
+  }
+});
+```
+
+Plugin diagnostics land in the same report as native diagnostics, ordered by
+position, in the CLI, `fishlint`, and the JavaScript API (`lintFiles`,
+`lintText`, `ESLint`, `Linter`, and `RuleTester`). `eslint-disable` comments and
+`utlint-ignore` suppress plugin rules, and plugin autofixes and suggestions are
+applied by `--fix` and reported by `--fix-dry-run`.
+
+How it works:
+
+- The native engine lints every file first. Rules provided by a plugin never
+  reach the native binary, so they do not need a native implementation.
+- Each file with plugin rules enabled is parsed again in Node.js with
+  [`yuku-parser`](https://www.npmjs.com/package/yuku-parser), the parser the
+  native engine is built on, into an ESTree / TypeScript-ESTree tree. The rules
+  run against that tree with an ESLint-compatible `context` and `sourceCode`.
+- Plugin objects are loaded from the config module in-process. Plugins must
+  therefore be mounted from `utlint.config.ts` (or `.js`, `.mjs`, `.cjs`,
+  `.mts`, `.cts`); JSON configs cannot mount plugins.
+
+Native rules take precedence. When a mounted plugin provides a rule that
+`utoo-lint` implements natively, such as `react/jsx-key` from
+`eslint-plugin-react`, the native implementation runs and the plugin copy is
+skipped. Only rule IDs without a native implementation are routed to the
+plugin, so a config copied from ESLint keeps its native speed. See
+[Rule status](rule-status.md) for the native list.
+
+Supported rule APIs:
+
+- `context.report` with `message` or `messageId`, `data`, `loc`, `fix`, and
+  `suggest`.
+- `context.options`, including `meta.defaultOptions` and JSON-schema `default`
+  values for provided option objects.
+- `context.settings`, `context.languageOptions` (`sourceType`, `ecmaVersion`,
+  `globals`, `parserOptions.ecmaFeatures`), `context.filename`, and
+  `context.cwd`.
+- esquery selectors, including `:exit`, attribute, child, descendant, `:has`,
+  `:matches`, and `:not`.
+- `sourceCode` text, lines, tokens, comments, `getAncestors`, and scope analysis
+  (`getScope`, `getDeclaredVariables`, `markVariableAsUsed`) backed by
+  `eslint-scope` for JavaScript files and `@typescript-eslint/scope-manager`
+  for TypeScript files. ECMAScript built-ins, CommonJS globals, and
+  `languageOptions.globals` are declared in the global scope.
+
+Not supported: `sourceCode.parserServices` (type-aware rules), a custom
+`languageOptions.parser`, `processor`, and code-path analysis events such as
+`onCodePathStart`. A rule that depends on one of these loads without an error
+but reports nothing for that feature.
+
+Plugin rules run in JavaScript, so they are slower than native rules. Keep them
+scoped with `files` to the sources that need them. Running plugin rules requires
+Node.js 20.19 or newer (or 22.12 or newer).
+
 ## CLI Precedence
 
 Rule-related CLI options are applied after the config file:
