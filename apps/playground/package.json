@@ -10,7 +10,7 @@
     "typecheck": "ev prepare && tsc --noEmit"
   },
   "dependencies": {
-    "@evjs/ev": "0.3.16",
+    "@evjs/ev": "0.3.21",
     "@monaco-editor/react": "4.7.0",
     "@utoo/lint-wasm": "workspace:*",
     "@yuku-parser/wasm": "0.9.1",
@@ -19,7 +19,7 @@
     "react-dom": "18.3.1"
   },
   "devDependencies": {
-    "@evjs/cli": "0.3.16",
+    "@evjs/cli": "0.3.21",
     "@types/react": "18.3.28",
     "@types/react-dom": "18.3.7",
     "typescript": "7.x"
