@@ -9,8 +9,12 @@ const { createLegacyConfigResolver } = require("./lib/legacy-config.cjs");
 const { formatESLintResults } = require("./lib/stylish-formatter.cjs");
 const {
   findConfigPath: findConfigPathFromDirectory,
+  isExecutableConfigPath,
   readConfig
 } = require("./lib/config-loader.cjs");
+const configModule = require("./lib/config-module.cjs");
+const estreeParser = require("./lib/estree-parser.cjs");
+const pluginRunner = require("./lib/plugin-runner.cjs");
 
 const version = JSON.parse(readFileSync(join(__dirname, "package.json"), "utf8")).version;
 
@@ -24,10 +28,6 @@ const JS_KEYWORDS = new Set([
   "do", "else", "export", "extends", "finally", "for", "function", "if", "import", "in",
   "instanceof", "let", "new", "return", "super", "switch", "this", "throw", "try", "typeof",
   "var", "void", "while", "with", "yield"
-]);
-const AST_TRAVERSAL_SKIP_KEYS = new Set([
-  "type", "parent", "loc", "range", "tokens", "comments", "leadingComments", "trailingComments",
-  "innerComments", "raw", "value", "name", "regex", "bigint", "errors"
 ]);
 const RULE_TESTER_INITIAL_CONFIG = { rules: {} };
 let ruleTesterDefaultConfig = { rules: {} };
@@ -480,6 +480,7 @@ const NATIVE_ONLY_RULE_IDS = [
   "semantic-errors"
 ];
 const NATIVE_RULE_IDS = [...BUILTIN_RULE_IDS, ...NATIVE_ONLY_RULE_IDS];
+const NATIVE_RULE_ID_SET = new Set(NATIVE_RULE_IDS);
 const FIXABLE_BUILTIN_RULE_IDS = new Set([
   "@typescript-eslint/no-explicit-any",
   "jest/no-deprecated-functions",
@@ -607,15 +608,15 @@ class UtooLint {
       throw new Error("'results' must be an array");
     }
     const options = eslintConstructorOptions(this.options);
-    const customRuleConfig = [options.baseConfig, options.overrideConfig].filter(Boolean);
     const rulesByFilePath = new Map();
+    const cachedOptions = withConfigCache(options);
     return rulesMetaForResults(results, (ruleId, result) => {
-      if (customRuleConfig.length === 0 || typeof result.filePath !== "string") {
+      if (typeof result.filePath !== "string") {
         return undefined;
       }
       const filePath = normalizeESLintFilePath(result.filePath, options.cwd);
       if (!rulesByFilePath.has(filePath)) {
-        rulesByFilePath.set(filePath, customRuleMapForConfig(customRuleConfig, new Map(), filePath, options.cwd));
+        rulesByFilePath.set(filePath, jsPluginRuleMapForFile(cachedOptions, filePath));
       }
       return rulesByFilePath.get(filePath).get(ruleId)?.meta;
     });
@@ -1229,21 +1230,169 @@ function lintFiles(paths, options = {}) {
   }
 
   const nativeFlatOptions = nativeFlatConfigOptions(options);
-  if (nativeFlatOptions) {
-    const report = runNativeLintReport(lintPaths, nativeFlatOptions);
-    return finalizeLintReport(report, ignoredDiagnostics, options);
-  }
+  const report = nativeFlatOptions
+    ? runNativeLintReport(lintPaths, nativeFlatOptions)
+    : runNativeConfigRunReports(lintPaths, options);
+  // The flat-config path resolves one config for the whole run; only the
+  // per-file path has already discovered (and cached) nested configs.
+  appendPluginRuleDiagnostics(report, options, { perFileConfig: !nativeFlatOptions });
+  return finalizeLintReport(report, ignoredDiagnostics, options);
+}
 
+function runNativeConfigRunReports(lintPaths, options) {
   const configRuns = nativeConfigRunsForFiles(expandNativeConfigRunPaths(lintPaths, options), options);
   if (configRuns) {
-    const report = mergeNativeReports(
+    return mergeNativeReports(
       configRuns.map(({ paths: runPaths, options: runOptions }) => runNativeLintReport(runPaths, runOptions))
     );
-    return finalizeLintReport(report, ignoredDiagnostics, options);
   }
 
-  const report = runNativeLintReport(lintPaths, options);
-  return finalizeLintReport(report, ignoredDiagnostics, options);
+  return runNativeLintReport(lintPaths, options);
+}
+
+function pluginFixModeForOptions(options) {
+  const extraArgs = Array.isArray(options.extraArgs) ? options.extraArgs : [];
+  if (options.fix || extraArgs.includes("--fix-dry-run")) {
+    return "dry-run";
+  }
+  return extraArgs.includes("--fix") ? "write" : null;
+}
+
+function pluginMessageToDiagnostic(message, filePath) {
+  const toFix = (fix) => ({ range: [fix.range[0], fix.range[1]], text: fix.text });
+  const diagnostic = {
+    filePath,
+    line: message.line,
+    column: message.column,
+    severity: message.severity === 2 ? "error" : "warning",
+    message: message.message,
+    ruleId: message.ruleId,
+    fixes: ruleFixItems(message.fix).map(toFix),
+    suggestions: (message.suggestions ?? []).map((suggestion) => ({
+      desc: suggestion.desc,
+      fix: ruleFixItems(suggestion.fix).map(toFix)
+    }))
+  };
+  if (typeof message.endLine === "number") {
+    diagnostic.endLine = message.endLine;
+  }
+  if (typeof message.endColumn === "number") {
+    diagnostic.endColumn = message.endColumn;
+  }
+  return diagnostic;
+}
+
+function sortReportDiagnostics(report) {
+  const order = new Map((report.filePaths ?? []).map((filePath, index) => [filePath, index]));
+  const rank = (diagnostic) => order.get(diagnostic.filePath) ?? Number.MAX_SAFE_INTEGER;
+  const compare = (left, right) => rank(left) - rank(right)
+    || (left.line ?? 0) - (right.line ?? 0)
+    || (left.column ?? 0) - (right.column ?? 0);
+  report.diagnostics = [...(report.diagnostics ?? [])].sort(compare);
+  report.suppressedDiagnostics = [...(report.suppressedDiagnostics ?? [])].sort(compare);
+}
+
+// Runs the ESLint plugin rules a config mounts and merges their diagnostics
+// into the native report. Plugin rules never reach the native binary; see
+// `withoutJsPluginRules`.
+function appendPluginRuleDiagnostics(report, options, { perFileConfig = true } = {}) {
+  if (options.noConfig && !options.baseConfig && !options.overrideConfig) {
+    return report;
+  }
+  const filePaths = report.filePaths ?? [];
+  if (filePaths.length === 0) {
+    return report;
+  }
+  const cwd = options.cwd ?? process.cwd();
+  const singleMatchPath = filePaths.length === 1
+    ? options.filePath ?? options.filename ?? options.pluginTextFilePath
+    : undefined;
+  const fixMode = pluginFixModeForOptions(options);
+  let appended = false;
+
+  for (const filePath of filePaths) {
+    const matchPath = singleMatchPath ?? filePath;
+    const ruleMap = jsPluginRuleMapForFile(options, matchPath, perFileConfig);
+    if (ruleMap.size === 0) {
+      continue;
+    }
+    const ruleEntries = pluginRuleEntriesForFile(options, matchPath, ruleMap, perFileConfig);
+    if (ruleEntries.length === 0) {
+      continue;
+    }
+
+    // The native report echoes targets as given, so relative paths resolve
+    // against the lint cwd rather than the process cwd.
+    const absolutePath = normalizeESLintFilePath(filePath, cwd);
+    const outputIndex = (report.outputs ?? []).findIndex((fixed) => fixed.filePath === filePath);
+    let code = outputIndex === -1 ? undefined : report.outputs[outputIndex].output;
+    if (typeof code !== "string") {
+      try {
+        code = readFileSync(absolutePath, "utf8");
+      } catch {
+        continue;
+      }
+    }
+
+    const config = pluginConfigSourcesForFile(options, matchPath, perFileConfig).map((source) => source.config);
+    const parserOptions = { ...parserOptionsForConfig(config, matchPath, cwd), filePath: matchPath, requireParser: true };
+    const lintOptions = {
+      cwd,
+      filename: matchPath,
+      config: calculatedConfig({ cwd, noConfig: true, baseConfig: config }, matchPath)
+    };
+    const lintOnce = (text) => {
+      const sourceCode = createLinterSourceCode(text, null, parserOptions);
+      return applyDisableDirectives(runCustomLinterRules(ruleEntries, sourceCode, lintOptions), sourceCode);
+    };
+
+    let filtered = lintOnce(code);
+    if (fixMode) {
+      let changed = false;
+      for (let pass = 0; pass < MAX_AUTOFIX_PASSES; pass += 1) {
+        const output = applyMessageFixes(code, filtered.messages);
+        if (output === code) {
+          break;
+        }
+        changed = true;
+        code = output;
+        filtered = lintOnce(code);
+      }
+      if (changed) {
+        if (fixMode === "write") {
+          writeFileSync(absolutePath, code);
+        } else if (outputIndex === -1) {
+          report.outputs = [...(report.outputs ?? []), { filePath, output: code }];
+        } else {
+          report.outputs[outputIndex] = { ...report.outputs[outputIndex], output: code };
+        }
+      }
+    }
+
+    if (filtered.messages.length === 0 && filtered.suppressedMessages.length === 0) {
+      continue;
+    }
+    report.diagnostics = [
+      ...(report.diagnostics ?? []),
+      ...filtered.messages.map((message) => pluginMessageToDiagnostic(message, filePath))
+    ];
+    report.suppressedDiagnostics = [
+      ...(report.suppressedDiagnostics ?? []),
+      ...filtered.suppressedMessages.map((message) => ({
+        ...pluginMessageToDiagnostic(message, filePath),
+        suppression: {
+          kind: message.suppressions?.[0]?.kind ?? "directive",
+          justification: message.suppressions?.[0]?.justification ?? ""
+        }
+      }))
+    ];
+    appended = true;
+  }
+
+  if (appended) {
+    sortReportDiagnostics(report);
+  }
+  return report;
 }
 
 function nativeFlatConfigOptions(options) {
@@ -1273,6 +1422,10 @@ function nativeFlatConfigOptions(options) {
     return undefined;
   }
 
+  const jsPluginRuleIds = jsPluginRuleIdsFromConfigs(config);
+  if (jsPluginRuleIds.size > 0) {
+    config = configWithoutCustomRules(config, jsPluginRuleIds);
+  }
   if (configCanUseNativeRulesFastPath(config)) {
     return undefined;
   }
@@ -1398,6 +1551,9 @@ function nativeConfigRunsForFiles(paths, options) {
     const settings = calculated.settings;
     if (configured && options.rules) {
       rules = selectedRulesWithConfigOptions(rules, options.rules);
+    }
+    if (configured) {
+      rules = withoutJsPluginRules(rules, jsPluginRuleIdsForOptions(options, matchPath));
     }
     const signature = configured ? stableConfigSignature({ rules, settings }) : "<native-defaults>";
     if (!groups.has(signature)) {
@@ -1571,7 +1727,8 @@ function lintText(code, options = {}) {
       cwd: options.cwd,
       config: options.config ?? discoveredConfig,
       noConfig: options.noConfig,
-      deferDiagnosticConfigFiltering: true
+      deferDiagnosticConfigFiltering: true,
+      pluginTextFilePath: requestedPath
     });
     report.filePaths = (report.filePaths ?? []).map((filePath) => (filePath === tempFile ? requestedPath : filePath));
     report.outputs = (report.outputs ?? []).map((fixed) => ({
@@ -1613,11 +1770,12 @@ function buildNativeLintArgs(paths, options) {
     const configForRuleSelection = options.noConfig
       ? undefined
       : options.config ? readConfig(options.config, options.cwd, options.configCache) : undefined;
+    const jsPluginRuleIds = jsPluginRuleIdsFromConfigs(configForRuleSelection, options.baseConfig, options.overrideConfig);
     const enabledRules = enabledRuleNamesFromConfigs(
       configForRuleSelection,
       options.baseConfig,
       options.overrideConfig
-    );
+    ).filter((rule) => !jsPluginRuleIds.has(rule));
     if (enabledRules.length > 0) {
       cliArgs.push(`--rules=${enabledRules.join(",")}`);
     }
@@ -2095,9 +2253,11 @@ function withTemporaryConfig(options, callback) {
     ? readConfig(fileConfigPath, options.cwd, options.configCache)
     : undefined;
   const configs = [options.baseConfig, fileConfig, options.overrideConfig];
-  const rules = shouldMaterializeFileConfig
-    ? materializedRulesFromConfigs(...configs)
-    : runtimeRulesFromConfigs(...configs);
+  const jsPluginRuleIds = jsPluginRuleIdsFromConfigs(...configs);
+  const rules = withoutJsPluginRules(
+    shouldMaterializeFileConfig ? materializedRulesFromConfigs(...configs) : runtimeRulesFromConfigs(...configs),
+    jsPluginRuleIds
+  );
   const settings = configs.reduce(
     (result, config) => ({
       ...result,
@@ -2116,7 +2276,7 @@ function withTemporaryConfig(options, callback) {
     }
     return callback(options);
   }
-  const enabledRules = enabledRuleNamesFromConfigs(...configs);
+  const enabledRules = enabledRuleNamesFromConfigs(...configs).filter((rule) => !jsPluginRuleIds.has(rule));
   const hasExplicitOffRules = Object.values(rules).some((value) => ruleConfigSeverity(value) === 0);
   if (!shouldMaterializeFileConfig && !hasSettings && !hasRuleOptions(rules) && !hasExplicitOffRules && !options.forceMaterializedConfig) {
     return callback({
@@ -2245,14 +2405,14 @@ class Linter {
     const verifyOptions = typeof options === "string" ? { filename: options } : { ...options };
     const filePath = verifyOptions.filename ?? verifyOptions.filePath ?? "input.js";
     const normalizedFilePath = normalizeESLintFilePath(filePath, verifyOptions.cwd);
-    const sourceCode = createLinterSourceCode(
-      code,
-      parserForConfig(config, this.parsers, normalizedFilePath, verifyOptions.cwd),
-      parserOptionsForConfig(config, normalizedFilePath, verifyOptions.cwd)
-    );
     const customRuleMap = customRuleMapForConfig(config, this.rules, normalizedFilePath, verifyOptions.cwd);
     const customRuleFilterMap = customRuleMapForConfig(config, this.rules);
     const customRules = customRuleEntriesForConfig(config, customRuleMap, normalizedFilePath, verifyOptions.cwd);
+    const sourceCode = createLinterSourceCode(
+      code,
+      parserForConfig(config, this.parsers, normalizedFilePath, verifyOptions.cwd),
+      { ...parserOptionsForConfig(config, normalizedFilePath, verifyOptions.cwd), requireParser: customRules.length > 0 }
+    );
     const nativeConfig = configWithoutCustomRules(config, customRuleFilterMap);
     const lintOptions = {
       cwd: verifyOptions.cwd,
@@ -2282,10 +2442,10 @@ class Linter {
     ];
     this.times = { passes: [] };
     this.fixPassCount = 0;
-    return [
+    return sortLintMessages([
       ...nativeRuleFilter.messages,
       ...customRuleFilter.messages
-    ];
+    ]);
   }
 
   verifyAndFix(code, config = {}, options = {}) {
@@ -2294,7 +2454,7 @@ class Linter {
     let fixPassCount = 0;
     for (let pass = 0; pass < MAX_AUTOFIX_PASSES; pass += 1) {
       const messages = this.verify(output, config, options);
-      const fixedOutput = applyRuleFixes(output, messages.flatMap((message) => ruleFixItems(message.fix)));
+      const fixedOutput = applyMessageFixes(output, messages);
       if (fixedOutput === output) {
         this.fixPassCount = fixPassCount;
         return {
@@ -2377,9 +2537,17 @@ function parserForConfig(config, parsers, filePath, cwd) {
 
 function parserOptionsForConfig(config, filePath, cwd) {
   const configData = configDataFromConfig(config, filePath, cwd);
-  return {
+  const languageOptions = configData.languageOptions ?? {};
+  const parserOptions = {
     ...(configData.parserOptions ?? {}),
-    ...(configData.languageOptions?.parserOptions ?? {}),
+    ...(languageOptions.parserOptions ?? {})
+  };
+  return {
+    ...parserOptions,
+    sourceType: languageOptions.sourceType ?? parserOptions.sourceType,
+    ecmaVersion: languageOptions.ecmaVersion ?? parserOptions.ecmaVersion,
+    ecmaFeatures: parserOptions.ecmaFeatures ?? {},
+    globals: { ...(configData.globals ?? {}), ...(languageOptions.globals ?? {}) },
     filename: filePath,
     filePath,
     cwd
@@ -2425,11 +2593,127 @@ function pluginRulesForConfig(config, filePath, cwd) {
         continue;
       }
       for (const [ruleName, rule] of Object.entries(plugin.rules)) {
-        rules.set(`${pluginName}/${ruleName}`, rule);
+        const ruleId = `${pluginName}/${ruleName}`;
+        // A native rule takes precedence over a plugin rule mounted under the
+        // same id, so a config copied from ESLint keeps its native speed.
+        if (NATIVE_RULE_ID_SET.has(ruleId)) {
+          continue;
+        }
+        rules.set(ruleId, rule);
       }
     }
   }
   return rules;
+}
+
+function jsPluginRuleIdsFromConfigs(...configs) {
+  const ids = new Set();
+  for (const config of configs) {
+    for (const ruleId of pluginRulesForConfig(config).keys()) {
+      ids.add(ruleId);
+    }
+  }
+  return ids;
+}
+
+function withoutJsPluginRules(rules, jsPluginRuleIds) {
+  if (!rules || typeof rules !== "object" || jsPluginRuleIds.size === 0) {
+    return rules;
+  }
+  const filtered = {};
+  for (const [ruleId, ruleConfig] of Object.entries(rules)) {
+    if (!jsPluginRuleIds.has(ruleId)) {
+      filtered[ruleId] = ruleConfig;
+    }
+  }
+  return filtered;
+}
+
+function configDeclaresPlugins(config) {
+  if (Array.isArray(config)) {
+    return config.some((entry) => configDeclaresPlugins(entry));
+  }
+  return Boolean(
+    config
+    && typeof config === "object"
+    && config.plugins
+    && typeof config.plugins === "object"
+    && !Array.isArray(config.plugins)
+    && Object.keys(config.plugins).length > 0
+  );
+}
+
+// The native engine receives the JSON form of a config module. Plugin objects
+// (and their `create()` functions) only survive an in-process import, so a
+// config module that mounts plugins is loaded again in this process.
+function liveConfigForPath(configPath, options) {
+  const config = readConfig(configPath, options.cwd, options.configCache);
+  if (!isExecutableConfigPath(configPath) || !configDeclaresPlugins(config)) {
+    return config;
+  }
+  return configModule.readConfigModule(configPath, options.cwd);
+}
+
+function pluginConfigSourcesForFile(options, matchPath, perFileConfig = true) {
+  const cwd = options.cwd ?? process.cwd();
+  const sources = [];
+  if (options.baseConfig) {
+    sources.push({ config: options.baseConfig, cwd });
+  }
+  if (!options.noConfig) {
+    const configPath = perFileConfig && matchPath ? configPathForFile(options, matchPath) : configPathForOptions(options);
+    if (configPath) {
+      sources.push({ config: liveConfigForPath(configPath, options), cwd: dirname(configPath) });
+    }
+  }
+  if (options.overrideConfig) {
+    sources.push({ config: options.overrideConfig, cwd });
+  }
+  return sources;
+}
+
+function jsPluginRuleIdsForOptions(options, matchPath) {
+  const configs = [options.baseConfig, options.overrideConfig];
+  if (!options.noConfig) {
+    const configPath = matchPath ? configPathForFile(options, matchPath) : configPathForOptions(options);
+    if (configPath) {
+      configs.push(readConfig(configPath, options.cwd, options.configCache));
+    }
+  }
+  return jsPluginRuleIdsFromConfigs(...configs);
+}
+
+function jsPluginRuleMapForFile(options, matchPath, perFileConfig = true) {
+  const rules = new Map();
+  for (const { config, cwd } of pluginConfigSourcesForFile(options, matchPath, perFileConfig)) {
+    for (const [ruleId, rule] of pluginRulesForConfig(config, matchPath, cwd)) {
+      rules.set(ruleId, rule);
+    }
+  }
+  return rules;
+}
+
+function pluginRuleEntriesForFile(options, matchPath, ruleMap, perFileConfig = true) {
+  const entries = new Map();
+  for (const { config, cwd } of pluginConfigSourcesForFile(options, matchPath, perFileConfig)) {
+    for (const [ruleId, ruleConfig] of Object.entries(rulesFromConfig(config, matchPath, cwd))) {
+      if (!ruleMap.has(ruleId)) {
+        continue;
+      }
+      const severity = ruleConfigSeverity(ruleConfig);
+      if (severity === 0) {
+        entries.delete(ruleId);
+        continue;
+      }
+      entries.set(ruleId, {
+        ruleId,
+        rule: ruleMap.get(ruleId),
+        severity,
+        options: Array.isArray(ruleConfig) ? ruleConfig.slice(1) : []
+      });
+    }
+  }
+  return [...entries.values()];
 }
 
 function matchingConfigEntries(config, filePath = undefined, cwd = undefined) {
@@ -2483,7 +2767,7 @@ function appendCustomLintTextMessages(results, code, filePath, config, rules, op
   }
   let result = results.find((item) => item.filePath === filePath);
   const effectiveCode = typeof result?.output === "string" ? result.output : code;
-  const sourceCode = createLinterSourceCode(effectiveCode);
+  const sourceCode = createLinterSourceCode(effectiveCode, null, { ...parserOptionsForConfig(config, filePath, options.cwd), requireParser: true });
   const messages = runCustomLinterRules(customRules, sourceCode, {
     cwd: options.cwd,
     filename: filePath,
@@ -2498,7 +2782,7 @@ function appendCustomLintTextMessages(results, code, filePath, config, rules, op
     result = emptyESLintResult(filePath, effectiveCode);
     results.push(result);
   }
-  result.messages.push(...filtered.messages);
+  result.messages = sortLintMessages([...result.messages, ...filtered.messages]);
   result.suppressedMessages.push(...filtered.suppressedMessages);
   applyResultFixes(result, effectiveCode, options);
   finalizeESLintResult(result);
@@ -2521,7 +2805,7 @@ function appendCustomLintFileMessages(results, config, options) {
         continue;
       }
     }
-    const sourceCode = createLinterSourceCode(code);
+    const sourceCode = createLinterSourceCode(code, null, { ...parserOptionsForConfig(config, filePath, options.cwd), requireParser: true });
     const messages = runCustomLinterRules(customRules, sourceCode, {
       cwd: options.cwd,
       filename: filePath,
@@ -2531,7 +2815,7 @@ function appendCustomLintFileMessages(results, config, options) {
     if (filtered.messages.length === 0 && filtered.suppressedMessages.length === 0) {
       continue;
     }
-    result.messages.push(...filtered.messages);
+    result.messages = sortLintMessages([...result.messages, ...filtered.messages]);
     result.suppressedMessages.push(...filtered.suppressedMessages);
     applyResultFixes(result, code, options);
     finalizeESLintResult(result);
@@ -2539,11 +2823,22 @@ function appendCustomLintFileMessages(results, config, options) {
   return results;
 }
 
+// ESLint orders a file's messages by position; native and plugin messages
+// arrive as two separate batches.
+function sortLintMessages(messages) {
+  return messages
+    .map((message, index) => ({ message, index }))
+    .sort((left, right) => (left.message.line ?? 0) - (right.message.line ?? 0)
+      || (left.message.column ?? 0) - (right.message.column ?? 0)
+      || left.index - right.index)
+    .map(({ message }) => message);
+}
+
 function applyResultFixes(result, code, options) {
   if (!options.fix) {
     return;
   }
-  const output = applyRuleFixes(code, result.messages.flatMap((message) => ruleFixItems(message.fix)));
+  const output = applyMessageFixes(code, result.messages);
   if (output !== code) {
     result.output = output;
   }
@@ -2556,14 +2851,39 @@ function runCustomLinterRules(ruleEntries, sourceCode, options) {
 
   const messages = [];
   const program = sourceCode.ast ?? { type: "Program", range: [0, sourceCode.text.length] };
+  const hasAst = Array.isArray(program.body);
+  const listenersBySelector = new Map();
   for (const ruleEntry of ruleEntries) {
+    if (typeof ruleEntry.rule !== "function" && typeof ruleEntry.rule?.create !== "function") {
+      throw new Error(
+        `utoo-lint: rule "${ruleEntry.ruleId}" has no create() function. ` +
+          "ESLint plugins must be mounted from a utlint.config.ts (or .js) module so their rule objects are available at lint time."
+      );
+    }
     const context = createCustomRuleContext(ruleEntry, sourceCode, options, messages);
     const listeners = customRuleListeners(ruleEntry.rule, context);
-    if (customRuleChildNodes(program, sourceCode.visitorKeys).length > 0) {
-      traverseCustomRuleAst(program, listeners, context, sourceCode.visitorKeys);
-    } else {
+    if (!hasAst) {
       runCustomRuleTokenListeners(program, sourceCode.tokens, listeners, context);
+      continue;
     }
+    for (const [selector, listener] of Object.entries(listeners)) {
+      if (typeof listener !== "function") {
+        continue;
+      }
+      if (!listenersBySelector.has(selector)) {
+        listenersBySelector.set(selector, []);
+      }
+      listenersBySelector.get(selector).push({
+        ruleId: ruleEntry.ruleId,
+        listener(node) {
+          context.setCurrentNode(node);
+          listener(node);
+        }
+      });
+    }
+  }
+  if (hasAst && listenersBySelector.size > 0) {
+    pluginRunner.runRuleListeners(program, listenersBySelector, { visitorKeys: sourceCode.visitorKeys });
   }
   return messages;
 }
@@ -2720,231 +3040,6 @@ function disableDirectiveMatchesRule(directive, ruleId) {
   return directive.ruleId == null || directive.ruleId === ruleId;
 }
 
-function traverseCustomRuleAst(node, listeners, context, visitorKeys, seen = new Set(), ancestors = [], siblings = {}) {
-  if (!node || typeof node !== "object" || typeof node.type !== "string" || seen.has(node)) {
-    return;
-  }
-  seen.add(node);
-  for (const listener of customRuleMatchingListeners(listeners, node, false, ancestors, siblings, visitorKeys)) {
-    context.setCurrentNode(node);
-    listener(node);
-  }
-  const children = customRuleChildNodes(node, visitorKeys);
-  for (const [index, child] of children.entries()) {
-    traverseCustomRuleAst(child, listeners, context, visitorKeys, seen, [...ancestors, node], {
-      previous: children[index - 1] ?? null,
-      previousAll: children.slice(0, index)
-    });
-  }
-  for (const listener of customRuleMatchingListeners(listeners, node, true, ancestors, siblings, visitorKeys)) {
-    context.setCurrentNode(node);
-    listener(node);
-  }
-}
-
-function customRuleMatchingListeners(listeners, node, exit, ancestors = [], siblings = {}, visitorKeys = null) {
-  const matches = [];
-  for (const [selector, listener] of Object.entries(listeners)) {
-    if (typeof listener !== "function" || !customRuleSelectorMatches(selector, node, exit, ancestors, siblings, visitorKeys)) {
-      continue;
-    }
-    matches.push(listener);
-  }
-  return matches;
-}
-
-function customRuleSelectorMatches(selector, node, exit, ancestors = [], siblings = {}, visitorKeys = null) {
-  const suffix = ":exit";
-  const isExit = selector.endsWith(suffix);
-  if (isExit !== exit) {
-    return false;
-  }
-  const expression = isExit ? selector.slice(0, -suffix.length) : selector;
-  const childSelector = customRuleSplitTopLevelSelector(expression, ">");
-  if (childSelector) {
-    const parent = ancestors.at(-1);
-    return Boolean(parent)
-      && customRuleSimpleSelectorMatches(childSelector[0].trim(), parent, visitorKeys)
-      && customRuleSimpleSelectorMatches(childSelector[1].trim(), node, visitorKeys);
-  }
-  const adjacentSelector = customRuleSplitTopLevelSelector(expression, "+");
-  if (adjacentSelector) {
-    return Boolean(siblings.previous)
-      && customRuleSimpleSelectorMatches(adjacentSelector[0].trim(), siblings.previous, visitorKeys)
-      && customRuleSimpleSelectorMatches(adjacentSelector[1].trim(), node, visitorKeys);
-  }
-  const siblingSelector = customRuleSplitTopLevelSelector(expression, "~");
-  if (siblingSelector) {
-    return (siblings.previousAll ?? []).some((sibling) => customRuleSimpleSelectorMatches(siblingSelector[0].trim(), sibling, visitorKeys))
-      && customRuleSimpleSelectorMatches(siblingSelector[1].trim(), node, visitorKeys);
-  }
-  const descendantSelector = customRuleSplitTopLevelDescendantSelector(expression);
-  if (descendantSelector) {
-    return ancestors.some((ancestor) => customRuleSimpleSelectorMatches(descendantSelector[0].trim(), ancestor, visitorKeys))
-      && customRuleSimpleSelectorMatches(descendantSelector[1].trim(), node, visitorKeys);
-  }
-  return customRuleSimpleSelectorMatches(expression, node, visitorKeys);
-}
-
-function customRuleSimpleSelectorMatches(expression, node, visitorKeys = null) {
-  const hasSelector = expression.match(/^(.+?):has\((.+)\)$/u);
-  if (hasSelector) {
-    return customRuleSimpleSelectorMatches(hasSelector[1].trim(), node, visitorKeys)
-      && customRuleDescendants(node, visitorKeys).some((descendant) => (
-        customRuleSplitSelectorList(hasSelector[2]).some((selector) => customRuleSimpleSelectorMatches(selector.trim(), descendant, visitorKeys))
-      ));
-  }
-  const notSelector = expression.match(/^(.+?):not\((.+)\)$/u);
-  if (notSelector) {
-    return customRuleSimpleSelectorMatches(notSelector[1].trim(), node, visitorKeys)
-      && !customRuleSimpleSelectorMatches(notSelector[2].trim(), node, visitorKeys);
-  }
-  const matchesSelector = expression.match(/^(.*?):matches\((.+)\)$/u);
-  if (matchesSelector) {
-    const prefix = matchesSelector[1].trim();
-    if (prefix && !customRuleSimpleSelectorMatches(prefix, node, visitorKeys)) {
-      return false;
-    }
-    return customRuleSplitSelectorList(matchesSelector[2]).some((selector) => (
-      customRuleSimpleSelectorMatches(selector.trim(), node, visitorKeys)
-    ));
-  }
-  if (expression === node.type) {
-    return true;
-  }
-  const match = expression.match(/^([A-Za-z_$][\w$-]*|\*)?(?:\[([^\]]+)\])?$/u);
-  if (!match) {
-    return false;
-  }
-  const [, type = "*", attribute] = match;
-  if (type !== "*" && type !== node.type) {
-    return false;
-  }
-  return attribute ? customRuleAttributeSelectorMatches(node, attribute.trim()) : type === "*" || type === node.type;
-}
-
-function customRuleDescendants(node, visitorKeys, seen = new Set()) {
-  const descendants = [];
-  for (const child of customRuleChildNodes(node, visitorKeys)) {
-    if (seen.has(child)) {
-      continue;
-    }
-    seen.add(child);
-    descendants.push(child, ...customRuleDescendants(child, visitorKeys, seen));
-  }
-  return descendants;
-}
-
-function customRuleSplitTopLevelSelector(expression, separator) {
-  let state = customRuleSelectorScanState();
-  for (let index = 0; index < expression.length; index += 1) {
-    state = customRuleUpdateSelectorScanState(state, expression[index]);
-    if (state.depth === 0 && !state.quote && expression[index] === separator) {
-      return [expression.slice(0, index), expression.slice(index + 1)];
-    }
-  }
-  return null;
-}
-
-function customRuleSplitTopLevelDescendantSelector(expression) {
-  let state = customRuleSelectorScanState();
-  for (let index = 0; index < expression.length; index += 1) {
-    state = customRuleUpdateSelectorScanState(state, expression[index]);
-    if (state.depth === 0 && !state.quote && /\s/u.test(expression[index])) {
-      const left = expression.slice(0, index).trim();
-      const right = expression.slice(index).trim();
-      return left && right ? [left, right] : null;
-    }
-  }
-  return null;
-}
-
-function customRuleSplitSelectorList(value) {
-  const selectors = [];
-  let state = customRuleSelectorScanState();
-  let start = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    state = customRuleUpdateSelectorScanState(state, value[index]);
-    if (state.depth === 0 && !state.quote && value[index] === ",") {
-      selectors.push(value.slice(start, index));
-      start = index + 1;
-    }
-  }
-  selectors.push(value.slice(start));
-  return selectors.filter((selector) => selector.trim());
-}
-
-function customRuleSelectorScanState() {
-  return { depth: 0, quote: null, escaped: false };
-}
-
-function customRuleUpdateSelectorScanState(state, char) {
-  if (state.escaped) {
-    return { ...state, escaped: false };
-  }
-  if (char === "\\") {
-    return { ...state, escaped: true };
-  }
-  if (state.quote) {
-    return char === state.quote ? { ...state, quote: null } : state;
-  }
-  if (char === "\"" || char === "'") {
-    return { ...state, quote: char };
-  }
-  if (char === "[" || char === "(") {
-    return { ...state, depth: state.depth + 1 };
-  }
-  if ((char === "]" || char === ")") && state.depth > 0) {
-    return { ...state, depth: state.depth - 1 };
-  }
-  return state;
-}
-
-function customRuleAttributeSelectorMatches(node, attribute) {
-  const match = attribute.match(/^([\w$.-]+)\s*(!=|=)\s*(.+)$/u);
-  if (!match) {
-    return customRuleValueByPath(node, attribute) != null;
-  }
-  const [, path, operator, rawExpected] = match;
-  const actual = customRuleValueByPath(node, path);
-  const expected = customRuleSelectorValue(rawExpected);
-  return operator === "="
-    ? String(actual) === expected
-    : String(actual) !== expected;
-}
-
-function customRuleSelectorValue(raw) {
-  const value = raw.trim();
-  const quote = value[0];
-  if ((quote === "\"" || quote === "'") && value.at(-1) === quote) {
-    return value.slice(1, -1);
-  }
-  return value;
-}
-
-function customRuleValueByPath(node, path) {
-  return path.split(".").reduce((value, key) => (
-    value && typeof value === "object" ? value[key] : undefined
-  ), node);
-}
-
-function customRuleChildNodes(node, visitorKeys) {
-  const keys = Array.isArray(visitorKeys?.[node.type])
-    ? visitorKeys[node.type]
-    : Object.keys(node).filter((key) => !AST_TRAVERSAL_SKIP_KEYS.has(key));
-  const children = [];
-  for (const key of keys) {
-    const value = node[key];
-    const values = Array.isArray(value) ? value : [value];
-    for (const child of values) {
-      if (child && typeof child === "object" && typeof child.type === "string") {
-        children.push(child);
-      }
-    }
-  }
-  return children;
-}
-
 function runCustomRuleTokenListeners(program, tokens, listeners, context) {
   if (typeof listeners.Program === "function") {
     context.setCurrentNode(program);
@@ -2979,7 +3074,7 @@ function createCustomRuleContext(ruleEntry, sourceCode, options, messages) {
   let currentNode = sourceCode.ast ?? null;
   const context = {
     id: ruleEntry.ruleId,
-    options: ruleEntry.options,
+    options: pluginRunner.applyRuleOptionDefaults(ruleEntry.rule, ruleEntry.options),
     filename,
     physicalFilename: filename,
     cwd,
@@ -3197,7 +3292,7 @@ class SourceCode {
       this.text = textOrConfig.text;
       this.ast = textOrConfig.ast ?? null;
       this.parserServices = textOrConfig.parserServices ?? {};
-      this.scopeManager = textOrConfig.scopeManager ?? null;
+      defineScopeManager(this, textOrConfig.scopeManager ?? null);
       this.visitorKeys = textOrConfig.visitorKeys ?? null;
       this.hasBOM = Boolean(textOrConfig.hasBOM);
     } else {
@@ -3389,7 +3484,17 @@ class SourceCode {
   }
 
   getAncestors(node) {
-    return node ? sourceAncestorsForNode(this.ast, node) ?? [] : [];
+    if (!node) {
+      return [];
+    }
+    if (node.parent !== undefined) {
+      const ancestors = [];
+      for (let current = node.parent; current; current = current.parent) {
+        ancestors.unshift(current);
+      }
+      return ancestors;
+    }
+    return sourceAncestorsForNode(this.ast, node) ?? [];
   }
 
   getDeclaredVariables(node) {
@@ -3397,10 +3502,20 @@ class SourceCode {
   }
 
   getScope(node) {
-    if (node && typeof this.scopeManager?.acquire === "function") {
-      return this.scopeManager.acquire(node, true) ?? this.scopeManager.acquire(node, false) ?? this.scopeManager.globalScope ?? null;
+    const scopeManager = this.scopeManager;
+    if (!scopeManager || typeof scopeManager.acquire !== "function") {
+      return null;
     }
-    return this.scopeManager?.globalScope ?? null;
+    if (node) {
+      const inner = node.type !== "Program";
+      for (let current = node; current; current = current.parent) {
+        const scope = scopeManager.acquire(current, inner);
+        if (scope) {
+          return scope.type === "function-expression-name" ? scope.childScopes[0] : scope;
+        }
+      }
+    }
+    return scopeManager.scopes?.[0] ?? scopeManager.globalScope ?? null;
   }
 
   markVariableAsUsed(name, node) {
@@ -3434,6 +3549,31 @@ class SourceCode {
   isGlobalReference() {
     return false;
   }
+}
+
+function defineScopeManager(sourceCode, scopeManager) {
+  if (typeof scopeManager !== "function") {
+    sourceCode.scopeManager = scopeManager;
+    return;
+  }
+  // Scope analysis is comparatively expensive; run it only when a rule asks.
+  let computed = false;
+  let value = null;
+  Object.defineProperty(sourceCode, "scopeManager", {
+    configurable: true,
+    enumerable: true,
+    get() {
+      if (!computed) {
+        computed = true;
+        value = scopeManager() ?? null;
+      }
+      return value;
+    },
+    set(next) {
+      computed = true;
+      value = next;
+    }
+  });
 }
 
 function sourceLineStartIndices(text) {
@@ -3725,12 +3865,10 @@ class RuleTester {
           RuleTester[testCase.only ? "itOnly" : "it"](testCase.name ?? testCase.code, () => {
             const config = ruleTesterConfig(ruleName, this.config, testCase, "error");
             const options = ruleTesterOptions(testCase);
-            const result = Object.hasOwn(testCase, "output")
-              ? linter.verifyAndFix(testCase.code, config, options)
-              : { messages: linter.verify(testCase.code, config, options), output: testCase.code };
-            const messages = result.messages;
+            const messages = linter.verify(testCase.code, config, options);
             assertRuleTesterErrors(testCase, messages, rule);
-            assertRuleTesterOutput(testCase, result.output);
+            // Like ESLint's RuleTester, `output` is the result of one autofix pass.
+            assertRuleTesterOutput(testCase, Object.hasOwn(testCase, "output") ? applyMessageFixes(testCase.code, messages) : testCase.code);
           });
         }
       });
@@ -3877,6 +4015,47 @@ function applyRuleFixes(code, fix) {
     .reduce((output, item) => output.slice(0, item.range[0]) + item.text + output.slice(item.range[1]), code);
 }
 
+// Applies one non-overlapping fix per message, like ESLint's SourceCodeFixer.
+// Fixes that overlap an earlier one are left for a later pass.
+function applyMessageFixes(code, messages) {
+  const fixes = [];
+  for (const message of messages) {
+    const items = ruleFixItems(message?.fix)
+      .slice()
+      .sort((left, right) => left.range[0] - right.range[0] || left.range[1] - right.range[1]);
+    if (items.length === 0) {
+      continue;
+    }
+    let text = "";
+    let cursor = items[0].range[0];
+    let valid = true;
+    for (const item of items) {
+      if (item.range[0] < cursor) {
+        valid = false;
+        break;
+      }
+      text += code.slice(cursor, item.range[0]) + item.text;
+      cursor = item.range[1];
+    }
+    if (valid) {
+      fixes.push({ range: [items[0].range[0], cursor], text });
+    }
+  }
+  fixes.sort((left, right) => left.range[0] - right.range[0] || left.range[1] - right.range[1]);
+  let output = "";
+  let position = 0;
+  let lastEnd = -Infinity;
+  for (const fix of fixes) {
+    if (lastEnd >= fix.range[0]) {
+      continue;
+    }
+    output += code.slice(position, fix.range[0]) + fix.text;
+    position = fix.range[1];
+    lastEnd = fix.range[1];
+  }
+  return output + code.slice(position);
+}
+
 function ruleFixItems(fix) {
   if (!fix) {
     return [];
@@ -3929,9 +4108,28 @@ function createLinterSourceCode(text, parser = null, parserOptions = {}) {
   });
 }
 
-function parseSourceCode(text, parser, parserOptions) {
-  if (!parser) {
+function parseSourceCodeWithDefaultParser(text, parserOptions) {
+  let parsed;
+  try {
+    parsed = estreeParser.parseForESLint(text, parserOptions);
+  } catch (error) {
+    if (parserOptions.requireParser) {
+      throw error;
+    }
     return null;
+  }
+  return new SourceCode({
+    text,
+    ast: parsed.ast,
+    parserServices: parsed.services ?? {},
+    scopeManager: parsed.scopeManager ?? null,
+    visitorKeys: parsed.visitorKeys ?? null
+  });
+}
+
+function parseSourceCode(text, parser, parserOptions = {}) {
+  if (!parser) {
+    return parserOptions.tokensOnly ? null : parseSourceCodeWithDefaultParser(text, parserOptions);
   }
   if (typeof parser.parseForESLint === "function") {
     const result = parser.parseForESLint(text, parserOptions) ?? {};
@@ -4198,7 +4396,7 @@ function applyCompatibilityDisableDirectives(result, textOptions) {
     return;
   }
 
-  const filtered = applyDisableDirectives(result.messages, createLinterSourceCode(source));
+  const filtered = applyDisableDirectives(result.messages, createLinterSourceCode(source, null, { tokensOnly: true }));
   result.messages = filtered.messages;
   result.suppressedMessages.push(...filtered.suppressedMessages);
 }
@@ -4932,6 +5130,12 @@ function diagnosticToESLintMessage(diagnostic, ruleSeverities) {
     column: diagnostic.column,
     nodeType: null
   };
+  if (typeof diagnostic.endLine === "number") {
+    message.endLine = diagnostic.endLine;
+  }
+  if (typeof diagnostic.endColumn === "number") {
+    message.endColumn = diagnostic.endColumn;
+  }
   if (diagnostic.endLine != null) {
     message.endLine = diagnostic.endLine;
   }

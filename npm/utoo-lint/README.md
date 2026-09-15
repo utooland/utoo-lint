@@ -24,6 +24,9 @@ and JavaScript APIs.
   parallel file linting.
 - **Broad rule coverage** — More than 300 rules cover JavaScript, TypeScript,
   React, JSX accessibility, and imports.
+- **ESLint plugin compatibility** — Mount community ESLint plugins in
+  `utlint.config.ts`; their rules run alongside native rules with shared
+  suppressions, autofix, and reporting.
 - **Familiar configuration** — Use typed `utlint.config.ts` or static
   `utlint.config.json`, with ESLint-style rule names and severities.
 - **Practical workflows** — Safe autofix, suppression comments, JSON output,

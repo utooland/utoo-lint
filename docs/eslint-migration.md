@@ -17,7 +17,8 @@ The lowest-cost projects usually have these properties:
 - Most enabled rules are ESLint core rules or supported rules from
   `@typescript-eslint`, `eslint-plugin-react`, `eslint-plugin-import`,
   `eslint-plugin-jsx-a11y`, `eslint-plugin-react-hooks`, or
-  `eslint-plugin-eslint-comments`.
+  `eslint-plugin-eslint-comments`. Rules from other plugins can keep running
+  through the [ESLint plugin bridge](configuration.md#eslint-plugins).
 - Formatting is already handled by Prettier, Biome, or another formatter
   outside ESLint.
 - CI and pre-commit scripts can run ESLint and `utoo-lint` side by side for a
@@ -36,8 +37,8 @@ Use this table as a first estimate.
 | Project shape | Expected cost | What usually needs work |
 | --- | --- | --- |
 | Simple app or package with mostly supported rules | Low, often under half a day | Install package, generate `utlint.config.json`, update scripts, compare diagnostics |
-| Frontend app with several plugin presets and overrides | Medium, around 1-2 days | Flatten config, review unsupported plugin rules, decide which rules stay on ESLint temporarily |
-| Monorepo with custom ESLint plugins, processors, typed parser services, or autofix-dependent workflows | High, several days or more | Keep dual lint jobs, port custom rules, replace processors, and audit type-aware rule behavior |
+| Frontend app with several plugin presets and overrides | Medium, around 1-2 days | Flatten config, mount plugins whose rules have no native implementation, decide which rules stay on ESLint temporarily |
+| Monorepo with custom ESLint plugins, processors, typed parser services, or autofix-dependent workflows | High, several days or more | Mount custom plugins in `utlint.config.ts`, keep dual lint jobs for processors and type-aware rules, and audit autofix coverage |
 
 The main cost is not changing file syntax. It is deciding what to do with ESLint
 features that do not have a native equivalent yet.
@@ -55,10 +56,13 @@ Common low-cost items:
 
 Common medium- or high-cost items:
 
-- Unsupported plugin rules need a native `utoo-lint` rule, a replacement rule,
-  or a temporary ESLint job.
+- Plugin rules without a native implementation can keep running by mounting
+  the plugin in `utlint.config.ts`; see
+  [ESLint Plugins](configuration.md#eslint-plugins). They run in JavaScript, so
+  prefer a native rule where one exists.
 - Dynamic JavaScript config values, functions, symbols, parser objects, and
-  non-serializable plugin objects are stripped by the migrator.
+  non-serializable plugin objects are stripped by the migrator. Re-add
+  `plugins` by hand in a TypeScript config when you need their rules.
 - Processors for non-JS files such as Markdown, Vue SFC, or MDX are not a native
   migration path today.
 - Autofix-dependent workflows need an explicit coverage check. `utoo-lint`
@@ -429,5 +433,6 @@ Before removing ESLint from CI, confirm:
 - Side-by-side diagnostics are reviewed for the selected rule set.
 - Formatting remains a separate step, and required autofixes have native
   coverage or a documented fallback.
-- Custom ESLint plugins, processors, and type-aware rules either remain in an
-  ESLint job or have a tracked native replacement plan.
+- Custom ESLint plugins are mounted in `utlint.config.ts`, and processors and
+  type-aware rules either remain in an ESLint job or have a tracked native
+  replacement plan.
