@@ -34,6 +34,10 @@ const Candidate = struct {
     first_assignment_end: u32 = 0,
     read_before_assignment: bool = false,
     destructuring_group: ?usize = null,
+    /// Statement list that directly contains the declaration. A delayed
+    /// assignment can only be merged into the declaration when it is an
+    /// expression statement in the same list.
+    declaration_host: ast.NodeIndex = .null,
 };
 
 pub fn run(
@@ -151,6 +155,7 @@ const Visitor = struct {
     ) Allocator.Error!traverser.Action {
         if (declaration.kind != .let) return .proceed;
 
+        const host = declarationHost(ctx);
         for (ctx.tree.extra(declaration.declarators)) |declarator_index| {
             const declarator = switch (ctx.tree.data(declarator_index)) {
                 .variable_declarator => |declarator| declarator,
@@ -164,7 +169,7 @@ const Visitor = struct {
                 break :group group_id;
             } else null;
 
-            try self.collectCandidate(ctx.tree, declarator.id, index, group, declarator.init != .null);
+            try self.collectCandidate(ctx.tree, declarator.id, index, host, group, declarator.init != .null);
         }
 
         return .proceed;
@@ -176,7 +181,13 @@ const Visitor = struct {
         index: ast.NodeIndex,
         ctx: *traverser.basic.Ctx,
     ) Allocator.Error!traverser.Action {
-        try self.markAssignment(ctx.tree, expression.left, expression.operator == .assign, ctx.tree.span(index).end);
+        try self.markAssignment(
+            ctx.tree,
+            expression.left,
+            expression.operator == .assign,
+            assignmentHost(ctx),
+            ctx.tree.span(index).end,
+        );
         return .proceed;
     }
 
@@ -206,7 +217,7 @@ const Visitor = struct {
         index: ast.NodeIndex,
         ctx: *traverser.basic.Ctx,
     ) Allocator.Error!traverser.Action {
-        try self.markAssignment(ctx.tree, expression.argument, false, ctx.tree.span(index).end);
+        try self.markAssignment(ctx.tree, expression.argument, false, .null, ctx.tree.span(index).end);
         return .proceed;
     }
 
@@ -230,7 +241,7 @@ const Visitor = struct {
                 break :group group_id;
             } else null;
 
-            try self.collectCandidate(tree, declarator.id, index, group, true);
+            try self.collectCandidate(tree, declarator.id, index, .null, group, true);
         }
     }
 
@@ -257,6 +268,7 @@ const Visitor = struct {
         tree: *const ast.Tree,
         index: ast.NodeIndex,
         declaration: ast.NodeIndex,
+        declaration_host: ast.NodeIndex,
         group: ?usize,
         initialized: bool,
     ) Allocator.Error!void {
@@ -276,15 +288,16 @@ const Visitor = struct {
                     .name = tree.string(identifier.name),
                     .initialized = initialized,
                     .destructuring_group = group,
+                    .declaration_host = declaration_host,
                 });
             },
-            .assignment_pattern => |pattern| try self.collectCandidate(tree, pattern.left, declaration, group, initialized),
-            .binding_rest_element => |element| try self.collectCandidate(tree, element.argument, declaration, group, initialized),
+            .assignment_pattern => |pattern| try self.collectCandidate(tree, pattern.left, declaration, declaration_host, group, initialized),
+            .binding_rest_element => |element| try self.collectCandidate(tree, element.argument, declaration, declaration_host, group, initialized),
             .array_pattern => |pattern| {
                 for (tree.extra(pattern.elements)) |element| {
-                    try self.collectCandidate(tree, element, declaration, group, initialized);
+                    try self.collectCandidate(tree, element, declaration, declaration_host, group, initialized);
                 }
-                try self.collectCandidate(tree, pattern.rest, declaration, group, initialized);
+                try self.collectCandidate(tree, pattern.rest, declaration, declaration_host, group, initialized);
             },
             .object_pattern => |pattern| {
                 for (tree.extra(pattern.properties)) |property_index| {
@@ -292,19 +305,24 @@ const Visitor = struct {
                         .binding_property => |property| property,
                         else => continue,
                     };
-                    try self.collectCandidate(tree, property.value, declaration, group, initialized);
+                    try self.collectCandidate(tree, property.value, declaration, declaration_host, group, initialized);
                 }
-                try self.collectCandidate(tree, pattern.rest, declaration, group, initialized);
+                try self.collectCandidate(tree, pattern.rest, declaration, declaration_host, group, initialized);
             },
             else => {},
         }
     }
 
+    /// `assignment_host` is the statement list that directly contains the
+    /// assignment expression statement, or `.null` when the assignment cannot
+    /// be rewritten into a declaration (nested expression, `if` body without
+    /// braces, labeled statement, and so on).
     fn markAssignment(
         self: *Visitor,
         tree: *const ast.Tree,
         index: ast.NodeIndex,
         simple_assign: bool,
+        assignment_host: ast.NodeIndex,
         assignment_end: u32,
     ) Allocator.Error!void {
         if (index == .null) return;
@@ -321,6 +339,12 @@ const Visitor = struct {
                         if (candidate.assignment_count == 1) {
                             candidate.first_assignment_node = unwrapped;
                             candidate.first_assignment_end = assignment_end;
+                            // ESLint only merges the assignment into the
+                            // declaration when both live in the same
+                            // statement list. Anything else keeps `let`.
+                            if (assignment_host == .null or assignment_host != candidate.declaration_host) {
+                                candidate.reassigned = true;
+                            }
                         } else {
                             candidate.reassigned = true;
                         }
@@ -332,12 +356,12 @@ const Visitor = struct {
                     }
                 }
             },
-            .assignment_pattern => |pattern| try self.markAssignment(tree, pattern.left, simple_assign, assignment_end),
+            .assignment_pattern => |pattern| try self.markAssignment(tree, pattern.left, simple_assign, assignment_host, assignment_end),
             .array_pattern => |pattern| {
                 for (tree.extra(pattern.elements)) |element| {
-                    try self.markAssignment(tree, element, simple_assign, assignment_end);
+                    try self.markAssignment(tree, element, simple_assign, assignment_host, assignment_end);
                 }
-                try self.markAssignment(tree, pattern.rest, simple_assign, assignment_end);
+                try self.markAssignment(tree, pattern.rest, simple_assign, assignment_host, assignment_end);
             },
             .object_pattern => |pattern| {
                 for (tree.extra(pattern.properties)) |property_index| {
@@ -345,14 +369,38 @@ const Visitor = struct {
                         .binding_property => |property| property,
                         else => continue,
                     };
-                    try self.markAssignment(tree, property.value, simple_assign, assignment_end);
+                    try self.markAssignment(tree, property.value, simple_assign, assignment_host, assignment_end);
                 }
-                try self.markAssignment(tree, pattern.rest, simple_assign, assignment_end);
+                try self.markAssignment(tree, pattern.rest, simple_assign, assignment_host, assignment_end);
             },
             else => {},
         }
     }
 };
+
+/// Returns the statement list that directly owns the node being visited.
+/// `switch` cases share one scope, so their consequents map to the `switch`
+/// statement itself.
+fn statementListHost(ctx: *traverser.basic.Ctx, depth: usize) ast.NodeIndex {
+    const host = ctx.path.ancestor(depth) orelse return .null;
+    return switch (ctx.tree.data(host)) {
+        .program, .function_body, .block_statement, .static_block => host,
+        .switch_case => ctx.path.ancestor(depth + 1) orelse .null,
+        else => .null,
+    };
+}
+
+fn declarationHost(ctx: *traverser.basic.Ctx) ast.NodeIndex {
+    return statementListHost(ctx, 1);
+}
+
+/// Mirrors ESLint's `canBecomeVariableDeclaration`: the assignment must be a
+/// whole expression statement placed directly in a statement list.
+fn assignmentHost(ctx: *traverser.basic.Ctx) ast.NodeIndex {
+    const parent = ctx.path.parent() orelse return .null;
+    if (ctx.tree.data(parent) != .expression_statement) return .null;
+    return statementListHost(ctx, 2);
+}
 
 fn candidateReportNode(
     candidate: Candidate,
