@@ -213,8 +213,11 @@ explicit missing file paths. Set
 `UTOO_LINT_BIN=/path/to/utoo-lint` to force the JS API and CLI wrapper to use a
 specific native binary during local development.
 
-The package also installs a `fishlint` compatibility command for projects that
-currently run `fishlint eslint ...`. It supports the common eslint subcommand
+The package also ships a fishlint compatibility CLI at
+`node_modules/@utoo/lint/bin/fishlint.js` for projects that currently run
+`fishlint eslint ...`. It is not registered as a `fishlint` bin (only
+`utoo-lint` and `utlint` are), so scripts opt into it by path. It supports the
+common eslint subcommand
 shape, forwards `--config` and `-c`, maps `--glob` values to native lint
 targets, expands common `--glob` patterns such as `src/**/*.js` and
 `src/**/*.{js,ts}` or `src/**/*.[jt]s`, and normalizes split value flags such
@@ -258,17 +261,19 @@ path shown in output.
 `--print-config` prints the selected utoo-lint JSON configuration for migration
 debugging.
 
-The package also exposes an `eslint` compatibility bin that routes directly
-through the same wrapper, so package scripts such as `eslint src -f json` can be
-tested without adding the `fishlint eslint` prefix.
+The package also ships an ESLint CLI wrapper at
+`node_modules/@utoo/lint/bin/eslint.js` that routes directly through the same
+wrapper, so package scripts such as `eslint src -f json` can be tested without
+adding the `fishlint eslint` prefix. It is not registered as an `eslint` bin
+either, so an installed ESLint keeps owning that command.
 
 ```bash
-pnpm exec fishlint eslint --disable-setup --config utlint.config.json --ext .js,.ts --glob src
-pnpm exec eslint --config utlint.config.json --ext .js,.ts src
+node node_modules/@utoo/lint/bin/fishlint.js eslint --disable-setup --config utlint.config.json --ext .js,.ts --glob src
+node node_modules/@utoo/lint/bin/eslint.js --config utlint.config.json --ext .js,.ts src
 ```
 
 For programmatic replacements, `runFishlint()` invokes the same compatibility
-wrapper as the `fishlint` bin, including wrapper-side ignore filtering, quiet
+wrapper as `bin/fishlint.js`, including wrapper-side ignore filtering, quiet
 output, max-warning exit semantics, stdin handling through `options.input`, and
 delegated commands.
 
@@ -289,7 +294,8 @@ configuration value flags such as `fishlint format --config .prettierrc`.
 `fishlint setup` and `fishlint setuplint` are accepted as no-ops so existing
 install hooks do not fail after replacing the package.
 
-`fishlint-lint-staged` is also provided for generated fishlint pre-commit hooks.
+`node_modules/@utoo/lint/bin/fishlint-lint-staged.js` is also provided for
+generated fishlint pre-commit hooks; reference it by path as well.
 If a project has its own `lint-staged` install, the wrapper delegates to it.
 Otherwise it lints staged JavaScript and TypeScript files directly with
 the same `fishlint eslint` compatibility wrapper, preserving flags such as

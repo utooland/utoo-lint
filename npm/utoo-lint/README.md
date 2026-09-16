@@ -144,7 +144,8 @@ With utoo, run these scripts as `ut lint` and `ut lint:fix`.
 | Select rules for one run | `utx @utoo/lint --rules=no-debugger,no-unused-vars src` |
 | Use an explicit config | `utx @utoo/lint --config=utlint.config.json src` |
 
-Run `utx @utoo/lint --help` for all CLI options.
+Run `utx @utoo/lint --help` for all CLI options. Once the package is installed,
+`utlint` is a shorter alias for the `utoo-lint` command.
 
 ## Configuration
 
@@ -218,10 +219,11 @@ utx @utoo/lint migrate eslint \
   --output utlint.config.json
 ```
 
-The package also installs a `fishlint` compatibility command and ships an
-ESLint CLI wrapper at `@utoo/lint/bin/eslint.js` for incremental replacement
-workflows. The wrapper is not registered as an `eslint` bin, so installing
-`@utoo/lint` next to ESLint never changes what existing `eslint` scripts run;
+The package registers only the `utoo-lint` and `utlint` commands. For
+incremental replacement workflows it also ships an ESLint CLI wrapper at
+`@utoo/lint/bin/eslint.js` and a fishlint compatibility CLI at
+`@utoo/lint/bin/fishlint.js`. Neither is registered as a bin, so installing
+`@utoo/lint` never changes what existing `eslint` or `fishlint` scripts run;
 opt in per script instead. See the
 [migration guide](https://github.com/utooland/utoo-lint/blob/main/docs/eslint-migration.md)
 for supported mappings and known differences.
