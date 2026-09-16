@@ -218,8 +218,11 @@ utx @utoo/lint migrate eslint \
   --output utlint.config.json
 ```
 
-The package also exposes `eslint` and `fishlint` compatibility commands for
-incremental replacement workflows. See the
+The package also installs a `fishlint` compatibility command and ships an
+ESLint CLI wrapper at `@utoo/lint/bin/eslint.js` for incremental replacement
+workflows. The wrapper is not registered as an `eslint` bin, so installing
+`@utoo/lint` next to ESLint never changes what existing `eslint` scripts run;
+opt in per script instead. See the
 [migration guide](https://github.com/utooland/utoo-lint/blob/main/docs/eslint-migration.md)
 for supported mappings and known differences.
 
