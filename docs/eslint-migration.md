@@ -371,12 +371,16 @@ translation layer as `fishlint eslint`, described below.
 
 ## Replace Fishlint Commands
 
-`@utoo/lint` installs a `fishlint` compatibility command for scripts that already
-call the eslint subcommand:
+`@utoo/lint` ships a fishlint compatibility CLI at `bin/fishlint.js` for scripts
+that already call the eslint subcommand. Like the ESLint wrapper above, it is
+not registered as a `fishlint` bin, so opt in explicitly:
 
 ```bash
-npx fishlint eslint --disable-setup --config utlint.config.json --ext .js,.ts --glob src
+node node_modules/@utoo/lint/bin/fishlint.js eslint --disable-setup --config utlint.config.json --ext .js,.ts --glob src
 ```
+
+`bin/fishlint-lint-staged.js` is the matching lint-staged entry point and can
+be referenced the same way.
 
 The wrapper invokes `utoo-lint` after translating common fishlint eslint flags.
 It forwards `--config`, maps `--glob` values to lint targets, accepts `--ext`

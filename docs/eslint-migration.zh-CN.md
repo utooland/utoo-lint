@@ -274,11 +274,13 @@ npx utoo-lint --config=utlint.config.json --format=json src test > utoo-report.j
 
 ## 替换 Fishlint 命令
 
-`@utoo/lint` 会安装一个 `fishlint` 兼容命令，供已经调用 eslint 子命令的脚本使用：
+`@utoo/lint` 在 `bin/fishlint.js` 中提供了 fishlint 兼容 CLI，供已经调用 eslint 子命令的脚本使用。与上文的 ESLint 封装一样，它不会注册为 `fishlint` 可执行命令，需要显式启用：
 
 ```bash
-npx fishlint eslint --disable-setup --config utlint.config.json --ext .js,.ts --glob src
+node node_modules/@utoo/lint/bin/fishlint.js eslint --disable-setup --config utlint.config.json --ext .js,.ts --glob src
 ```
+
+`bin/fishlint-lint-staged.js` 是对应的 lint-staged 入口，可以用同样的方式引用。
 
 封装层会先转换常见的 fishlint eslint 参数，再调用 `utoo-lint`。它会转发 `--config`，把 `--glob` 值映射为 lint 目标，为兼容性接受 `--ext`，并忽略仅属于 fishlint 的 setup/debug 参数。`--fix` 会应用受支持原生规则的修复，`--fix-dry-run` 会计算修复后的输出而不写入文件。
 

@@ -54,8 +54,7 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "fishlint": "./bin/fishlint.js",
-    "fishlint-lint-staged": "./bin/fishlint-lint-staged.js",
+    "utlint": "./bin/utoo-lint.js",
     "utoo-lint": "./bin/utoo-lint.js"
   },
   "files": [

@@ -1000,10 +1000,13 @@ test("fishlint --rules overrides flat-config off severities", (t) => {
   assert.ok(report.diagnostics.every((diagnostic) => diagnostic.severity === "warning"));
 });
 
-test("the package does not register an eslint bin but keeps the wrapper runnable", (t) => {
+test("the package registers only the utoo-lint and utlint bins but keeps the wrappers runnable", (t) => {
   const packageJson = JSON.parse(readFileSync(join(packageDirectory, "package.json"), "utf8"));
-  assert.deepEqual(Object.keys(packageJson.bin).sort(), ["fishlint", "fishlint-lint-staged", "utoo-lint"]);
+  assert.deepEqual(packageJson.bin, { utlint: "./bin/utoo-lint.js", "utoo-lint": "./bin/utoo-lint.js" });
   assert.ok(packageJson.files.includes("bin"));
+  for (const wrapper of ["eslint.js", "fishlint.js", "fishlint-lint-staged.js"]) {
+    assert.ok(existsSync(join(packageDirectory, "bin", wrapper)), wrapper);
+  }
 
   const project = createProject(t);
   const sourcePath = write(join(project, "index.js"), "debugger;\n");
