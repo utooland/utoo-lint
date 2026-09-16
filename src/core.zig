@@ -6932,6 +6932,10 @@ pub const Options = struct {
         };
         const max_depth = switch (config.get("maxDepth") orelse return 1024) {
             .integer => |max_depth| max_depth,
+            // eslint-plugin-import spells its unlimited default as "∞"; the
+            // JavaScript wrapper maps `Infinity` to the same string. Unlimited
+            // means no depth cutoff at all: the visited set bounds traversal.
+            .string => |spelling| return if (std.mem.eql(u8, spelling, "∞")) std.math.maxInt(usize) else error.UnsupportedRuleConfigValue,
             else => return error.UnsupportedRuleConfigValue,
         };
         if (max_depth < 1) return error.UnsupportedRuleConfigValue;
@@ -11493,6 +11497,28 @@ test "Options can apply ESLint-style rule config values" {
     try std.testing.expect(options.import_no_cycle_amd);
     try std.testing.expect(options.import_no_cycle_commonjs);
     try std.testing.expectEqual(@as(usize, 1), options.import_no_cycle_max_depth);
+
+    var import_no_cycle_unlimited_config = try std.json.parseFromSlice(
+        std.json.Value,
+        std.testing.allocator,
+        "[\"error\",{\"maxDepth\":\"∞\"}]",
+        .{},
+    );
+    defer import_no_cycle_unlimited_config.deinit();
+    try options.setByRuleConfigValue("import/no-cycle", import_no_cycle_unlimited_config.value);
+    try std.testing.expectEqual(@as(usize, std.math.maxInt(usize)), options.import_no_cycle_max_depth);
+
+    var import_no_cycle_invalid_config = try std.json.parseFromSlice(
+        std.json.Value,
+        std.testing.allocator,
+        "[\"error\",{\"maxDepth\":null}]",
+        .{},
+    );
+    defer import_no_cycle_invalid_config.deinit();
+    try std.testing.expectError(
+        error.UnsupportedRuleConfigValue,
+        options.setByRuleConfigValue("import/no-cycle", import_no_cycle_invalid_config.value),
+    );
 
     var import_no_duplicates_config = try std.json.parseFromSlice(
         std.json.Value,

@@ -216,3 +216,41 @@ test("empty settings and options on disabled rules remain fast-path eligible", (
   assert.ok(calls[0].args.includes("--rules=no-debugger"));
   assert.equal(calls[0].args.some((arg) => arg.startsWith("--config=")), false);
 });
+
+
+test("import/no-cycle maxDepth Infinity is written with the native unlimited spelling", (t) => {
+  const project = createProject(t);
+  const sourcePath = write(join(project, "index.js"), "export const value = 1;\n");
+  const rules = { "import/no-cycle": ["error", { maxDepth: Infinity }] };
+
+  const inline = captureNativeRuns(() =>
+    lintFiles([sourcePath], { binary: "mock-utoo-lint", cwd: project, noConfig: true, overrideConfig: { rules } })
+  );
+  assert.equal(inline.calls.length, 1);
+  assert.deepEqual(inline.calls[0].config, [{ rules: { "import/no-cycle": ["error", { maxDepth: "\u221e" }] } }]);
+
+  writeConfig(project, { rules: { "no-debugger": "error" } });
+  const perFile = captureNativeRuns(() =>
+    lintFiles([sourcePath], { binary: "mock-utoo-lint", cwd: project, overrideConfig: { rules } })
+  );
+  assert.equal(perFile.calls.length, 1);
+  assert.deepEqual(perFile.calls[0].config.rules["import/no-cycle"], ["error", { maxDepth: "\u221e" }]);
+  assert.equal(perFile.calls[0].config.rules["no-debugger"], "error");
+});
+
+test("non-finite rule options without a native spelling fail with the rule and option name", (t) => {
+  const project = createProject(t);
+  const sourcePath = write(join(project, "index.js"), "debugger;\n");
+
+  assert.throws(
+    () => captureNativeRuns(() =>
+      lintFiles([sourcePath], {
+        binary: "mock-utoo-lint",
+        cwd: project,
+        noConfig: true,
+        overrideConfig: { rules: { "max-depth": ["error", { max: Infinity }] } }
+      })
+    ),
+    { name: "TypeError", message: /Rule "max-depth" option "max" is Infinity/ }
+  );
+});

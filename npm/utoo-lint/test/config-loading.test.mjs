@@ -209,6 +209,35 @@ test("frontend preset scopes default and explicit targets to source files", (t) 
   }
 });
 
+test("ESLint accepts import/no-cycle maxDepth Infinity and a finite depth alike", async () => {
+  for (const maxDepth of [2, Infinity]) {
+    const eslint = new ESLint({
+      binary: testBinary(),
+      useEslintrc: false,
+      overrideConfig: { rules: { "import/no-cycle": ["error", { maxDepth }] } }
+    });
+
+    const [result] = await eslint.lintText("export const value = 1;\n", { filePath: "input.js" });
+
+    assert.equal(result.errorCount, 0, String(maxDepth));
+    assert.deepEqual(result.messages, [], String(maxDepth));
+  }
+});
+
+test("executable configs keep import/no-cycle maxDepth Infinity for the native binary", (t) => {
+  const project = createProject(t);
+  const configPath = write(
+    join(project, "utlint.config.mjs"),
+    'export default [{ rules: { "import/no-cycle": ["error", { maxDepth: Infinity }] } }];\n'
+  );
+  const sourcePath = write(join(project, "index.js"), "export const value = 1;\n");
+
+  const report = lintFiles([sourcePath], { binary: testBinary(), config: configPath, cwd: project });
+
+  assert.deepEqual(report.diagnostics, []);
+  assert.equal(report.exitCode, 0);
+});
+
 test("ESLint exposes diagnostics suppressed by utlint-ignore", async () => {
   const eslint = new ESLint({
     binary: testBinary(),

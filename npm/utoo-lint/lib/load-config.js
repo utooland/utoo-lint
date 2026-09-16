@@ -2,6 +2,8 @@ import { dirname } from "node:path";
 import { writeFileSync } from "node:fs";
 import { createJiti } from "jiti";
 
+import { nativeRules } from "./native-rule-options.cjs";
+
 const configPath = process.argv[2];
 
 // Config modules may mount live ESLint plugin objects, which contain functions
@@ -59,7 +61,12 @@ function serializable(value, seen = new WeakSet()) {
         result.plugins = serializablePlugins(item, seen);
         continue;
       }
-      const serialized = serializable(item, seen);
+      // Rule options such as `maxDepth: Infinity` have a JSON spelling the
+      // native binary understands; rewrite them before Infinity becomes null.
+      // Other non-finite values stay null here because this loader cannot
+      // tell native rules from plugin rules; the wrapper reports the native
+      // ones with the rule and option name.
+      const serialized = serializable(key === "rules" ? nativeRules(item, { strict: false }) : item, seen);
       if (serialized !== undefined) {
         result[key] = serialized;
       }
