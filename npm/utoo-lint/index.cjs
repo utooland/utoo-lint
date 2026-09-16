@@ -6,6 +6,7 @@ const { dirname, extname, isAbsolute, join, relative, resolve: resolvePath } = r
 
 const { platformPackageName, resolveBinary } = require("./lib/binary.cjs");
 const { createLegacyConfigResolver } = require("./lib/legacy-config.cjs");
+const { nativeFlatConfigEntries, nativeRules } = require("./lib/native-rule-options.cjs");
 const { formatESLintResults } = require("./lib/stylish-formatter.cjs");
 const {
   findConfigPath: findConfigPathFromDirectory,
@@ -2274,7 +2275,7 @@ function withTemporaryConfig(options, callback) {
     const tmp = mkdtempSync(join(tmpdir(), "utoo-lint-flat-config-"));
     const configPath = join(tmp, "utlint.config.json");
     try {
-      writeFileSync(configPath, JSON.stringify(options.nativeFlatConfigData));
+      writeFileSync(configPath, JSON.stringify(nativeFlatConfigEntries(options.nativeFlatConfigData)));
       return callback({
         ...options,
         config: configPath,
@@ -2331,7 +2332,7 @@ function withTemporaryConfig(options, callback) {
   const tmp = mkdtempSync(join(tmpdir(), "utoo-lint-config-"));
   const configPath = join(tmp, "utlint.config.json");
   try {
-    writeFileSync(configPath, JSON.stringify({ rules, ...(hasSettings ? { settings } : {}) }));
+    writeFileSync(configPath, JSON.stringify({ rules: nativeRules(rules), ...(hasSettings ? { settings } : {}) }));
     return callback({
       ...options,
       config: shouldMaterializeFileConfig ? configPath : options.config ?? configPath,
