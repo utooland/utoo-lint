@@ -269,3 +269,25 @@ test("raw native binary rejects invalid languageOptions.globals values", (t) => 
   assert.equal(result.status, 2);
   assert.match(result.stderr, /invalid flat config .*InvalidGlobalValue/);
 });
+
+test("raw native binary keeps languageOptions.globals from an object config alive for the whole run", (t) => {
+  const project = createProject(t);
+  const configPath = writeConfig(project, {
+    languageOptions: { globals: { APP_VERSION: "readonly", __DEV__: "writable" } },
+    rules: { "no-undef": "error", "no-global-assign": "error" }
+  });
+  const source = "console.log(APP_VERSION, __DEV__);\nAPP_VERSION = '2';\n__DEV__ = true;\nmissing();\n";
+  const paths = Array.from({ length: 6 }, (_, index) => write(join(project, "src", `file-${index}.js`), source));
+
+  const result = runNative(project, [`--config=${configPath}`, ...paths]);
+
+  assert.equal(result.status, 1, `${result.stderr}\n${result.stdout}`);
+  const diagnostics = JSON.parse(result.stdout).diagnostics
+    .filter(({ ruleId }) => ruleId !== "parse" && ruleId !== "io")
+    .map(({ ruleId, message }) => `${ruleId}: ${message}`)
+    .sort();
+  assert.deepEqual(diagnostics, [
+    ...paths.map(() => "no-global-assign: Read-only global 'APP_VERSION' should not be modified."),
+    ...paths.map(() => "no-undef: 'missing' is not defined.")
+  ]);
+});

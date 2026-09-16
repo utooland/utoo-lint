@@ -2003,6 +2003,10 @@ function mergeConfigData(base, override) {
   }
   if (base.languageOptions || override.languageOptions) {
     result.languageOptions = { ...(base.languageOptions ?? {}), ...(override.languageOptions ?? {}) };
+    // ESLint merges `languageOptions.globals` per name across config objects.
+    if (isGlobalsObject(base.languageOptions?.globals) && isGlobalsObject(override.languageOptions?.globals)) {
+      result.languageOptions.globals = { ...base.languageOptions.globals, ...override.languageOptions.globals };
+    }
   }
   if (base.parserOptions || override.parserOptions) {
     result.parserOptions = { ...(base.parserOptions ?? {}), ...(override.parserOptions ?? {}) };

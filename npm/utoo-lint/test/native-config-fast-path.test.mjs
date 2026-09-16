@@ -256,3 +256,25 @@ test("eslintrc-style globals in an inline config override reach the per-file nat
   assert.equal(calls[0].config.rules["no-undef"], "error");
   assert.equal(calls[0].config.rules["no-debugger"], "error");
 });
+
+test("languageOptions.globals from a file config and an inline override merge per name", (t) => {
+  const project = createProject(t);
+  writeConfig(project, [
+    { languageOptions: { globals: { FROM_FILE: "readonly", SHARED: "readonly" } }, rules: { "no-undef": "error" } },
+    { files: ["src/**"], languageOptions: { globals: { FROM_ENTRY: "writable" } } }
+  ]);
+  const sourcePath = write(join(project, "src", "index.js"), "console.log(FROM_FILE, SHARED, FROM_ENTRY, FROM_OVERRIDE);\n");
+
+  const { calls } = captureNativeRuns(() =>
+    lintFiles([sourcePath], {
+      binary: "mock-utoo-lint",
+      cwd: project,
+      overrideConfig: { languageOptions: { globals: { FROM_OVERRIDE: "readonly", SHARED: "off" } } }
+    })
+  );
+
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].config.languageOptions, {
+    globals: { FROM_FILE: "readonly", SHARED: "off", FROM_ENTRY: "writable", FROM_OVERRIDE: "readonly" }
+  });
+});
