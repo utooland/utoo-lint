@@ -82,6 +82,30 @@
             }
           ]
         },
+        "languageOptions": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "globals": {
+              "description": "Globals declared for matching files, using ESLint flat config values. \"readonly\" accepts reads, \"writable\" also accepts writes, and \"off\" removes a built-in global.",
+              "type": "object",
+              "additionalProperties": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": ["readonly", "readable", "writable", "writeable", "off"]
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
         "ignores": {
           "description": "File globs ignored by this config entry.",
           "oneOf": [

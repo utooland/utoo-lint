@@ -1266,6 +1266,7 @@ fn runSemanticAfterIo(
     if (options.no_global_assign) {
         try no_global_assign.runWithOptions(allocator, diagnostics, tree, semantic_result.symbol_table, .{
             .exceptions = options.no_global_assign_exceptions,
+            .configured_globals = &options.configured_globals,
         });
     }
 
@@ -1519,6 +1520,7 @@ fn runSemanticAfterIo(
     if (options.no_undef) {
         try no_undef.runWithOptions(allocator, diagnostics, tree, semantic_result.symbol_table, .{
             .check_typeof = options.no_undef_typeof,
+            .configured_globals = &options.configured_globals,
         });
     }
 

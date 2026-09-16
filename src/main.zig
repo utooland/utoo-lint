@@ -116,12 +116,16 @@ pub fn main(init: std.process.Init) !void {
     const config = parseConfigArgs(args[1..]);
     var loaded_flat_config: ?flat_config.FlatConfig = null;
     defer if (loaded_flat_config) |*loaded| loaded.deinit(allocator);
+    // Options borrow `languageOptions.globals` from the parsed config JSON, so
+    // an object-form config has to stay alive for the whole lint run too.
+    var retained_object_config: ?std.json.Parsed(std.json.Value) = null;
+    defer if (retained_object_config) |*parsed| parsed.deinit();
     if (config.enabled) {
         if (config.path) |path| {
-            loaded_flat_config = try loadConfigFile(allocator, io, path, config.root, config.cwd, true, &options, &rule_severities);
+            loaded_flat_config = try loadConfigFile(allocator, io, path, config.root, config.cwd, true, &options, &rule_severities, &retained_object_config);
         } else if (try findDefaultConfig(allocator, io)) |path| {
             defer allocator.free(path);
-            loaded_flat_config = try loadConfigFile(allocator, io, path, config.root, config.cwd, false, &options, &rule_severities);
+            loaded_flat_config = try loadConfigFile(allocator, io, path, config.root, config.cwd, false, &options, &rule_severities, &retained_object_config);
         }
     }
 
@@ -1511,6 +1515,7 @@ fn loadConfigFile(
     explicit: bool,
     options: *lint.Options,
     rule_severities: *RuleSeverityMap,
+    retained_object_config: *?std.json.Parsed(std.json.Value),
 ) !?flat_config.FlatConfig {
     const source = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(max_config_file_size)) catch |err| {
         if (explicit) {
@@ -1528,7 +1533,8 @@ fn loadConfigFile(
 
     switch (parsed.value) {
         .object => |root| {
-            defer parsed.deinit();
+            // Keep the JSON alive: configured globals point into it.
+            retained_object_config.* = parsed;
             try loadConfigObject(allocator, path, root, options, rule_severities);
             return null;
         },
@@ -1609,6 +1615,24 @@ fn loadConfigObject(
                     std.process.exit(2);
                 };
             }
+        }
+    }
+    if (root.get("languageOptions")) |language_options_value| {
+        const language_options = switch (language_options_value) {
+            .object => |object| object,
+            else => {
+                std.debug.print("utoo-lint: config {s} field \"languageOptions\" must be an object\n", .{path});
+                std.process.exit(2);
+            },
+        };
+        if (language_options.get("globals")) |globals| {
+            options.setConfiguredGlobalsFromConfig(globals) catch |err| {
+                std.debug.print(
+                    "utoo-lint: invalid config {s} field languageOptions.globals: {s}\n",
+                    .{ path, @errorName(err) },
+                );
+                std.process.exit(2);
+            };
         }
     }
     const rules_value = root.get("rules") orelse return;

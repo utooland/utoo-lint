@@ -140,6 +140,16 @@ pub fn applyConfigObject(
         }
     }
 
+    if (root.get("languageOptions")) |language_options_value| {
+        const language_options = switch (language_options_value) {
+            .object => |object| object,
+            else => return error.InvalidLanguageOptions,
+        };
+        if (language_options.get("globals")) |globals| {
+            try options.setConfiguredGlobalsFromConfig(globals);
+        }
+    }
+
     const rules_value = root.get("rules") orelse return;
     const rules = switch (rules_value) {
         .object => |object| object,

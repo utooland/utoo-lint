@@ -140,6 +140,26 @@ npm 封装层会执行 TypeScript 文件，将其结果转换为 JSON，再把�
 
 可通过 `settings.jest.globalAliases` 将 Jest 的标准函数名映射到项目自定义的全局别名。例如，上面的配置会将 `context` 视为 `describe` 的别名。
 
+使用 `languageOptions.globals` 声明项目全局变量，取值与 ESLint flat config 相同。`no-undef` 会接受声明过的名称，`no-global-assign` 会报告对 `readonly` 全局变量的写入并允许写入 `writable` 全局变量，`"off"` 则会移除某个全局变量（包括内置全局变量）：
+
+```json
+{
+  "languageOptions": {
+    "globals": {
+      "APP_VERSION": "readonly",
+      "__DEV__": "writable",
+      "window": "off"
+    }
+  },
+  "rules": {
+    "no-undef": "error",
+    "no-global-assign": "error"
+  }
+}
+```
+
+在扁平配置数组中，每个匹配文件的配置项都会贡献自己的 globals，后面的配置项会按名称覆盖前面的值。ESLint 兼容的 JavaScript API 也会把 eslintrc 风格的 `globals` 转发给原生规则。
+
 ESLint 配置文件仅作为迁移输入，不是推荐的长期配置格式。可使用以下命令生成原生配置：
 
 ```bash

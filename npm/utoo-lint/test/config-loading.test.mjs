@@ -209,6 +209,56 @@ test("frontend preset scopes default and explicit targets to source files", (t) 
   }
 });
 
+test("ESLint honours configured globals in no-undef and no-global-assign", async () => {
+  const cases = [
+    ["no-undef", "allowed(); missing();", ["'missing' is not defined."]],
+    ["no-global-assign", "allowed = 1;", ["Read-only global 'allowed' should not be modified."]]
+  ];
+
+  for (const [rule, source, expected] of cases) {
+    const eslint = new ESLint({
+      binary: testBinary(),
+      useEslintrc: false,
+      overrideConfig: {
+        parserOptions: { ecmaVersion: 2022 },
+        globals: { allowed: "readonly" },
+        rules: { [rule]: "error" }
+      }
+    });
+
+    const [result] = await eslint.lintText(source, { filePath: "input.js" });
+
+    assert.deepEqual(
+      result.messages.map(({ ruleId, message }) => ({ ruleId, message })),
+      expected.map((message) => ({ ruleId: rule, message })),
+      rule
+    );
+  }
+});
+
+test("ESLint forwards flat languageOptions.globals, including writable and off states", async () => {
+  const eslint = new ESLint({
+    binary: testBinary(),
+    useEslintrc: false,
+    overrideConfig: {
+      languageOptions: { globals: { allowed: "writable", window: "off" } },
+      rules: { "no-undef": "error", "no-global-assign": "error" }
+    }
+  });
+
+  const [result] = await eslint.lintText("allowed = 1;\nwindow.alert(allowed);\nmissing();\n", {
+    filePath: "input.js"
+  });
+
+  assert.deepEqual(
+    result.messages.map(({ ruleId, message }) => ({ ruleId, message })),
+    [
+      { ruleId: "no-undef", message: "'window' is not defined." },
+      { ruleId: "no-undef", message: "'missing' is not defined." }
+    ]
+  );
+});
+
 test("ESLint accepts import/no-cycle maxDepth Infinity and a finite depth alike", async () => {
   for (const maxDepth of [2, Infinity]) {
     const eslint = new ESLint({

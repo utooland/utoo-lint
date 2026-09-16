@@ -1481,11 +1481,28 @@ function nativeFlatConfigOptions(options) {
   };
 }
 
+// Globals declared by a config entry, merged the way ESLint does: flat
+// `languageOptions.globals` wins over eslintrc-style `globals`.
+function nativeConfigGlobals(config) {
+  if (!config || typeof config !== "object") {
+    return undefined;
+  }
+  const globals = {
+    ...(isGlobalsObject(config.globals) ? config.globals : {}),
+    ...(isGlobalsObject(config.languageOptions?.globals) ? config.languageOptions.globals : {})
+  };
+  return Object.keys(globals).length > 0 ? globals : undefined;
+}
+
+function isGlobalsObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 function configCanUseNativeRulesFastPath(config) {
   const entries = Array.isArray(config) ? config : [config];
   let hasEnabledRule = false;
   for (const entry of entries) {
-    if (!entry || typeof entry !== "object" || Object.keys(entry.settings ?? {}).length > 0) {
+    if (!entry || typeof entry !== "object" || Object.keys(entry.settings ?? {}).length > 0 || nativeConfigGlobals(entry)) {
       return false;
     }
     for (const ruleConfig of Object.values(entry.rules ?? {})) {
@@ -1508,11 +1525,16 @@ function nativeSerializableConfig(config) {
   if (!config || typeof config !== "object") {
     return config;
   }
-  return Object.fromEntries(
+  const serialized = Object.fromEntries(
     ["$schema", "name", "files", "ignores", "rules", "settings"]
       .filter((key) => config[key] !== undefined)
       .map((key) => [key, config[key]])
   );
+  const globals = nativeConfigGlobals(config);
+  if (globals) {
+    serialized.languageOptions = { globals };
+  }
+  return serialized;
 }
 
 function expandNativeConfigRunPaths(paths, options) {
@@ -1591,15 +1613,16 @@ function nativeConfigRunsForFiles(paths, options) {
     const calculated = configured ? calculatedConfig({ ...options, rules: undefined }, matchPath) : {};
     let rules = calculated.rules;
     const settings = calculated.settings;
+    const globals = configured ? nativeConfigGlobals(calculated) : undefined;
     if (configured && options.rules) {
       rules = selectedRulesWithConfigOptions(rules, options.rules);
     }
     if (configured) {
       rules = withoutJsPluginRules(rules, jsPluginRuleIdsForOptions(options, matchPath));
     }
-    const signature = configured ? stableConfigSignature({ rules, settings }) : "<native-defaults>";
+    const signature = configured ? stableConfigSignature({ rules, settings, globals }) : "<native-defaults>";
     if (!groups.has(signature)) {
-      groups.set(signature, { paths: [], rules, settings, configured });
+      groups.set(signature, { paths: [], rules, settings, globals, configured });
     }
     groups.get(signature).paths.push(filePath);
   }
@@ -1622,7 +1645,7 @@ function nativeConfigRunsForFiles(paths, options) {
       };
     }
 
-    const selectedRules = severityOnlyNativeRuleNames(group.rules, group.settings);
+    const selectedRules = severityOnlyNativeRuleNames(group.rules, group.settings, group.globals);
     if (selectedRules) {
       return {
         paths: group.paths,
@@ -1647,7 +1670,8 @@ function nativeConfigRunsForFiles(paths, options) {
         baseConfig: undefined,
         overrideConfig: {
           rules: allDisabledNativeRules(group.rules),
-          ...(group.settings ? { settings: group.settings } : {})
+          ...(group.settings ? { settings: group.settings } : {}),
+          ...(group.globals ? { languageOptions: { globals: group.globals } } : {})
         },
         forceMaterializedConfig: true
       }
@@ -1655,8 +1679,8 @@ function nativeConfigRunsForFiles(paths, options) {
   });
 }
 
-function severityOnlyNativeRuleNames(rules, settings) {
-  if (Object.keys(settings ?? {}).length > 0) {
+function severityOnlyNativeRuleNames(rules, settings, globals) {
+  if (globals || Object.keys(settings ?? {}).length > 0) {
     return undefined;
   }
 
@@ -1980,6 +2004,10 @@ function mergeConfigData(base, override) {
   }
   if (base.languageOptions || override.languageOptions) {
     result.languageOptions = { ...(base.languageOptions ?? {}), ...(override.languageOptions ?? {}) };
+    // ESLint merges `languageOptions.globals` per name across config objects.
+    if (isGlobalsObject(base.languageOptions?.globals) && isGlobalsObject(override.languageOptions?.globals)) {
+      result.languageOptions.globals = { ...base.languageOptions.globals, ...override.languageOptions.globals };
+    }
   }
   if (base.parserOptions || override.parserOptions) {
     result.parserOptions = { ...(base.parserOptions ?? {}), ...(override.parserOptions ?? {}) };
@@ -2308,7 +2336,15 @@ function withTemporaryConfig(options, callback) {
     {}
   );
   const hasSettings = Object.keys(settings).length > 0;
-  if (Object.keys(rules).length === 0 && !hasSettings) {
+  const globals = configs.reduce(
+    (result, config) => ({
+      ...result,
+      ...(nativeConfigGlobals(configDataFromConfig(config, options.filePath ?? options.filename, options.cwd)) ?? {})
+    }),
+    {}
+  );
+  const hasGlobals = Object.keys(globals).length > 0;
+  if (Object.keys(rules).length === 0 && !hasSettings && !hasGlobals) {
     if (shouldMaterializeFileConfig) {
       return callback({
         ...options,
@@ -2320,7 +2356,7 @@ function withTemporaryConfig(options, callback) {
   }
   const enabledRules = enabledRuleNamesFromConfigs(...configs).filter((rule) => !jsPluginRuleIds.has(rule));
   const hasExplicitOffRules = Object.values(rules).some((value) => ruleConfigSeverity(value) === 0);
-  if (!shouldMaterializeFileConfig && !hasSettings && !hasRuleOptions(rules) && !hasExplicitOffRules && !options.forceMaterializedConfig) {
+  if (!shouldMaterializeFileConfig && !hasSettings && !hasGlobals && !hasRuleOptions(rules) && !hasExplicitOffRules && !options.forceMaterializedConfig) {
     return callback({
       ...options,
       config: shouldMaterializeFileConfig ? undefined : options.config,
@@ -2332,7 +2368,11 @@ function withTemporaryConfig(options, callback) {
   const tmp = mkdtempSync(join(tmpdir(), "utoo-lint-config-"));
   const configPath = join(tmp, "utlint.config.json");
   try {
-    writeFileSync(configPath, JSON.stringify({ rules: nativeRules(rules), ...(hasSettings ? { settings } : {}) }));
+    writeFileSync(configPath, JSON.stringify({
+      rules: nativeRules(rules),
+      ...(hasSettings ? { settings } : {}),
+      ...(hasGlobals ? { languageOptions: { globals } } : {})
+    }));
     return callback({
       ...options,
       config: shouldMaterializeFileConfig ? configPath : options.config ?? configPath,

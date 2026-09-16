@@ -10,6 +10,8 @@ pub const id = "no-global-assign";
 
 pub const Options = struct {
     exceptions: core.NoShadowAllowNames = .{},
+    /// Globals declared through `languageOptions.globals`.
+    configured_globals: ?*const core.ConfiguredGlobals = null,
 };
 
 pub fn run(
@@ -103,7 +105,7 @@ const Visitor = struct {
         node: ast.NodeIndex,
     ) Allocator.Error!void {
         const name = tree.string(name_string);
-        if (!isReadonlyGlobal(name)) return;
+        if (!self.isReadonly(name)) return;
         if (self.options.exceptions.contains(name)) return;
         if (!isUnresolvedReference(self.symbol_table, node)) return;
 
@@ -116,6 +118,16 @@ const Visitor = struct {
             "Read-only global '{s}' should not be modified.",
             .{name},
         );
+    }
+
+    /// A configured global overrides the built-in table, so
+    /// `{ Object: "writable" }` allows the write and `{ APP: "readonly" }`
+    /// reports it. `off` removes the global, which `no-undef` reports instead.
+    fn isReadonly(self: *const Visitor, name: []const u8) bool {
+        if (self.options.configured_globals) |globals| {
+            if (globals.lookup(name)) |state| return state == .readonly;
+        }
+        return isReadonlyGlobal(name);
     }
 };
 

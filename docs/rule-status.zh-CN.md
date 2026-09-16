@@ -94,7 +94,7 @@
 | [`no-floating-decimal`](https://eslint.org/docs/latest/rules/no-floating-decimal) | 已实现对 token 安全的自动修复 |
 | [`no-for-in`](https://eslint.org/docs/latest/rules/no-for-in) | 已实现 |
 | [`no-func-assign`](https://eslint.org/docs/latest/rules/no-func-assign) | 已实现 |
-| [`no-global-assign`](https://eslint.org/docs/latest/rules/no-global-assign) | 支持 `exceptions` 配置 |
+| [`no-global-assign`](https://eslint.org/docs/latest/rules/no-global-assign) | 支持 `exceptions` 配置和 `languageOptions.globals`（`readonly` 会报告写入，`writable` 允许写入） |
 | [`no-global-is-finite`](https://eslint.org/docs/latest/rules/no-global-is-finite) | 已实现 |
 | [`no-global-is-nan`](https://eslint.org/docs/latest/rules/no-global-is-nan) | 已实现 |
 | [`no-implicit-coercion`](https://eslint.org/docs/latest/rules/no-implicit-coercion) | 支持 `boolean`、`number`、`string`、`allow` 和 `disallowTemplateShorthand` 配置 |
@@ -166,7 +166,7 @@
 | [`no-this-before-super`](https://eslint.org/docs/latest/rules/no-this-before-super) | 已实现 |
 | [`no-throw-literal`](https://eslint.org/docs/latest/rules/no-throw-literal) | 已实现 |
 | [`no-trailing-spaces`](https://eslint.org/docs/latest/rules/no-trailing-spaces) | 支持 `skipBlankLines` 和 `ignoreComments` 配置，并支持自动修复 |
-| [`no-undef`](https://eslint.org/docs/latest/rules/no-undef) | 已实现 |
+| [`no-undef`](https://eslint.org/docs/latest/rules/no-undef) | 已实现；接受 `languageOptions.globals` 中声明的名称，并报告被设为 `off` 的全局变量 |
 | [`no-undef-init`](https://eslint.org/docs/latest/rules/no-undef-init) | 已实现对 `let` 绑定安全的自动修复 |
 | [`no-unassigned-vars`](https://eslint.org/docs/latest/rules/no-unassigned-vars) | 报告已被读取但没有初始化器且从未赋值的 `let`/`var` 绑定 |
 | [`no-underscore-dangle`](https://eslint.org/docs/latest/rules/no-underscore-dangle) | 支持 `allow`、`allowAfterThis`、`allowAfterSuper`、`allowAfterThisConstructor`、`allowFunctionParams`、`allowInArrayDestructuring`、`allowInObjectDestructuring`、`enforceInMethodNames` 和 `enforceInClassFields` 配置 |

@@ -193,6 +193,31 @@ Use `settings.jest.globalAliases` to map canonical Jest functions to
 project-specific global names. For example, the configuration above treats
 `context` as an alias for `describe`.
 
+Declare project globals with `languageOptions.globals`, using the same values
+as ESLint flat config. `no-undef` accepts declared names, `no-global-assign`
+reports writes to `readonly` globals and allows writes to `writable` ones, and
+`"off"` removes a global, including a built-in one:
+
+```json
+{
+  "languageOptions": {
+    "globals": {
+      "APP_VERSION": "readonly",
+      "__DEV__": "writable",
+      "window": "off"
+    }
+  },
+  "rules": {
+    "no-undef": "error",
+    "no-global-assign": "error"
+  }
+}
+```
+
+In a flat config array, every entry that matches a file contributes its
+globals, and later entries override earlier ones per name. The ESLint-compatible
+JavaScript API also forwards eslintrc-style `globals` to the native rules.
+
 ESLint config files are a migration input, not the recommended long-term
 configuration format. Generate a native config with:
 
