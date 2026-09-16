@@ -921,6 +921,26 @@ test("fishlint --rules overrides flat-config off severities", (t) => {
   assert.ok(report.diagnostics.every((diagnostic) => diagnostic.severity === "warning"));
 });
 
+test("the package does not register an eslint bin but keeps the wrapper runnable", (t) => {
+  const packageJson = JSON.parse(readFileSync(join(packageDirectory, "package.json"), "utf8"));
+  assert.deepEqual(Object.keys(packageJson.bin).sort(), ["fishlint", "fishlint-lint-staged", "utoo-lint"]);
+  assert.ok(packageJson.files.includes("bin"));
+
+  const project = createProject(t);
+  const sourcePath = write(join(project, "index.js"), "debugger;\n");
+  const result = spawnSync(
+    process.execPath,
+    [join(packageDirectory, "bin", "eslint.js"), "--no-config", "--format=json", sourcePath],
+    { cwd: project, env: { ...process.env, UTOO_LINT_BIN: testBinary() }, encoding: "utf8" }
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(
+    JSON.parse(result.stdout).diagnostics.some(({ ruleId, severity }) => ruleId === "no-debugger" && severity === "warning"),
+    result.stdout
+  );
+});
+
 test("fishlint enforces --max-warnings when the native binary exits successfully", (t) => {
   const project = createProject(t);
   const sourcePath = write(join(project, "index.js"), "debugger;\n");

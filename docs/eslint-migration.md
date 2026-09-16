@@ -349,6 +349,26 @@ When using the JavaScript API, calling `lintFiles()` without patterns follows
 the `files` entries in `utlint.config.json`. For command-line scripts, pass explicit
 targets during migration so CI stays easy to reason about.
 
+## ESLint CLI Wrapper
+
+`@utoo/lint` ships an ESLint-flavoured CLI at `bin/eslint.js`, but it does not
+register it as an `eslint` bin. Installing `@utoo/lint` next to ESLint therefore
+never changes which tool `npx eslint` or an existing `"lint": "eslint src"`
+script runs, and the two CLIs can be compared side by side. Opt into the
+wrapper per script when a project is ready to switch:
+
+```json
+{
+  "scripts": {
+    "lint": "node node_modules/@utoo/lint/bin/eslint.js src test"
+  }
+}
+```
+
+The wrapper accepts the common ESLint flags (`--config`, `--format`, `--fix`,
+`--max-warnings`, `--quiet`, `--rule`, `--no-config`) and forwards to the same
+translation layer as `fishlint eslint`, described below.
+
 ## Replace Fishlint Commands
 
 `@utoo/lint` installs a `fishlint` compatibility command for scripts that already
