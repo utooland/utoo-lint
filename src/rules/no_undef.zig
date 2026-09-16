@@ -10,6 +10,8 @@ pub const id = "no-undef";
 
 pub const Options = struct {
     check_typeof: bool = false,
+    /// Globals declared through `languageOptions.globals`.
+    configured_globals: ?*const core.ConfiguredGlobals = null,
 };
 
 pub fn run(
@@ -45,7 +47,10 @@ pub fn runWithOptions(
         if (allowed_typeof_refs.contains(reference.node)) continue;
 
         const name = tree.string(reference.name);
-        if (core.isKnownGlobal(name)) continue;
+        if (configuredGlobalState(options, name)) |state| {
+            // `off` removes the global, so even a built-in name is undefined.
+            if (state != .off) continue;
+        } else if (core.isKnownGlobal(name)) continue;
 
         try core.addDiagnosticFmt(
             allocator,
@@ -57,6 +62,11 @@ pub fn runWithOptions(
             .{name},
         );
     }
+}
+
+fn configuredGlobalState(options: Options, name: []const u8) ?core.ConfiguredGlobalState {
+    const globals = options.configured_globals orelse return null;
+    return globals.lookup(name);
 }
 
 const TypeofVisitor = struct {

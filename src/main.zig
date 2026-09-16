@@ -1611,6 +1611,24 @@ fn loadConfigObject(
             }
         }
     }
+    if (root.get("languageOptions")) |language_options_value| {
+        const language_options = switch (language_options_value) {
+            .object => |object| object,
+            else => {
+                std.debug.print("utoo-lint: config {s} field \"languageOptions\" must be an object\n", .{path});
+                std.process.exit(2);
+            },
+        };
+        if (language_options.get("globals")) |globals| {
+            options.setConfiguredGlobalsFromConfig(globals) catch |err| {
+                std.debug.print(
+                    "utoo-lint: invalid config {s} field languageOptions.globals: {s}\n",
+                    .{ path, @errorName(err) },
+                );
+                std.process.exit(2);
+            };
+        }
+    }
     const rules_value = root.get("rules") orelse return;
     const rules = switch (rules_value) {
         .object => |object| object,

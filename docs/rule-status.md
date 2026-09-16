@@ -95,7 +95,7 @@ instead of being rewritten.
 | [`no-floating-decimal`](https://eslint.org/docs/latest/rules/no-floating-decimal) | Implemented with token-safe autofix |
 | [`no-for-in`](https://eslint.org/docs/latest/rules/no-for-in) | Implemented |
 | [`no-func-assign`](https://eslint.org/docs/latest/rules/no-func-assign) | Implemented |
-| [`no-global-assign`](https://eslint.org/docs/latest/rules/no-global-assign) | Supports `exceptions` configuration |
+| [`no-global-assign`](https://eslint.org/docs/latest/rules/no-global-assign) | Supports `exceptions` configuration and `languageOptions.globals` (`readonly` reports writes, `writable` allows them) |
 | [`no-global-is-finite`](https://eslint.org/docs/latest/rules/no-global-is-finite) | Implemented |
 | [`no-global-is-nan`](https://eslint.org/docs/latest/rules/no-global-is-nan) | Implemented |
 | [`no-implicit-coercion`](https://eslint.org/docs/latest/rules/no-implicit-coercion) | Supports `boolean`, `number`, `string`, `allow`, and `disallowTemplateShorthand` configuration |
@@ -167,7 +167,7 @@ instead of being rewritten.
 | [`no-this-before-super`](https://eslint.org/docs/latest/rules/no-this-before-super) | Implemented |
 | [`no-throw-literal`](https://eslint.org/docs/latest/rules/no-throw-literal) | Implemented |
 | [`no-trailing-spaces`](https://eslint.org/docs/latest/rules/no-trailing-spaces) | Supports `skipBlankLines` and `ignoreComments` configuration with autofix |
-| [`no-undef`](https://eslint.org/docs/latest/rules/no-undef) | Implemented |
+| [`no-undef`](https://eslint.org/docs/latest/rules/no-undef) | Implemented; accepts names declared in `languageOptions.globals` and reports globals set to `off` |
 | [`no-undef-init`](https://eslint.org/docs/latest/rules/no-undef-init) | Implemented with safe autofix for `let` bindings |
 | [`no-unassigned-vars`](https://eslint.org/docs/latest/rules/no-unassigned-vars) | Reports read `let`/`var` bindings that have no initializer and no assignment |
 | [`no-underscore-dangle`](https://eslint.org/docs/latest/rules/no-underscore-dangle) | Supports `allow`, `allowAfterThis`, `allowAfterSuper`, `allowAfterThisConstructor`, `allowFunctionParams`, `allowInArrayDestructuring`, `allowInObjectDestructuring`, `enforceInMethodNames`, and `enforceInClassFields` configuration |

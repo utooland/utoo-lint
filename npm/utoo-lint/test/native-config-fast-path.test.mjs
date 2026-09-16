@@ -216,3 +216,43 @@ test("empty settings and options on disabled rules remain fast-path eligible", (
   assert.ok(calls[0].args.includes("--rules=no-debugger"));
   assert.equal(calls[0].args.some((arg) => arg.startsWith("--config=")), false);
 });
+
+test("configured globals keep the materialized config path and reach the native config", (t) => {
+  const project = createProject(t);
+  writeConfig(project, {
+    languageOptions: { globals: { APP_VERSION: "readonly" } },
+    rules: { "no-undef": "error" }
+  });
+  const sourcePath = write(join(project, "index.js"), "console.log(APP_VERSION);\n");
+
+  const { calls } = captureNativeRuns(() =>
+    lintFiles([sourcePath], { binary: "mock-utoo-lint", cwd: project })
+  );
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].args.includes("--no-config"), false);
+  assert.equal(calls[0].args.some((arg) => arg.startsWith("--rules=")), false);
+  assert.deepEqual(calls[0].config, [
+    { languageOptions: { globals: { APP_VERSION: "readonly" } }, rules: { "no-undef": "error" } }
+  ]);
+});
+
+test("eslintrc-style globals in an inline config override reach the per-file native config", (t) => {
+  const project = createProject(t);
+  writeConfig(project, { rules: { "no-debugger": "error" } });
+  const sourcePath = write(join(project, "index.js"), "console.log(APP_VERSION);\n");
+
+  const { calls } = captureNativeRuns(() =>
+    lintFiles([sourcePath], {
+      binary: "mock-utoo-lint",
+      cwd: project,
+      overrideConfig: { globals: { APP_VERSION: "readonly", __DEV__: true }, rules: { "no-undef": "error" } }
+    })
+  );
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].args.some((arg) => arg.startsWith("--rules=")), false);
+  assert.deepEqual(calls[0].config.languageOptions, { globals: { APP_VERSION: "readonly", __DEV__: true } });
+  assert.equal(calls[0].config.rules["no-undef"], "error");
+  assert.equal(calls[0].config.rules["no-debugger"], "error");
+});

@@ -145,3 +145,36 @@ test "can disable no-global-assign" {
 
     try std.testing.expect(!helpers.hasRule(result, lint.rules.no_global_assign.id));
 }
+
+test "honours configured globals in no-global-assign" {
+    var globals = try std.json.parseFromSlice(
+        std.json.Value,
+        std.testing.allocator,
+        "{\"APP_VERSION\":\"readonly\",\"__DEV__\":\"writable\",\"legacy\":false,\"Object\":\"writable\",\"window\":\"off\"}",
+        .{},
+    );
+    defer globals.deinit();
+
+    var options = lint.Options{};
+    try options.setConfiguredGlobalsFromConfig(globals.value);
+    options.eol_last = false;
+    options.no_undef = false;
+    options.parser_semantic_errors = false;
+
+    const source =
+        \\APP_VERSION = "2";
+        \\__DEV__ = true;
+        \\legacy = 1;
+        \\Object = null;
+        \\window = null;
+        \\Array = null;
+    ;
+
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.js", options);
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 3), helpers.countRule(result, lint.rules.no_global_assign.id));
+    try std.testing.expectEqualStrings("Read-only global 'APP_VERSION' should not be modified.", result.diagnostics[0].message);
+    try std.testing.expectEqualStrings("Read-only global 'legacy' should not be modified.", result.diagnostics[1].message);
+    try std.testing.expectEqualStrings("Read-only global 'Array' should not be modified.", result.diagnostics[2].message);
+}

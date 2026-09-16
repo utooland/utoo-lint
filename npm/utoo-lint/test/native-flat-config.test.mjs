@@ -228,3 +228,44 @@ test("Node wrapper preserves selectors from a single config object", (t) => {
     { filePath: testPath, ruleId: "no-debugger" }
   ]);
 });
+
+test("raw native binary honours languageOptions.globals from every matching entry", (t) => {
+  const project = createProject(t);
+  const configPath = writeConfig(project, [
+    {
+      languageOptions: { globals: { APP_VERSION: "readonly", __DEV__: "writable" } },
+      rules: { "no-undef": "error", "no-global-assign": "error" }
+    },
+    { files: ["legacy/**"], languageOptions: { globals: { APP_VERSION: "writable", window: "off" } } }
+  ]);
+  const source = "console.log(APP_VERSION, __DEV__, window);\nAPP_VERSION = '2';\n__DEV__ = true;\nmissing();\n";
+  const appPath = write(join(project, "src", "index.js"), source);
+  const legacyPath = write(join(project, "legacy", "index.js"), source);
+
+  const result = runNative(project, [`--config=${configPath}`, appPath, legacyPath]);
+
+  assert.equal(result.status, 1, `${result.stderr}\n${result.stdout}`);
+  const diagnostics = JSON.parse(result.stdout).diagnostics
+    .filter(({ ruleId }) => ruleId !== "parse" && ruleId !== "io")
+    .map(({ filePath, line, ruleId, message }) => ({ filePath, line, ruleId, message }))
+    .sort((left, right) => left.filePath.localeCompare(right.filePath) || left.line - right.line);
+  assert.deepEqual(diagnostics, [
+    { filePath: legacyPath, line: 1, ruleId: "no-undef", message: "'window' is not defined." },
+    { filePath: legacyPath, line: 4, ruleId: "no-undef", message: "'missing' is not defined." },
+    { filePath: appPath, line: 2, ruleId: "no-global-assign", message: "Read-only global 'APP_VERSION' should not be modified." },
+    { filePath: appPath, line: 4, ruleId: "no-undef", message: "'missing' is not defined." }
+  ]);
+});
+
+test("raw native binary rejects invalid languageOptions.globals values", (t) => {
+  const project = createProject(t);
+  const configPath = writeConfig(project, [
+    { languageOptions: { globals: { APP_VERSION: "sometimes" } }, rules: { "no-undef": "error" } }
+  ]);
+  const sourcePath = write(join(project, "index.js"), "console.log(APP_VERSION);\n");
+
+  const result = runNative(project, [`--config=${configPath}`, sourcePath]);
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /invalid flat config .*InvalidGlobalValue/);
+});

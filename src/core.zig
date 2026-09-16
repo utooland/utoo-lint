@@ -2784,6 +2784,7 @@ pub const Options = struct {
     jest_valid_title_must_not_match: JestValidTitleMatchers = .{},
     jest_valid_title_must_match: JestValidTitleMatchers = .{},
     jest_global_aliases: JestGlobalAliases = .{},
+    configured_globals: ConfiguredGlobals = .{},
     jest_version: u32 = 0,
     jsx_a11y_alt_text: bool = true,
     jsx_a11y_alt_text_img: bool = true,
@@ -4291,6 +4292,14 @@ pub const Options = struct {
                 }
             }
         }
+    }
+
+    pub fn setConfiguredGlobalsFromConfig(self: *Options, value: std.json.Value) ConfiguredGlobalsError!void {
+        const globals = switch (value) {
+            .object => |object| object,
+            else => return error.InvalidGlobals,
+        };
+        try self.configured_globals.append(globals);
     }
 
     pub fn severityFromRuleConfigValue(value: std.json.Value) RuleConfigError!?Severity {
@@ -10382,6 +10391,69 @@ pub const JestGlobalAliases = struct {
     }
 };
 
+pub const max_configured_global_layers = 32;
+
+/// State of a name declared through `languageOptions.globals`.
+pub const ConfiguredGlobalState = enum { readonly, writable, off };
+
+pub const ConfiguredGlobalsError = error{
+    InvalidGlobals,
+    InvalidGlobalValue,
+    TooManyGlobalLayers,
+};
+
+/// Globals declared through `languageOptions.globals`. Every applied config
+/// entry contributes one layer and later layers win, matching how ESLint
+/// merges the option across matching entries. Layers borrow the parsed config
+/// JSON, which outlives every lint run that uses these options.
+pub const ConfiguredGlobals = struct {
+    count: usize = 0,
+    layers: [max_configured_global_layers]std.json.ObjectMap = undefined,
+
+    pub fn lookup(self: *const ConfiguredGlobals, name: []const u8) ?ConfiguredGlobalState {
+        var index = self.count;
+        while (index > 0) {
+            index -= 1;
+            if (self.layers[index].get(name)) |value| {
+                return configuredGlobalState(value) catch null;
+            }
+        }
+        return null;
+    }
+
+    pub fn append(self: *ConfiguredGlobals, layer: std.json.ObjectMap) ConfiguredGlobalsError!void {
+        var iterator = layer.iterator();
+        while (iterator.next()) |entry| {
+            _ = try configuredGlobalState(entry.value_ptr.*);
+        }
+        if (layer.count() == 0) return;
+        if (self.count >= max_configured_global_layers) return error.TooManyGlobalLayers;
+        self.layers[self.count] = layer;
+        self.count += 1;
+    }
+};
+
+/// Accepts every spelling ESLint normalizes: `readonly`, `readable`, `false`,
+/// and `null` are read-only; `writable`, `writeable`, and `true` are writable;
+/// `off` removes the global.
+pub fn configuredGlobalState(value: std.json.Value) ConfiguredGlobalsError!ConfiguredGlobalState {
+    return switch (value) {
+        .null => .readonly,
+        .bool => |writable| if (writable) .writable else .readonly,
+        .string => |state| {
+            if (std.mem.eql(u8, state, "readonly") or std.mem.eql(u8, state, "readable") or std.mem.eql(u8, state, "false")) {
+                return .readonly;
+            }
+            if (std.mem.eql(u8, state, "writable") or std.mem.eql(u8, state, "writeable") or std.mem.eql(u8, state, "true")) {
+                return .writable;
+            }
+            if (std.mem.eql(u8, state, "off")) return .off;
+            return error.InvalidGlobalValue;
+        },
+        else => error.InvalidGlobalValue,
+    };
+}
+
 pub const Diagnostic = struct {
     rule_id: []const u8,
     message: []const u8,
@@ -10706,6 +10778,42 @@ pub fn isKnownGlobal(name: []const u8) bool {
     }
 
     return false;
+}
+
+test "configured globals validate values and resolve the latest layer" {
+    var first = try std.json.parseFromSlice(
+        std.json.Value,
+        std.testing.allocator,
+        "{\"shared\":\"readonly\",\"legacy\":true,\"implicit\":null,\"removed\":\"off\"}",
+        .{},
+    );
+    defer first.deinit();
+    var second = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, "{\"shared\":\"off\"}", .{});
+    defer second.deinit();
+    var empty = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, "{}", .{});
+    defer empty.deinit();
+
+    var options = Options{};
+    try std.testing.expect(options.configured_globals.lookup("shared") == null);
+    try options.setConfiguredGlobalsFromConfig(first.value);
+    try options.setConfiguredGlobalsFromConfig(empty.value);
+    try options.setConfiguredGlobalsFromConfig(second.value);
+
+    try std.testing.expectEqual(@as(usize, 2), options.configured_globals.count);
+    try std.testing.expectEqual(ConfiguredGlobalState.off, options.configured_globals.lookup("shared").?);
+    try std.testing.expectEqual(ConfiguredGlobalState.writable, options.configured_globals.lookup("legacy").?);
+    try std.testing.expectEqual(ConfiguredGlobalState.readonly, options.configured_globals.lookup("implicit").?);
+    try std.testing.expectEqual(ConfiguredGlobalState.off, options.configured_globals.lookup("removed").?);
+    try std.testing.expect(options.configured_globals.lookup("missing") == null);
+
+    var invalid = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, "{\"bad\":\"sometimes\"}", .{});
+    defer invalid.deinit();
+    try std.testing.expectError(error.InvalidGlobalValue, options.setConfiguredGlobalsFromConfig(invalid.value));
+
+    var not_object = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, "[\"shared\"]", .{});
+    defer not_object.deinit();
+    try std.testing.expectError(error.InvalidGlobals, options.setConfiguredGlobalsFromConfig(not_object.value));
+    try std.testing.expectEqual(@as(usize, 2), options.configured_globals.count);
 }
 
 test "Options can enable rules by CLI name" {
