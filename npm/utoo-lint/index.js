@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import { resolveBinary } from "./lib/binary.js";
 import { createLegacyConfigResolver } from "./lib/legacy-config.cjs";
+import { nativeFlatConfigEntries, nativeRules } from "./lib/native-rule-options.cjs";
 import { formatESLintResults } from "./lib/stylish-formatter.cjs";
 import {
   findConfigPath as findConfigPathFromDirectory,
@@ -4350,7 +4351,7 @@ function withTemporaryConfig(options, callback) {
     const tmp = mkdtempSync(join(tmpdir(), "utoo-lint-flat-config-"));
     const configPath = join(tmp, "utlint.config.json");
     try {
-      writeFileSync(configPath, JSON.stringify(options.nativeFlatConfigData));
+      writeFileSync(configPath, JSON.stringify(nativeFlatConfigEntries(options.nativeFlatConfigData)));
       return callback({
         ...options,
         config: configPath,
@@ -4416,7 +4417,7 @@ function withTemporaryConfig(options, callback) {
   const configPath = join(tmp, "utlint.config.json");
   try {
     writeFileSync(configPath, JSON.stringify({
-      rules,
+      rules: nativeRules(rules),
       ...(hasSettings ? { settings } : {}),
       ...(hasGlobals ? { languageOptions: { globals } } : {})
     }));

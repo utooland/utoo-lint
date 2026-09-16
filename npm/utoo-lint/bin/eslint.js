@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+// ESLint CLI compatibility wrapper. It is deliberately not registered as an
+// `eslint` bin: installing @utoo/lint must never change which tool an
+// existing `eslint` script runs. Scripts opt in explicitly, for example
+// `node node_modules/@utoo/lint/bin/eslint.js src`.
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 

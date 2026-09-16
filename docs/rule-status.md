@@ -251,7 +251,7 @@ instead of being rewritten.
 | [`import/namespace`](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/namespace.md) | Implemented for relative namespace imports resolved with fishlint's configured extensions |
 | [`import/newline-after-import`](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/newline-after-import.md) | Implemented for `count`, `exactCount`, and `considerComments` configurations |
 | [`import/no-amd`](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/no-amd.md) | Implemented |
-| [`import/no-cycle`](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/no-cycle.md) | Implemented for relative imports and re-exports resolved with fishlint's configured extensions, with `maxDepth`, `commonjs`, and `amd` configuration |
+| [`import/no-cycle`](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/no-cycle.md) | Implemented for relative imports and re-exports resolved with fishlint's configured extensions, with `maxDepth` (integer, `"∞"`, or `Infinity` through the JavaScript API), `commonjs`, and `amd` configuration |
 | [`import/no-duplicates`](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/no-duplicates.md) | Implemented with `considerQueryString` configuration |
 | [`import/no-named-as-default`](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/no-named-as-default.md) | Implemented for relative imports resolved with fishlint's configured extensions |
 | [`import/no-named-as-default-member`](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/no-named-as-default-member.md) | Implemented for relative imports resolved with fishlint's configured extensions |

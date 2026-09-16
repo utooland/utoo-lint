@@ -258,6 +258,20 @@ npx utoo-lint --config=utlint.config.json --format=json src test > utoo-report.j
 
 使用 JavaScript API 时，不带模式调用 `lintFiles()` 会遵循 `utlint.config.json` 中的 `files` 配置项。对于命令行脚本，迁移期间请显式传入目标，让 CI 行为更容易理解。
 
+## ESLint CLI 封装
+
+`@utoo/lint` 在 `bin/eslint.js` 中提供了一个 ESLint 风格的 CLI，但不会把它注册为 `eslint` 可执行命令。因此在已安装 ESLint 的项目中安装 `@utoo/lint`，不会改变 `npx eslint` 或现有 `"lint": "eslint src"` 脚本实际运行的工具，两个 CLI 可以并行对比。项目准备好切换时，再按脚本显式启用封装：
+
+```json
+{
+  "scripts": {
+    "lint": "node node_modules/@utoo/lint/bin/eslint.js src test"
+  }
+}
+```
+
+封装接受常见的 ESLint 参数（`--config`、`--format`、`--fix`、`--max-warnings`、`--quiet`、`--rule`、`--no-config`），并转发给与下文 `fishlint eslint` 相同的转换层。
+
 ## 替换 Fishlint 命令
 
 `@utoo/lint` 会安装一个 `fishlint` 兼容命令，供已经调用 eslint 子命令的脚本使用：

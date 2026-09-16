@@ -250,7 +250,7 @@
 | [`import/namespace`](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/namespace.md) | 已实现对使用 fishlint 已配置扩展名解析的相对命名空间导入的检查 |
 | [`import/newline-after-import`](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/newline-after-import.md) | 已实现 `count`、`exactCount` 和 `considerComments` 配置 |
 | [`import/no-amd`](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/no-amd.md) | 已实现 |
-| [`import/no-cycle`](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/no-cycle.md) | 已实现对使用 fishlint 已配置扩展名解析的相对导入和再导出的检查，并支持 `maxDepth`、`commonjs` 和 `amd` 配置 |
+| [`import/no-cycle`](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/no-cycle.md) | 已实现对使用 fishlint 已配置扩展名解析的相对导入和再导出的检查，并支持 `maxDepth`（整数、`"∞"`，或通过 JavaScript API 传入的 `Infinity`）、`commonjs` 和 `amd` 配置 |
 | [`import/no-duplicates`](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/no-duplicates.md) | 已实现 `considerQueryString` 配置 |
 | [`import/no-named-as-default`](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/no-named-as-default.md) | 已实现对使用 fishlint 已配置扩展名解析的相对导入的检查 |
 | [`import/no-named-as-default-member`](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/no-named-as-default-member.md) | 已实现对使用 fishlint 已配置扩展名解析的相对导入的检查 |
