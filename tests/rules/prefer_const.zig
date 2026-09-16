@@ -293,6 +293,10 @@ test "does not report prefer-const for delayed assignments outside the declarati
         \\  return local;
         \\}
         \\scoped();
+        \\export let exported;
+        \\{
+        \\  exported = 7;
+        \\}
     ;
 
     var result = try lint.lintSource(std.testing.allocator, source, "fixture.js", .{
@@ -331,6 +335,11 @@ test "reports prefer-const for delayed assignments in the declaration's statemen
         \\    console.log(inner);
         \\  }
         \\}
+        \\export let exported;
+        \\exported = 5;
+        \\let wrapped;
+        \\((wrapped = 6));
+        \\console.log(wrapped);
     ;
 
     var result = try lint.lintSource(std.testing.allocator, source, "fixture.js", .{
@@ -341,7 +350,7 @@ test "reports prefer-const for delayed assignments in the declaration's statemen
     });
     defer result.deinit(std.testing.allocator);
 
-    try std.testing.expectEqual(@as(usize, 4), helpers.countRule(result, lint.rules.prefer_const.id));
+    try std.testing.expectEqual(@as(usize, 6), helpers.countRule(result, lint.rules.prefer_const.id));
 }
 
 test "can disable prefer-const" {

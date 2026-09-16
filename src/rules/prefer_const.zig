@@ -390,16 +390,30 @@ fn statementListHost(ctx: *traverser.basic.Ctx, depth: usize) ast.NodeIndex {
     };
 }
 
+/// `export let value;` wraps the declaration in an export declaration that
+/// sits in the module's statement list.
 fn declarationHost(ctx: *traverser.basic.Ctx) ast.NodeIndex {
-    return statementListHost(ctx, 1);
+    const parent = ctx.path.parent() orelse return .null;
+    return switch (ctx.tree.data(parent)) {
+        .export_named_declaration => statementListHost(ctx, 2),
+        else => statementListHost(ctx, 1),
+    };
 }
 
 /// Mirrors ESLint's `canBecomeVariableDeclaration`: the assignment must be a
 /// whole expression statement placed directly in a statement list.
+/// Parentheses around the assignment are transparent, which also covers the
+/// mandatory `({ value } = source);` form.
 fn assignmentHost(ctx: *traverser.basic.Ctx) ast.NodeIndex {
-    const parent = ctx.path.parent() orelse return .null;
-    if (ctx.tree.data(parent) != .expression_statement) return .null;
-    return statementListHost(ctx, 2);
+    var depth: usize = 1;
+    while (ctx.path.ancestor(depth)) |ancestor| : (depth += 1) {
+        switch (ctx.tree.data(ancestor)) {
+            .parenthesized_expression => continue,
+            .expression_statement => return statementListHost(ctx, depth + 1),
+            else => return .null,
+        }
+    }
+    return .null;
 }
 
 fn candidateReportNode(
