@@ -1,0 +1,12 @@
+{
+  "expect": "diagnostics",
+  "diagnostic_count": 2,
+  "fixes": "forbidden",
+  "rule_options": [
+    "error",
+    {
+      "args": "after-used",
+      "argsIgnorePattern": "^NEVER$"
+    }
+  ]
+}
