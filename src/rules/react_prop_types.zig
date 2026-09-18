@@ -198,7 +198,19 @@ fn collectTopLevelDeclaration(
             if (declaration.declaration != .null) try collectTopLevelDeclaration(allocator, tree, declaration.declaration, state, custom_validators);
         },
         .export_default_declaration => |declaration| {
-            if (declaration.declaration != .null) try collectTopLevelDeclaration(allocator, tree, declaration.declaration, state, custom_validators);
+            if (declaration.declaration == .null) return;
+            const exported = unwrapTransparent(tree, declaration.declaration);
+            const anonymous = switch (tree.data(exported)) {
+                .arrow_function_expression => true,
+                .function => |function| function.id == .null,
+                else => false,
+            };
+            if (anonymous and functionReturnsJSXOrNull(tree, exported)) {
+                const component_index = try state.ensureComponent(allocator, null, exported, true);
+                try appendNode(allocator, &state.components.items[component_index].function_nodes, exported);
+            } else {
+                try collectTopLevelDeclaration(allocator, tree, exported, state, custom_validators);
+            }
         },
         else => {},
     }
@@ -266,6 +278,9 @@ fn collectVariableDeclarator(
             if (!functionReturnsJSXOrNull(tree, wrapped)) return;
             const component_index = try state.ensureComponent(allocator, name, index, true);
             try appendNode(allocator, &state.components.items[component_index].function_nodes, wrapped);
+            if (reactFunctionComponentProps(tree, declarator.id)) |props_type| {
+                try collectTypeProps(allocator, tree, props_type, &state.components.items[component_index].declared_props, 0);
+            }
         },
         else => {},
     }
@@ -334,6 +349,10 @@ fn collectTypeProps(allocator: Allocator, tree: *const ast.Tree, index: ast.Node
         .ts_type_annotation => |annotation| return collectTypeProps(allocator, tree, annotation.type_annotation, props, depth + 1),
         .ts_type_literal => |literal| literal.members,
         .ts_interface_body => |body| body.body,
+        .ts_intersection_type => |intersection| {
+            for (tree.extra(intersection.types)) |part| try collectTypeProps(allocator, tree, part, props, depth + 1);
+            return;
+        },
         .ts_type_reference => |reference| {
             const name = identifierReferenceName(tree, reference.type_name) orelse return;
             const program = tree.data(tree.root).program;
@@ -360,6 +379,11 @@ fn collectTypeProps(allocator: Allocator, tree: *const ast.Tree, index: ast.Node
     for (tree.extra(members)) |member| {
         const property = switch (tree.data(member)) {
             .ts_property_signature => |value| value,
+            .ts_method_signature => |method| {
+                const name = propertyName(tree, method.key, method.computed) orelse continue;
+                _ = try ensureDeclaredProp(allocator, props, name, method.key);
+                continue;
+            },
             else => continue,
         };
         const name = propertyName(tree, property.key, property.computed) orelse continue;

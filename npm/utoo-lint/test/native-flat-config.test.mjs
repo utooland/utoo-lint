@@ -291,3 +291,25 @@ test("raw native binary keeps languageOptions.globals from an object config aliv
     ...paths.map(() => "no-undef: 'missing' is not defined.")
   ]);
 });
+
+for (const flat of [false, true]) {
+  test(`rule option defaults survive unrelated options (${flat ? "flat" : "object"} config)`, (t) => {
+    const project = createProject(t);
+    const sourcePath = write(join(project, "example.tsx"),
+      'export function Example() { return <img src="image.png" />; }\n' +
+      'export interface Options { run: () => Promise<void>; }\n');
+    for (const rejectOptions of ["warn", ["warn", { allowEmptyReject: true }], ["warn", { allowEmptyReject: false }]]) {
+      const config = { rules: {
+        "jsx-a11y/alt-text": "warn",
+        "@typescript-eslint/no-invalid-void-type": "error",
+        "prefer-promise-reject-errors": rejectOptions
+      } };
+      const configPath = writeConfig(project, flat ? [config] : config);
+      const result = runNative(project, [`--config=${configPath}`, sourcePath]);
+      assert.equal(result.status, 0, result.stderr + result.stdout);
+      assert.deepEqual(diagnosticSummary(result), [
+        { filePath: sourcePath, ruleId: "jsx-a11y/alt-text", severity: "warning" }
+      ]);
+    }
+  });
+}
