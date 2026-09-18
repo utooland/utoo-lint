@@ -215,6 +215,9 @@ const Visitor = struct {
             return .proceed;
         }
 
+        var key_arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer key_arena.deinit();
+        const key_allocator = key_arena.allocator();
         const deps_node = unwrapTransparent(ctx.tree, args[hook.callback_index + 1]);
         var declared = std.StringHashMap(ast.NodeIndex).init(self.allocator);
         defer declared.deinit();
@@ -243,7 +246,7 @@ const Visitor = struct {
                             );
                         },
                         else => {
-                            const key = dependencyKey(ctx.tree, unwrapped) orelse {
+                            const key = try dependencyKey(key_allocator, ctx.tree, unwrapped) orelse {
                                 try self.reportFmt(
                                     ctx.tree,
                                     unwrapped,
@@ -274,7 +277,7 @@ const Visitor = struct {
         var used = std.StringHashMap(ast.NodeIndex).init(self.allocator);
         defer used.deinit();
         var dep_visitor = DependencyVisitor{
-            .allocator = self.allocator,
+            .allocator = key_allocator,
             .callback_span = ctx.tree.span(callback),
             .used = &used,
             .symbol_table = self.symbol_table,
@@ -373,7 +376,7 @@ const DependencyVisitor = struct {
 
         if (!isTopDependencyReference(ctx.tree, index, ctx)) return .proceed;
 
-        const key = dependencyKey(ctx.tree, topDependencyNode(ctx.tree, index, ctx)) orelse ctx.tree.string(identifier.name);
+        const key = try dependencyKey(self.allocator, ctx.tree, topDependencyNode(ctx.tree, index, ctx)) orelse ctx.tree.string(identifier.name);
         if (!self.used.contains(key)) try self.used.put(key, index);
         return .proceed;
     }
@@ -475,24 +478,18 @@ fn isUnstableInitializer(tree: *const ast.Tree, index: ast.NodeIndex) bool {
     };
 }
 
-fn dependencyKey(tree: *const ast.Tree, index: ast.NodeIndex) ?[]const u8 {
+fn dependencyKey(allocator: Allocator, tree: *const ast.Tree, index: ast.NodeIndex) Allocator.Error!?[]const u8 {
     const unwrapped = unwrapTransparent(tree, index);
     return switch (tree.data(unwrapped)) {
-        .identifier_reference => nodeSource(tree, unwrapped),
-        .member_expression => |member| if (isStaticMemberChain(tree, member)) nodeSource(tree, unwrapped) else null,
-        .chain_expression => |chain| dependencyKey(tree, chain.expression),
+        .identifier_reference => |identifier| tree.string(identifier.name),
+        .member_expression => |member| blk: {
+            if (member.computed) break :blk null;
+            const object = try dependencyKey(allocator, tree, member.object) orelse break :blk null;
+            const property = propertyName(tree, member) orelse break :blk null;
+            break :blk try std.fmt.allocPrint(allocator, "{s}.{s}", .{ object, property });
+        },
+        .chain_expression => |chain| try dependencyKey(allocator, tree, chain.expression),
         else => null,
-    };
-}
-
-fn isStaticMemberChain(tree: *const ast.Tree, member: ast.MemberExpression) bool {
-    if (member.computed) return false;
-    if (propertyName(tree, member) == null) return false;
-    const object = unwrapTransparent(tree, member.object);
-    return switch (tree.data(object)) {
-        .identifier_reference => true,
-        .member_expression => |inner| isStaticMemberChain(tree, inner),
-        else => false,
     };
 }
 

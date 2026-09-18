@@ -1,0 +1,20 @@
+---
+fixture: "tests/snapshots/specs/react-hooks/exhaustive-deps/optional-paths.tsx"
+rule: "react-hooks/exhaustive-deps"
+---
+
+# Input
+
+```tsx
+export function Example({data}) { return useMemo(() => data?.items.map(x => x), [data]); }
+export function Callback({data}) { return useCallback(() => data.id, [data?.id]); }
+```
+
+# Diagnostics
+
+count: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

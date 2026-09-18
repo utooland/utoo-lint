@@ -150,3 +150,25 @@ fn hasMessage(result: lint.Result, needle: []const u8) bool {
     }
     return false;
 }
+
+test "optional dependency paths match ordinary member paths" {
+    const sources = [_][]const u8{
+        "function Example({ data }) { return useMemo(() => data?.items.map(x => x), [data]); }",
+        "function Example({ data }) { return useCallback(() => data.id, [data?.id]); }",
+        "function Example({ data }) { return useMemo(() => data?.user?.name, [data.user.name]); }",
+        "function Example({ data }) { return useMemo(() => data.user.name, [data?.user]); }",
+        "function Example({ data }) { return useMemo(() => data /* comment */ . name, [data.name]); }",
+    };
+    for (sources) |source| {
+        var options = lint.Options.allDisabled();
+        options.react_hooks_exhaustive_deps = true;
+        var result = try lint.lintSource(std.testing.allocator, source, "fixture.tsx", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(@as(usize, 0), helpers.countRule(result, lint.rules.react_hooks_exhaustive_deps.id));
+    }
+    var options = lint.Options.allDisabled();
+    options.react_hooks_exhaustive_deps = true;
+    var result = try lint.lintSource(std.testing.allocator, "function Example({ data }) { return useMemo(() => data?.name, [data?.id]); }", "fixture.tsx", options);
+    defer result.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 2), helpers.countRule(result, lint.rules.react_hooks_exhaustive_deps.id));
+}
