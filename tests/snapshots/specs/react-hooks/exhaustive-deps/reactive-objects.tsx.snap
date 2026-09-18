@@ -1,0 +1,45 @@
+---
+fixture: "tests/snapshots/specs/react-hooks/exhaustive-deps/reactive-objects.tsx"
+rule: "react-hooks/exhaustive-deps"
+---
+
+# Input
+
+```tsx
+export function Example({items, inputRef}) {
+  const result = useMemo(() => items.map(x => x), []);
+  useEffect(() => { inputRef.current = 1; }, []);
+  return result;
+}
+```
+
+# Diagnostics
+
+count: 2
+
+## Diagnostic 1
+
+- rule: "react-hooks/exhaustive-deps"
+- severity: "error"
+- message: "React Hook useMemo has a missing dependency: 'items'. Either include it or remove the dependency array."
+- byte span: 95..97
+- start: 2:51
+- end: 2:53
+- source: "[]"
+- fixes: 0
+
+## Diagnostic 2
+
+- rule: "react-hooks/exhaustive-deps"
+- severity: "error"
+- message: "React Hook useEffect has a missing dependency: 'inputRef'. Either include it or remove the dependency array."
+- byte span: 145..147
+- start: 3:46
+- end: 3:48
+- source: "[]"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0
