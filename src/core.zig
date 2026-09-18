@@ -3315,6 +3315,7 @@ pub const Options = struct {
     typescript_eslint_prefer_namespace_keyword: bool = true,
     typescript_eslint_restrict_plus_operands: bool = true,
     typescript_eslint_restrict_plus_operands_allow_number_and_string: bool = false,
+    typescript_eslint_restrict_plus_operands_allow_any: bool = true,
     promise_always_return: bool = true,
     promise_always_return_ignore_last_callback: bool = false,
     promise_always_return_ignore_assignment_variables: PromiseAlwaysReturnIgnoreAssignmentVariables = .{},
@@ -4206,6 +4207,7 @@ pub const Options = struct {
         }
         if (std.mem.eql(u8, cli_name, "@typescript-eslint/restrict-plus-operands")) {
             self.typescript_eslint_restrict_plus_operands_allow_number_and_string = try typescriptEslintRestrictPlusOperandsBoolOptionFromConfig(value, "allowNumberAndString", false);
+            self.typescript_eslint_restrict_plus_operands_allow_any = try typescriptEslintRestrictPlusOperandsBoolOptionFromConfig(value, "allowAny", true);
         }
         if (std.mem.eql(u8, cli_name, "no-undef")) {
             self.no_undef_typeof = try noUndefTypeofFromConfig(value);
