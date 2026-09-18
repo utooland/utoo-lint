@@ -703,9 +703,39 @@ const UsageVisitor = struct {
         return buffer[0 .. alias.len + len];
     }
 
+    fn clearAssignedAliases(self: *UsageVisitor, tree: *const ast.Tree, index: ast.NodeIndex) void {
+        const target = unwrapTransparent(tree, index);
+        if (target == .null) return;
+        switch (tree.data(target)) {
+            .identifier_reference, .binding_identifier => {
+                if (self.state.symbols.symbolOf(target)) |symbol| _ = self.state.aliases.remove(symbol);
+            },
+            .assignment_pattern => |pattern| self.clearAssignedAliases(tree, pattern.left),
+            .binding_rest_element => |element| self.clearAssignedAliases(tree, element.argument),
+            .array_pattern => |pattern| {
+                for (tree.extra(pattern.elements)) |element| self.clearAssignedAliases(tree, element);
+                self.clearAssignedAliases(tree, pattern.rest);
+            },
+            .object_pattern => |pattern| {
+                for (tree.extra(pattern.properties)) |property_index| {
+                    const property = switch (tree.data(property_index)) {
+                        .binding_property => |property| property,
+                        else => continue,
+                    };
+                    self.clearAssignedAliases(tree, property.value);
+                }
+                self.clearAssignedAliases(tree, pattern.rest);
+            },
+            else => {},
+        }
+    }
+
     pub fn exit_assignment_expression(self: *UsageVisitor, assignment: ast.AssignmentExpression, _: ast.NodeIndex, ctx: *traverser.basic.Ctx) void {
         const target = unwrapTransparent(ctx.tree, assignment.left);
-        if (ctx.tree.data(target) != .identifier_reference) return;
+        if (ctx.tree.data(target) != .identifier_reference) {
+            self.clearAssignedAliases(ctx.tree, target);
+            return;
+        }
         const symbol = self.state.symbols.symbolOf(target) orelse return;
         var buffer: [max_prop_depth][]const u8 = undefined;
         if (assignment.operator == .assign) {

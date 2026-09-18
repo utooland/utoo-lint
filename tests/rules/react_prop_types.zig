@@ -262,6 +262,10 @@ test "React FC props support wrappers intersections and methods" {
 
 test "nested destructured props are checked against shape validators" {
     const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "function Example({ data }) { ({ data } = fallback); return <span>{data.name}</span>; } Example.propTypes = { data: PropTypes.shape({}) };", .count = 0 },
+        .{ .source = "function Example({ data }) { [data] = fallback; return <span>{data.name}</span>; } Example.propTypes = { data: PropTypes.shape({}) };", .count = 0 },
+        .{ .source = "function Example({ data }) { ({ nested: [data = {}] } = fallback); return <span>{data.name}</span>; } Example.propTypes = { data: PropTypes.shape({}) };", .count = 0 },
+        .{ .source = "function Example({ data }) { [...data] = fallback; return <span>{data.name}</span>; } Example.propTypes = { data: PropTypes.shape({}) };", .count = 0 },
         .{ .source = "function Example({ data }) { return <span>{data.name}</span>; } Example.propTypes = { data: PropTypes.shape({}) };", .count = 1 },
         .{ .source = "function Example({ data: alias }) { return <span>{alias.name}</span>; } Example.propTypes = { data: PropTypes.shape({}) };", .count = 1 },
         .{ .source = "function Example(props) { const { data } = props; return <span>{data.name}</span>; } Example.propTypes = { data: PropTypes.shape({}) };", .count = 1 },
