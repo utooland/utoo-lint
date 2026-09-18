@@ -1,0 +1,35 @@
+---
+fixture: "tests/snapshots/specs/core/require-atomic-updates/captured-property.js"
+rule: "require-atomic-updates"
+---
+
+# Input
+
+```js
+const state = { count: 0 };
+export async function update(task) {
+  const previous = state.count;
+  await task();
+  state.count = previous + 1;
+}
+```
+
+# Diagnostics
+
+count: 1
+
+## Diagnostic 1
+
+- rule: "require-atomic-updates"
+- severity: "warning"
+- message: "Possible race condition: 'state.count' might be assigned based on an outdated state of 'state'."
+- byte span: 115..141
+- start: 5:3
+- end: 5:29
+- source: "state.count = previous + 1"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

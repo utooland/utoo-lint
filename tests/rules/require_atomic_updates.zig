@@ -169,3 +169,23 @@ test "can disable require-atomic-updates" {
 
     try std.testing.expect(!helpers.hasRule(result, lint.rules.require_atomic_updates.id));
 }
+
+test "captured shared property reads remain stale at write targets" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "const state = { count: 0 }; async function update(task) { const previous = state.count; await task(); state.count = previous + 1; }", .count = 1 },
+        .{ .source = "const state = { count: 0 }; async function update(task) { const previous = state['count']; await task(); state['count'] = previous + 1; }", .count = 1 },
+        .{ .source = "const state = { count: 0 }; async function update(task) { await task(); state.count = 1; }", .count = 0 },
+        .{ .source = "const state = { count: 0 }; async function update(task) { const previous = state.count; await task(); state.count = state.count + 1; }", .count = 0 },
+        .{ .source = "const state = { count: 0 }; async function update(task) { const previous = state.count; state.count = previous + 1; }", .count = 0 },
+    };
+    for (cases) |case| {
+        for ([_]bool{ false, true }) |allow| {
+            var options = lint.Options.allDisabled();
+            options.require_atomic_updates = true;
+            options.require_atomic_updates_allow_properties = allow;
+            var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.js", options);
+            defer result.deinit(std.testing.allocator);
+            try std.testing.expectEqual(if (allow) @as(usize, 0) else case.count, helpers.countRule(result, lint.rules.require_atomic_updates.id));
+        }
+    }
+}

@@ -330,7 +330,8 @@ const Analyzer = struct {
             .member_expression => |member| {
                 try self.scanNode(member.object);
                 if (member.computed) try self.scanNode(member.property);
-                try self.markObjectRead(member.object);
+                // Evaluating a write target does not reread its property's value.
+                // Keep pre-suspension reads stale until an actual member read.
             },
             .array_pattern => |pattern| {
                 for (self.tree.extra(pattern.elements)) |element| {
