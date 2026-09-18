@@ -1,0 +1,19 @@
+---
+fixture: "tests/snapshots/specs/import/named/types.ts"
+rule: "import/named"
+---
+
+# Input
+
+```ts
+export interface Example { count: number; }
+```
+
+# Diagnostics
+
+count: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

@@ -21,6 +21,7 @@ const max_reexport_depth = 8;
 pub const ExportMap = struct {
     allocator: Allocator,
     has_default: bool = false,
+    include_types: bool = false,
     named: std.StringHashMap(void),
 
     pub fn init(allocator: Allocator) ExportMap {
@@ -100,6 +101,15 @@ pub fn readExportMap(
     io: std.Io,
     path: []const u8,
 ) Allocator.Error!?ExportMap {
+    return readExportMapWithTypes(allocator, io, path, false);
+}
+
+pub fn readExportMapWithTypes(
+    allocator: Allocator,
+    io: std.Io,
+    path: []const u8,
+    include_types: bool,
+) Allocator.Error!?ExportMap {
     var visited = std.StringHashMap(void).init(allocator);
     defer {
         var iter = visited.iterator();
@@ -109,7 +119,7 @@ pub fn readExportMap(
         visited.deinit();
     }
 
-    return readExportMapInner(allocator, io, path, &visited, 0);
+    return readExportMapInner(allocator, io, path, &visited, 0, include_types);
 }
 
 fn readExportMapInner(
@@ -118,13 +128,16 @@ fn readExportMapInner(
     path: []const u8,
     visited: *std.StringHashMap(void),
     depth: usize,
+    include_types: bool,
 ) Allocator.Error!?ExportMap {
     if (depth > max_reexport_depth) return null;
     if (visited.contains(path)) return null;
 
     const owned_path = try allocator.dupe(u8, path);
-    errdefer allocator.free(owned_path);
+    defer allocator.free(owned_path);
     try visited.put(owned_path, {});
+    // Track the active recursion path, allowing sibling reexports to revisit a module.
+    defer _ = visited.remove(owned_path);
 
     const source = readFile(allocator, io, path) orelse return null;
     defer allocator.free(source);
@@ -142,16 +155,17 @@ fn readExportMapInner(
     };
 
     var map = ExportMap.init(allocator);
+    map.include_types = include_types;
     errdefer map.deinit();
     for (tree.extra(program.body)) |statement_index| {
         switch (tree.data(statement_index)) {
             .export_default_declaration => map.has_default = true,
             .export_named_declaration => |declaration| {
-                if (declaration.export_kind == .type) continue;
+                if (declaration.export_kind == .type and !include_types) continue;
                 try collectNamedDeclarationExports(allocator, &tree, declaration, &map, path, io, visited, depth);
                 if (hasDefaultSpecifier(&tree, declaration)) {
                     if (exportNamedSource(&tree, declaration)) |reexport_source| {
-                        if (try reexportHasDefault(allocator, io, path, reexport_source, visited, depth)) {
+                        if (try reexportHasDefault(allocator, io, path, reexport_source, visited, depth, include_types)) {
                             map.has_default = true;
                         }
                     } else {
@@ -160,7 +174,7 @@ fn readExportMapInner(
                 }
             },
             .export_all_declaration => |declaration| {
-                if (declaration.export_kind == .type) continue;
+                if (declaration.export_kind == .type and !include_types) continue;
                 if (declaration.exported != .null) {
                     if (moduleExportName(&tree, declaration.exported)) |name| {
                         try map.addNamed(name);
@@ -183,11 +197,12 @@ fn reexportHasDefault(
     source: []const u8,
     visited: *std.StringHashMap(void),
     depth: usize,
+    include_types: bool,
 ) Allocator.Error!bool {
     const resolved = try resolveRelativeModule(allocator, io, path, source) orelse return false;
     defer allocator.free(resolved);
 
-    var map = try readExportMapInner(allocator, io, resolved, visited, depth + 1) orelse return false;
+    var map = try readExportMapInner(allocator, io, resolved, visited, depth + 1, include_types) orelse return false;
     defer map.deinit();
     return map.has_default;
 }
@@ -200,11 +215,12 @@ fn reexportHasNamed(
     name: []const u8,
     visited: *std.StringHashMap(void),
     depth: usize,
+    include_types: bool,
 ) Allocator.Error!bool {
     const resolved = try resolveRelativeModule(allocator, io, path, source) orelse return false;
     defer allocator.free(resolved);
 
-    var map = try readExportMapInner(allocator, io, resolved, visited, depth + 1) orelse return false;
+    var map = try readExportMapInner(allocator, io, resolved, visited, depth + 1, include_types) orelse return false;
     defer map.deinit();
     return map.hasNamed(name);
 }
@@ -223,7 +239,7 @@ fn collectExportAll(
     const resolved = try resolveRelativeModule(allocator, io, path, source) orelse return;
     defer allocator.free(resolved);
 
-    var remote = try readExportMapInner(allocator, io, resolved, visited, depth + 1) orelse return;
+    var remote = try readExportMapInner(allocator, io, resolved, visited, depth + 1, map.include_types) orelse return;
     defer remote.deinit();
 
     var iter = remote.named.iterator();
@@ -248,10 +264,10 @@ fn collectNamedDeclarationExports(
                 .export_specifier => |specifier| specifier,
                 else => continue,
             };
-            if (specifier.export_kind == .type) continue;
+            if (specifier.export_kind == .type and !map.include_types) continue;
             const local = moduleExportName(tree, specifier.local) orelse continue;
             const exported = moduleExportName(tree, specifier.exported) orelse continue;
-            if (try reexportHasNamed(allocator, io, path, source, local, visited, depth)) {
+            if (try reexportHasNamed(allocator, io, path, source, local, visited, depth, map.include_types)) {
                 try map.addNamed(exported);
             }
         }
@@ -263,7 +279,7 @@ fn collectNamedDeclarationExports(
             .export_specifier => |specifier| specifier,
             else => continue,
         };
-        if (specifier.export_kind == .type) continue;
+        if (specifier.export_kind == .type and !map.include_types) continue;
         const exported = moduleExportName(tree, specifier.exported) orelse continue;
         try map.addNamed(exported);
     }
