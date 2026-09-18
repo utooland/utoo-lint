@@ -78,6 +78,24 @@ pub fn runWithOptions(
     };
     try traverser.basic.traverse(StableSymbolVisitor, tree, &stable_visitor);
 
+    var changed = true;
+    while (changed) {
+        changed = false;
+        for (tree.nodes.items(.data), 0..) |data, raw_index| {
+            const function: ast.NodeIndex, const binding: ast.NodeIndex = switch (data) {
+                .function => |value| .{ @enumFromInt(raw_index), value.id },
+                .variable_declarator => |value| .{ unwrapTransparent(tree, value.init), value.id },
+                else => continue,
+            };
+            if (function == .null or binding == .null or !isFunctionLike(tree, function)) continue;
+            const symbol = symbol_table.symbolOf(binding) orelse continue;
+            if (stable_symbols.contains(symbol)) continue;
+            if (functionCapturesReactiveValues(tree, symbol_table, function, symbol, &stable_symbols)) continue;
+            try stable_symbols.put(symbol, {});
+            changed = true;
+        }
+    }
+
     var visitor = Visitor{
         .allocator = allocator,
         .diagnostics = diagnostics,
@@ -88,6 +106,31 @@ pub fn runWithOptions(
         .options = options,
     };
     try traverser.basic.traverse(Visitor, tree, &visitor);
+}
+
+fn functionCapturesReactiveValues(tree: *const ast.Tree, symbols: traverser.semantic.SymbolTable, function: ast.NodeIndex, function_symbol: SymbolId, stable: *const SymbolSet) bool {
+    const span = tree.span(function);
+    var references = symbols.iterReferences();
+    while (references.next()) |entry| {
+        if (entry.reference.kind != .value) continue;
+        if (symbols.referenceSymbol(entry.id) == function_symbol and symbols.isWriteReference(entry.id)) return true;
+        const reference_span = tree.span(entry.reference.node);
+        if (reference_span.start < span.start or reference_span.end > span.end) continue;
+        const symbol = symbols.referenceSymbol(entry.id);
+        if (symbol == .none or symbol == function_symbol or stable.contains(symbol)) continue;
+        const info = symbols.getSymbol(symbol);
+        if (info.flags.import or info.flags.type_import or info.scope == .root or info.scope == .module) continue;
+        var local = false;
+        for (symbols.symbolDecls(symbol)) |declaration| {
+            const declaration_span = tree.span(declaration);
+            if (declaration_span.start >= span.start and declaration_span.end <= span.end) {
+                local = true;
+                break;
+            }
+        }
+        if (!local) return true;
+    }
+    return false;
 }
 
 const StableSymbolVisitor = struct {
