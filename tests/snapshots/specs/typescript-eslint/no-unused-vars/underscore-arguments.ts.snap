@@ -1,0 +1,41 @@
+---
+fixture: "tests/snapshots/specs/typescript-eslint/no-unused-vars/underscore-arguments.ts"
+rule: "@typescript-eslint/no-unused-vars"
+---
+
+# Input
+
+```ts
+export function example(_first, _second) { return null; }
+```
+
+# Diagnostics
+
+count: 2
+
+## Diagnostic 1
+
+- rule: "@typescript-eslint/no-unused-vars"
+- severity: "error"
+- message: "'_first' is declared but never used."
+- byte span: 24..30
+- start: 1:25
+- end: 1:31
+- source: "_first"
+- fixes: 0
+
+## Diagnostic 2
+
+- rule: "@typescript-eslint/no-unused-vars"
+- severity: "error"
+- message: "'_second' is declared but never used."
+- byte span: 32..39
+- start: 1:33
+- end: 1:40
+- source: "_second"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

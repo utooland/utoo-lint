@@ -3,13 +3,14 @@ const parser = @import("parser");
 const core = @import("../core.zig");
 
 const ast = parser.ast;
-const traverser = parser.traverser;
+const SymbolTable = @import("../semantic_compat.zig").SymbolTable;
 const Allocator = std.mem.Allocator;
 
 pub const id = "@typescript-eslint/restrict-plus-operands";
 
 pub const Options = struct {
     allow_number_and_string: bool = false,
+    allow_any: bool = true,
 };
 
 const ValueType = enum {
@@ -18,6 +19,7 @@ const ValueType = enum {
     bigint,
     boolean,
     unknown,
+    any,
     invalid,
     unknown_expression,
 
@@ -28,29 +30,21 @@ const ValueType = enum {
             .bigint => "bigint",
             .boolean => "boolean",
             .unknown => "unknown",
+            .any => "any",
             .invalid => "invalid",
             .unknown_expression => "unknown",
         };
     }
 };
 
-const TypeEnv = std.StringHashMapUnmanaged(ValueType);
-
-pub const State = struct {
-    env: TypeEnv = .empty,
-    initialized: bool = false,
-
-    pub fn deinit(self: *State, allocator: Allocator) void {
-        self.env.deinit(allocator);
+pub fn run(allocator: Allocator, diagnostics: *core.DiagnosticList, tree: *const ast.Tree, symbols: SymbolTable, options: Options) Allocator.Error!void {
+    for (tree.nodes.items(.data), 0..) |data, raw_index| {
+        switch (data) {
+            .binary_expression => |expression| try checkBinaryExpression(allocator, diagnostics, tree, expression, @enumFromInt(raw_index), symbols, options),
+            else => {},
+        }
     }
-
-    fn ensureInitialized(self: *State, allocator: Allocator, tree: *const ast.Tree) Allocator.Error!void {
-        if (self.initialized) return;
-        self.initialized = true;
-        var visitor = TypeEnvVisitor{ .allocator = allocator, .env = &self.env };
-        try traverser.basic.traverse(TypeEnvVisitor, tree, &visitor);
-    }
-};
+}
 
 pub fn checkBinaryExpression(
     allocator: Allocator,
@@ -58,15 +52,21 @@ pub fn checkBinaryExpression(
     tree: *const ast.Tree,
     expression: ast.BinaryExpression,
     index: ast.NodeIndex,
-    state: *State,
+    symbols: SymbolTable,
     options: Options,
 ) Allocator.Error!void {
     if (expression.operator != .add) return;
 
-    try state.ensureInitialized(allocator, tree);
-
-    const left = inferExpressionType(tree, state.env, expression.left);
-    const right = inferExpressionType(tree, state.env, expression.right);
+    const left = inferExpressionType(tree, symbols, expression.left);
+    const right = inferExpressionType(tree, symbols, expression.right);
+    if (left == .any or right == .any) {
+        if (!options.allow_any) {
+            try core.addDiagnostic(allocator, diagnostics, .warning, id, "Invalid operand for a '+' operation. Operands must each be a number or string. Got `any`.", tree.span(index));
+            return;
+        }
+        const other = if (left == .any) right else left;
+        if (other == .any or other == .unknown_expression or isAllowedOperand(other)) return;
+    }
     if (left == .unknown_expression or right == .unknown_expression) return;
     if (isAllowedPair(left, right, options)) return;
 
@@ -83,7 +83,7 @@ pub fn checkBinaryExpression(
         return;
     }
 
-    const invalid = if (!isAllowedOperand(left)) left else right;
+    const invalid = if (left != .any and !isAllowedOperand(left)) left else right;
     try core.addDiagnosticFmt(
         allocator,
         diagnostics,
@@ -112,7 +112,7 @@ fn isAllowedOperand(value_type: ValueType) bool {
     return value_type == .number or value_type == .string;
 }
 
-fn inferExpressionType(tree: *const ast.Tree, env: TypeEnv, index: ast.NodeIndex) ValueType {
+fn inferExpressionType(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex) ValueType {
     if (index == .null) return .unknown_expression;
 
     return switch (tree.data(index)) {
@@ -121,20 +121,20 @@ fn inferExpressionType(tree: *const ast.Tree, env: TypeEnv, index: ast.NodeIndex
         .bigint_literal => .bigint,
         .boolean_literal => .boolean,
         .null_literal, .array_expression, .object_expression => .invalid,
-        .identifier_reference => |identifier| env.get(tree.string(identifier.name)) orelse .unknown_expression,
-        .parenthesized_expression => |parenthesized| inferExpressionType(tree, env, parenthesized.expression),
-        .ts_as_expression => |expression| typeFromAnnotation(tree, expression.type_annotation) orelse inferExpressionType(tree, env, expression.expression),
-        .ts_type_assertion => |expression| typeFromAnnotation(tree, expression.type_annotation) orelse inferExpressionType(tree, env, expression.expression),
-        .ts_satisfies_expression => |expression| inferExpressionType(tree, env, expression.expression),
-        .ts_non_null_expression => |expression| inferExpressionType(tree, env, expression.expression),
-        .binary_expression => |binary| if (binary.operator == .add) inferBinaryResultType(tree, env, binary) else .unknown_expression,
+        .identifier_reference => referenceType(tree, symbols, index),
+        .parenthesized_expression => |parenthesized| inferExpressionType(tree, symbols, parenthesized.expression),
+        .ts_as_expression => |expression| typeFromAnnotation(tree, expression.type_annotation) orelse inferExpressionType(tree, symbols, expression.expression),
+        .ts_type_assertion => |expression| typeFromAnnotation(tree, expression.type_annotation) orelse inferExpressionType(tree, symbols, expression.expression),
+        .ts_satisfies_expression => |expression| inferExpressionType(tree, symbols, expression.expression),
+        .ts_non_null_expression => |expression| inferExpressionType(tree, symbols, expression.expression),
+        .binary_expression => |binary| if (binary.operator == .add) inferBinaryResultType(tree, symbols, binary) else .unknown_expression,
         else => .unknown_expression,
     };
 }
 
-fn inferBinaryResultType(tree: *const ast.Tree, env: TypeEnv, expression: ast.BinaryExpression) ValueType {
-    const left = inferExpressionType(tree, env, expression.left);
-    const right = inferExpressionType(tree, env, expression.right);
+fn inferBinaryResultType(tree: *const ast.Tree, symbols: SymbolTable, expression: ast.BinaryExpression) ValueType {
+    const left = inferExpressionType(tree, symbols, expression.left);
+    const right = inferExpressionType(tree, symbols, expression.right);
     if (left == .string and right == .string) return .string;
     if (left == .number and right == .number) return .number;
     return .unknown_expression;
@@ -153,7 +153,7 @@ fn typeFromAnnotation(tree: *const ast.Tree, index: ast.NodeIndex) ?ValueType {
         .ts_bigint_keyword => .bigint,
         .ts_boolean_keyword => .boolean,
         .ts_unknown_keyword => .unknown,
-        .ts_any_keyword => null,
+        .ts_any_keyword => .any,
         .ts_literal_type => |literal| literalType(tree, literal.literal),
         else => null,
     };
@@ -170,49 +170,19 @@ fn literalType(tree: *const ast.Tree, index: ast.NodeIndex) ?ValueType {
     };
 }
 
-const TypeEnvVisitor = struct {
-    allocator: Allocator,
-    env: *TypeEnv,
-
-    pub fn enter_variable_declarator(
-        self: *TypeEnvVisitor,
-        declarator: ast.VariableDeclarator,
-        _: ast.NodeIndex,
-        ctx: *traverser.basic.Ctx,
-    ) Allocator.Error!traverser.Action {
-        try self.collectBinding(ctx.tree, declarator.id);
-        return .proceed;
-    }
-
-    pub fn enter_formal_parameter(
-        self: *TypeEnvVisitor,
-        parameter: ast.FormalParameter,
-        _: ast.NodeIndex,
-        ctx: *traverser.basic.Ctx,
-    ) Allocator.Error!traverser.Action {
-        try self.collectBinding(ctx.tree, parameter.pattern);
-        return .proceed;
-    }
-
-    fn collectBinding(self: *TypeEnvVisitor, tree: *const ast.Tree, index: ast.NodeIndex) Allocator.Error!void {
-        if (index == .null) return;
-
-        switch (tree.data(index)) {
-            .binding_identifier => |identifier| {
-                const value_type = typeFromAnnotation(tree, identifier.type_annotation) orelse return;
-                try self.env.put(self.allocator, tree.string(identifier.name), value_type);
-            },
-            .assignment_pattern => |assignment| {
-                if (typeFromAnnotation(tree, assignment.type_annotation)) |value_type| {
-                    if (tree.data(assignment.left) == .binding_identifier) {
-                        const identifier = tree.data(assignment.left).binding_identifier;
-                        try self.env.put(self.allocator, tree.string(identifier.name), value_type);
-                        return;
-                    }
-                }
-                try self.collectBinding(tree, assignment.left);
-            },
-            else => {},
+fn referenceType(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex) ValueType {
+    const symbol = symbols.symbolOf(index) orelse return .unknown_expression;
+    for (symbols.symbolDecls(symbol)) |declaration| {
+        const annotation = switch (tree.data(declaration)) {
+            .binding_identifier => |identifier| identifier.type_annotation,
+            else => .null,
+        };
+        if (typeFromAnnotation(tree, annotation)) |value| return value;
+        if (symbols.parentOf(declaration)) |parent| {
+            if (tree.data(parent) == .assignment_pattern) {
+                if (typeFromAnnotation(tree, tree.data(parent).assignment_pattern.type_annotation)) |value| return value;
+            }
         }
     }
-};
+    return .unknown_expression;
+}

@@ -78,6 +78,24 @@ pub fn runWithOptions(
     };
     try traverser.basic.traverse(StableSymbolVisitor, tree, &stable_visitor);
 
+    var changed = true;
+    while (changed) {
+        changed = false;
+        for (tree.nodes.items(.data), 0..) |data, raw_index| {
+            const function: ast.NodeIndex, const binding: ast.NodeIndex = switch (data) {
+                .function => |value| .{ @enumFromInt(raw_index), value.id },
+                .variable_declarator => |value| .{ unwrapTransparent(tree, value.init), value.id },
+                else => continue,
+            };
+            if (function == .null or binding == .null or !isFunctionLike(tree, function)) continue;
+            const symbol = symbol_table.symbolOf(binding) orelse continue;
+            if (stable_symbols.contains(symbol)) continue;
+            if (functionCapturesReactiveValues(tree, symbol_table, function, symbol, &stable_symbols)) continue;
+            try stable_symbols.put(symbol, {});
+            changed = true;
+        }
+    }
+
     var visitor = Visitor{
         .allocator = allocator,
         .diagnostics = diagnostics,
@@ -88,6 +106,31 @@ pub fn runWithOptions(
         .options = options,
     };
     try traverser.basic.traverse(Visitor, tree, &visitor);
+}
+
+fn functionCapturesReactiveValues(tree: *const ast.Tree, symbols: traverser.semantic.SymbolTable, function: ast.NodeIndex, function_symbol: SymbolId, stable: *const SymbolSet) bool {
+    const span = tree.span(function);
+    var references = symbols.iterReferences();
+    while (references.next()) |entry| {
+        if (entry.reference.kind != .value) continue;
+        if (symbols.referenceSymbol(entry.id) == function_symbol and symbols.isWriteReference(entry.id)) return true;
+        const reference_span = tree.span(entry.reference.node);
+        if (reference_span.start < span.start or reference_span.end > span.end) continue;
+        const symbol = symbols.referenceSymbol(entry.id);
+        if (symbol == .none or symbol == function_symbol or stable.contains(symbol)) continue;
+        const info = symbols.getSymbol(symbol);
+        if (info.flags.import or info.flags.type_import or info.scope == .root or info.scope == .module) continue;
+        var local = false;
+        for (symbols.symbolDecls(symbol)) |declaration| {
+            const declaration_span = tree.span(declaration);
+            if (declaration_span.start >= span.start and declaration_span.end <= span.end) {
+                local = true;
+                break;
+            }
+        }
+        if (!local) return true;
+    }
+    return false;
 }
 
 const StableSymbolVisitor = struct {
@@ -225,6 +268,9 @@ const Visitor = struct {
             return .proceed;
         }
 
+        var key_arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer key_arena.deinit();
+        const key_allocator = key_arena.allocator();
         const deps_node = unwrapTransparent(ctx.tree, args[hook.callback_index + 1]);
         var declared = std.StringHashMap(ast.NodeIndex).init(self.allocator);
         defer declared.deinit();
@@ -253,7 +299,7 @@ const Visitor = struct {
                             );
                         },
                         else => {
-                            const key = dependencyKey(ctx.tree, unwrapped) orelse {
+                            const key = try dependencyKey(key_allocator, ctx.tree, unwrapped) orelse {
                                 try self.reportFmt(
                                     ctx.tree,
                                     unwrapped,
@@ -284,7 +330,7 @@ const Visitor = struct {
         var used = std.StringHashMap(ast.NodeIndex).init(self.allocator);
         defer used.deinit();
         var dep_visitor = DependencyVisitor{
-            .allocator = self.allocator,
+            .allocator = key_allocator,
             .callback_span = ctx.tree.span(callback),
             .used = &used,
             .symbol_table = self.symbol_table,
@@ -383,7 +429,7 @@ const DependencyVisitor = struct {
 
         if (!isTopDependencyReference(ctx.tree, index, ctx)) return .proceed;
 
-        const key = dependencyKey(ctx.tree, topDependencyNode(ctx.tree, index, ctx)) orelse ctx.tree.string(identifier.name);
+        const key = try dependencyKey(self.allocator, ctx.tree, topDependencyNode(ctx.tree, index, ctx)) orelse ctx.tree.string(identifier.name);
         if (!self.used.contains(key)) try self.used.put(key, index);
         return .proceed;
     }
@@ -485,24 +531,18 @@ fn isUnstableInitializer(tree: *const ast.Tree, index: ast.NodeIndex) bool {
     };
 }
 
-fn dependencyKey(tree: *const ast.Tree, index: ast.NodeIndex) ?[]const u8 {
+fn dependencyKey(allocator: Allocator, tree: *const ast.Tree, index: ast.NodeIndex) Allocator.Error!?[]const u8 {
     const unwrapped = unwrapTransparent(tree, index);
     return switch (tree.data(unwrapped)) {
-        .identifier_reference => nodeSource(tree, unwrapped),
-        .member_expression => |member| if (isStaticMemberChain(tree, member)) nodeSource(tree, unwrapped) else null,
-        .chain_expression => |chain| dependencyKey(tree, chain.expression),
+        .identifier_reference => |identifier| tree.string(identifier.name),
+        .member_expression => |member| blk: {
+            if (member.computed) break :blk null;
+            const object = try dependencyKey(allocator, tree, member.object) orelse break :blk null;
+            const property = propertyName(tree, member) orelse break :blk null;
+            break :blk try std.fmt.allocPrint(allocator, "{s}.{s}", .{ object, property });
+        },
+        .chain_expression => |chain| try dependencyKey(allocator, tree, chain.expression),
         else => null,
-    };
-}
-
-fn isStaticMemberChain(tree: *const ast.Tree, member: ast.MemberExpression) bool {
-    if (member.computed) return false;
-    if (propertyName(tree, member) == null) return false;
-    const object = unwrapTransparent(tree, member.object);
-    return switch (tree.data(object)) {
-        .identifier_reference => true,
-        .member_expression => |inner| isStaticMemberChain(tree, inner),
-        else => false,
     };
 }
 
