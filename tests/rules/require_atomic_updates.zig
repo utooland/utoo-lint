@@ -172,6 +172,10 @@ test "can disable require-atomic-updates" {
 
 test "captured shared property reads remain stale at write targets" {
     const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "const state = { group: { count: 0 } }; async function update(task) { const previous = state.group.count; await task(); state.group.count = previous + 1; }", .count = 1 },
+        .{ .source = "const state = { group: { count: 0 } }; async function update(task) { const previous = state.group.count; await task(); state['group']['count'] = previous + 1; }", .count = 1 },
+        .{ .source = "const state = { group: { count: 0 } }; async function update(task) { const previous = state.group.count; await task(); state.group.count = state.group.count + 1; }", .count = 0 },
+        .{ .source = "const state = { group: { count: 0 } }; async function update(task) { await task(); state.group.count = 1; }", .count = 0 },
         .{ .source = "const state = { count: 0 }; async function update(task) { const previous = state.count; await task(); state.count = previous + 1; }", .count = 1 },
         .{ .source = "const state = { count: 0 }; async function update(task) { const previous = state['count']; await task(); state['count'] = previous + 1; }", .count = 1 },
         .{ .source = "const state = { count: 0 }; async function update(task) { await task(); state.count = 1; }", .count = 0 },

@@ -328,7 +328,11 @@ const Analyzer = struct {
         const unwrapped = unwrapTransparent(self.tree, index);
         switch (self.tree.data(unwrapped)) {
             .member_expression => |member| {
-                try self.scanNode(member.object);
+                if (self.tree.data(unwrapTransparent(self.tree, member.object)) == .member_expression) {
+                    try self.scanAssignmentTargetReference(member.object);
+                } else {
+                    try self.scanNode(member.object);
+                }
                 if (member.computed) try self.scanNode(member.property);
                 // Evaluating a write target does not reread its property's value.
                 // Keep pre-suspension reads stale until an actual member read.
