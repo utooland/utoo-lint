@@ -15,6 +15,8 @@ const FunctionContext = struct {
     class_method: bool,
     branch_base: usize,
     loop_base: usize,
+    has_conditional_return: bool = false,
+    terminated: bool = false,
 };
 
 pub fn run(
@@ -71,6 +73,16 @@ const Visitor = struct {
         _: *traverser.basic.Ctx,
     ) void {
         _ = self.function_stack.pop();
+    }
+
+    pub fn exit_return_statement(self: *Visitor, _: ast.ReturnStatement, _: ast.NodeIndex, _: *traverser.basic.Ctx) void {
+        if (self.function_stack.items.len == 0) return;
+        const context = &self.function_stack.items[self.function_stack.items.len - 1];
+        if (self.branch_depth > context.branch_base or self.loop_depth > context.loop_base) {
+            context.has_conditional_return = true;
+        } else {
+            context.terminated = true;
+        }
     }
 
     pub fn enter_if_statement(self: *Visitor, _: ast.IfStatement, _: ast.NodeIndex, _: *traverser.basic.Ctx) traverser.Action {
@@ -204,6 +216,8 @@ const Visitor = struct {
             return;
         };
 
+        if (context.terminated) return;
+
         const loop_delta = self.loop_depth - context.loop_base;
         if (context.directly_allowed and loop_delta > 0) {
             try self.report(
@@ -216,7 +230,7 @@ const Visitor = struct {
         }
 
         const branch_delta = self.branch_depth - context.branch_base;
-        if (context.directly_allowed and branch_delta > 0) {
+        if (context.directly_allowed and (branch_delta > 0 or context.has_conditional_return)) {
             try self.report(
                 tree,
                 callee,

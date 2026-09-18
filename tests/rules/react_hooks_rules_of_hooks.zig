@@ -94,3 +94,22 @@ test "can disable react-hooks/rules-of-hooks" {
 
     try std.testing.expect(!helpers.hasRule(result, lint.rules.react_hooks_rules_of_hooks.id));
 }
+
+test "reports hooks after conditional returns without leaking nested returns" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "export default function Example({ready}) { if (!ready) { return null; } useEffect(() => {}, []); return null; }", .count = 1 },
+        .{ .source = "function Example({ready}) { if (!ready) return null; return useMemo(() => 1, []); }", .count = 1 },
+        .{ .source = "const Example = ({ready}) => { if (!ready) return null; useState(0); return null; };", .count = 1 },
+        .{ .source = "function Example({ready}) { useState(0); if (!ready) return null; return null; }", .count = 0 },
+        .{ .source = "function Example({ready}) { function helper() { if (!ready) return null; } useState(0); return null; }", .count = 0 },
+        .{ .source = "function Example() { useEffect(() => { return () => {}; }, []); useState(0); return null; }", .count = 0 },
+        .{ .source = "function Example({ready}) { if (!ready) return null; return null; useState(0); }", .count = 0 },
+    };
+    for (cases) |case| {
+        var options = lint.Options.allDisabled();
+        options.react_hooks_rules_of_hooks = true;
+        var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.tsx", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(case.count, helpers.countRule(result, lint.rules.react_hooks_rules_of_hooks.id));
+    }
+}
