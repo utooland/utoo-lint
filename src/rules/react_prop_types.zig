@@ -5,6 +5,7 @@ const core = @import("../core.zig");
 const ast = parser.ast;
 const traverser = parser.traverser;
 const Allocator = std.mem.Allocator;
+const SymbolTable = @import("../semantic_compat.zig").SymbolTable;
 
 pub const id = "react/prop-types";
 
@@ -60,6 +61,7 @@ pub const ComponentInfo = struct {
 };
 
 pub const State = struct {
+    symbols: SymbolTable,
     components: std.ArrayList(ComponentInfo) = .empty,
 
     pub fn deinit(self: *State, allocator: Allocator) void {
@@ -119,11 +121,12 @@ pub fn run(
     allocator: Allocator,
     diagnostics: *core.DiagnosticList,
     tree: *const ast.Tree,
+    symbols: SymbolTable,
     skip_undeclared: bool,
     ignore: *const core.ReactPropTypesIgnoreNames,
     custom_validators: *const core.ReactPropTypesIgnoreNames,
 ) Allocator.Error!void {
-    var state = try collectWithCustomValidators(allocator, tree, custom_validators);
+    var state = try collectWithCustomValidators(allocator, tree, symbols, custom_validators);
     defer state.deinit(allocator);
 
     try finish(allocator, diagnostics, tree, &state, skip_undeclared, ignore);
@@ -132,17 +135,19 @@ pub fn run(
 pub fn collect(
     allocator: Allocator,
     tree: *const ast.Tree,
+    symbols: SymbolTable,
 ) Allocator.Error!State {
     const custom_validators = core.ReactPropTypesIgnoreNames{};
-    return collectWithCustomValidators(allocator, tree, &custom_validators);
+    return collectWithCustomValidators(allocator, tree, symbols, &custom_validators);
 }
 
 pub fn collectWithCustomValidators(
     allocator: Allocator,
     tree: *const ast.Tree,
+    symbols: SymbolTable,
     custom_validators: *const core.ReactPropTypesIgnoreNames,
 ) Allocator.Error!State {
-    var state = State{};
+    var state = State{ .symbols = symbols };
     errdefer state.deinit(allocator);
 
     try collectComponents(allocator, tree, &state, custom_validators);
@@ -263,7 +268,7 @@ fn collectVariableDeclarator(
             const component_index = try state.ensureComponent(allocator, name, index, true);
             try appendNode(allocator, &state.components.items[component_index].function_nodes, init);
             if (reactFunctionComponentProps(tree, declarator.id)) |props_type| {
-                try collectTypeProps(allocator, tree, props_type, &state.components.items[component_index].declared_props, 0);
+                try collectTypeProps(allocator, tree, state.symbols, props_type, &state.components.items[component_index].declared_props, 0);
             }
         },
         .call_expression => |call| {
@@ -279,7 +284,7 @@ fn collectVariableDeclarator(
             const component_index = try state.ensureComponent(allocator, name, index, true);
             try appendNode(allocator, &state.components.items[component_index].function_nodes, wrapped);
             if (reactFunctionComponentProps(tree, declarator.id)) |props_type| {
-                try collectTypeProps(allocator, tree, props_type, &state.components.items[component_index].declared_props, 0);
+                try collectTypeProps(allocator, tree, state.symbols, props_type, &state.components.items[component_index].declared_props, 0);
             }
         },
         else => {},
@@ -343,37 +348,28 @@ fn isReactFunctionComponentType(tree: *const ast.Tree, type_name: ast.NodeIndex)
     return false;
 }
 
-fn collectTypeProps(allocator: Allocator, tree: *const ast.Tree, index: ast.NodeIndex, props: *std.ArrayList(DeclaredProp), depth: usize) Allocator.Error!void {
+fn collectTypeProps(allocator: Allocator, tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex, props: *std.ArrayList(DeclaredProp), depth: usize) Allocator.Error!void {
     if (index == .null or depth >= max_prop_depth) return;
     const members = switch (tree.data(index)) {
-        .ts_type_annotation => |annotation| return collectTypeProps(allocator, tree, annotation.type_annotation, props, depth + 1),
+        .ts_type_annotation => |annotation| return collectTypeProps(allocator, tree, symbols, annotation.type_annotation, props, depth + 1),
         .ts_type_literal => |literal| literal.members,
         .ts_interface_body => |body| body.body,
         .ts_intersection_type => |intersection| {
-            for (tree.extra(intersection.types)) |part| try collectTypeProps(allocator, tree, part, props, depth + 1);
+            for (tree.extra(intersection.types)) |part| try collectTypeProps(allocator, tree, symbols, part, props, depth + 1);
             return;
         },
         .ts_type_reference => |reference| {
-            const name = identifierReferenceName(tree, reference.type_name) orelse return;
-            const program = tree.data(tree.root).program;
-            for (tree.extra(program.body)) |statement| {
-                const declaration = switch (tree.data(statement)) {
-                    .export_named_declaration => |value| value.declaration,
-                    else => statement,
-                };
-                if (declaration == .null) continue;
-                switch (tree.data(declaration)) {
-                    .ts_type_alias_declaration => |alias| if (std.mem.eql(u8, bindingIdentifierName(tree, alias.id) orelse "", name)) {
-                        return collectTypeProps(allocator, tree, alias.type_annotation, props, depth + 1);
-                    },
-                    .ts_interface_declaration => |interface| if (std.mem.eql(u8, bindingIdentifierName(tree, interface.id) orelse "", name)) {
-                        return collectTypeProps(allocator, tree, interface.body, props, depth + 1);
-                    },
-                    else => {},
-                }
+            const symbol = symbols.symbolOf(reference.type_name) orelse return;
+            for (symbols.symbolDecls(symbol)) |declaration| {
+                const parent = symbols.parentOf(declaration) orelse continue;
+                try collectTypeProps(allocator, tree, symbols, parent, props, depth + 1);
             }
             return;
         },
+        .ts_type_alias_declaration => |alias| return collectTypeProps(allocator, tree, symbols, alias.type_annotation, props, depth + 1),
+        .ts_interface_declaration => |interface| return collectTypeProps(allocator, tree, symbols, interface.body, props, depth + 1),
+        .ts_type_parameter => |parameter| return collectTypeProps(allocator, tree, symbols, parameter.constraint, props, depth + 1),
+
         else => return,
     };
     for (tree.extra(members)) |member| {
@@ -388,7 +384,7 @@ fn collectTypeProps(allocator: Allocator, tree: *const ast.Tree, index: ast.Node
         };
         const name = propertyName(tree, property.key, property.computed) orelse continue;
         const prop = try ensureDeclaredProp(allocator, props, name, property.key);
-        try collectTypeProps(allocator, tree, property.type_annotation, &prop.children, depth + 1);
+        try collectTypeProps(allocator, tree, symbols, property.type_annotation, &prop.children, depth + 1);
     }
 }
 
@@ -717,6 +713,13 @@ fn collectComponentParams(
         else => items[0],
     };
     const pattern = unwrapAssignmentPattern(tree, first);
+    const annotation = if (tree.data(first) == .assignment_pattern and tree.data(first).assignment_pattern.type_annotation != .null) tree.data(first).assignment_pattern.type_annotation else switch (tree.data(pattern)) {
+        .binding_identifier => |binding| binding.type_annotation,
+        .object_pattern => |binding| binding.type_annotation,
+        .array_pattern => |binding| binding.type_annotation,
+        else => .null,
+    };
+    try collectTypeProps(allocator, tree, state.symbols, annotation, &state.components.items[component_index].declared_props, 0);
     if (bindingIdentifierName(tree, pattern)) |name| return name;
     try collectPatternUsage(allocator, tree, &state.components.items[component_index], pattern, &.{});
     return null;

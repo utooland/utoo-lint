@@ -257,7 +257,9 @@ fn isDefinitionFile(path: []const u8) bool {
 }
 
 fn hasSemanticRules(options: Options) bool {
-    return options.typescript_eslint_restrict_plus_operands or
+    return options.react_prop_types or
+        options.react_no_unused_prop_types or
+        options.typescript_eslint_restrict_plus_operands or
         options.parser_semantic_errors or
         options.block_scoped_var or
         options.no_array_constructor or

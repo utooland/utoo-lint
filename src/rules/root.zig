@@ -773,13 +773,6 @@ pub fn runBasicWithOptionsPtr(
     if (options.require_await) {
         try require_await.run(allocator, diagnostics, tree);
     }
-    if (options.react_prop_types) {
-        try react_prop_types.run(allocator, diagnostics, tree, options.react_prop_types_skip_undeclared, &options.react_prop_types_ignore, &options.react_prop_types_custom_validators);
-    }
-    if (options.react_no_unused_prop_types) {
-        try react_no_unused_prop_types.run(allocator, diagnostics, tree, options.react_no_unused_prop_types_skip_shape_props, &options.react_no_unused_prop_types_ignore, &options.react_no_unused_prop_types_custom_validators);
-    }
-
     var visitor = BasicVisitor{
         .allocator = allocator,
         .diagnostics = diagnostics,
@@ -849,6 +842,13 @@ fn runSemanticBeforeIo(
     semantic_result: traverser.semantic.Result,
     options: core.Options,
 ) Allocator.Error!void {
+    if (options.react_prop_types) {
+        try react_prop_types.run(allocator, diagnostics, tree, semantic_result.symbol_table, options.react_prop_types_skip_undeclared, &options.react_prop_types_ignore, &options.react_prop_types_custom_validators);
+    }
+    if (options.react_no_unused_prop_types) {
+        try react_no_unused_prop_types.run(allocator, diagnostics, tree, semantic_result.symbol_table, options.react_no_unused_prop_types_skip_shape_props, &options.react_no_unused_prop_types_ignore, &options.react_no_unused_prop_types_custom_validators);
+    }
+
     if (options.typescript_eslint_restrict_plus_operands) {
         try typescript_eslint_restrict_plus_operands.run(allocator, diagnostics, tree, semantic_result.symbol_table, .{
             .allow_number_and_string = options.typescript_eslint_restrict_plus_operands_allow_number_and_string,

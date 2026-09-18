@@ -1,0 +1,30 @@
+---
+fixture: "tests/snapshots/specs/react/no-unused-prop-types/inline-typescript.tsx"
+rule: "react/no-unused-prop-types"
+---
+
+# Input
+
+```tsx
+export const Example = (props: { unused?: string }) => <span>hello</span>;
+```
+
+# Diagnostics
+
+count: 1
+
+## Diagnostic 1
+
+- rule: "react/no-unused-prop-types"
+- severity: "error"
+- message: "'unused' PropType is defined but prop is never used"
+- byte span: 33..39
+- start: 1:34
+- end: 1:40
+- source: "unused"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0
