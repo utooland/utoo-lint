@@ -1,0 +1,30 @@
+---
+fixture: "tests/snapshots/specs/react/prop-types/default-arrow.tsx"
+rule: "react/prop-types"
+---
+
+# Input
+
+```tsx
+export default (props) => { const { value } = props; return <span>{value}</span>; };
+```
+
+# Diagnostics
+
+count: 1
+
+## Diagnostic 1
+
+- rule: "react/prop-types"
+- severity: "warning"
+- message: "'value' is missing in props validation"
+- byte span: 36..41
+- start: 1:37
+- end: 1:42
+- source: "value"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0
