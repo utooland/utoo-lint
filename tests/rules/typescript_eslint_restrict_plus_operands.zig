@@ -108,3 +108,26 @@ test "can disable @typescript-eslint/restrict-plus-operands" {
 
     try std.testing.expect(!helpers.hasRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id));
 }
+
+test "explicit any operands respect allowAny" {
+    const sources = [_][]const u8{
+        "export function example(value: any) { return value + 1; }",
+        "export function example(value: any) { return 1 + value; }",
+        "export function example(value: any, other) { return value + other; }",
+        "const value: any = 1; export const result = value + 1;",
+        "export const result = (1 as any) + 1;",
+    };
+    for ([_][]const u8{ "[\"error\",{\"allowAny\":false}]", "[\"error\",{\"allowAny\":true}]", "error" }) |config_source| {
+        const json_source = if (std.mem.eql(u8, config_source, "error")) "\"error\"" else config_source;
+        var config = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, json_source, .{});
+        defer config.deinit();
+        var options = lint.Options.allDisabled();
+        try options.setByRuleConfigValue(lint.rules.typescript_eslint_restrict_plus_operands.id, config.value);
+        for (sources) |source| {
+            var result = try lint.lintSource(std.testing.allocator, source, "fixture.ts", options);
+            defer result.deinit(std.testing.allocator);
+            const count: usize = if (std.mem.indexOf(u8, config_source, "false") != null) 1 else 0;
+            try std.testing.expectEqual(count, helpers.countRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id));
+        }
+    }
+}

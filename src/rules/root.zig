@@ -3598,6 +3598,7 @@ const BasicVisitor = struct {
         if (self.options.typescript_eslint_restrict_plus_operands) {
             try typescript_eslint_restrict_plus_operands.checkBinaryExpression(self.allocator, self.diagnostics, ctx.tree, expression, index, &self.typescript_eslint_restrict_plus_operands_state, .{
                 .allow_number_and_string = self.options.typescript_eslint_restrict_plus_operands_allow_number_and_string,
+                .allow_any = self.options.typescript_eslint_restrict_plus_operands_allow_any,
             });
         }
         if (self.options.no_compare_neg_zero) {

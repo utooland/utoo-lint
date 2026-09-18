@@ -10,6 +10,7 @@ pub const id = "@typescript-eslint/restrict-plus-operands";
 
 pub const Options = struct {
     allow_number_and_string: bool = false,
+    allow_any: bool = true,
 };
 
 const ValueType = enum {
@@ -18,6 +19,7 @@ const ValueType = enum {
     bigint,
     boolean,
     unknown,
+    any,
     invalid,
     unknown_expression,
 
@@ -28,6 +30,7 @@ const ValueType = enum {
             .bigint => "bigint",
             .boolean => "boolean",
             .unknown => "unknown",
+            .any => "any",
             .invalid => "invalid",
             .unknown_expression => "unknown",
         };
@@ -67,6 +70,12 @@ pub fn checkBinaryExpression(
 
     const left = inferExpressionType(tree, state.env, expression.left);
     const right = inferExpressionType(tree, state.env, expression.right);
+    if (left == .any or right == .any) {
+        if (!options.allow_any) {
+            try core.addDiagnostic(allocator, diagnostics, .warning, id, "Invalid operand for a '+' operation. Operands must each be a number or string. Got `any`.", tree.span(index));
+        }
+        return;
+    }
     if (left == .unknown_expression or right == .unknown_expression) return;
     if (isAllowedPair(left, right, options)) return;
 
@@ -153,7 +162,7 @@ fn typeFromAnnotation(tree: *const ast.Tree, index: ast.NodeIndex) ?ValueType {
         .ts_bigint_keyword => .bigint,
         .ts_boolean_keyword => .boolean,
         .ts_unknown_keyword => .unknown,
-        .ts_any_keyword => null,
+        .ts_any_keyword => .any,
         .ts_literal_type => |literal| literalType(tree, literal.literal),
         else => null,
     };
