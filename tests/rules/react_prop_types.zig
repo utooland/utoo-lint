@@ -245,3 +245,17 @@ test "checks anonymous default-export components" {
         try std.testing.expectEqual(@as(usize, 0), helpers.countRule(result, lint.rules.react_prop_types.id));
     }
 }
+
+test "React FC props support wrappers intersections and methods" {
+    const sources = [_][]const u8{
+        "import React from 'react'; type Props = { value: string }; const Example: React.FC<Props> = React.memo(props => <span>{props.value}</span>);",
+        "import React from 'react'; type Props = { value: string }; const Example: React.FC<Props> = React.forwardRef((props, ref) => <span>{props.value}</span>);",
+        "import React from 'react'; type Base = { base: string }; type Props = Base & { value: string }; const Example: React.FC<Props> = props => <span>{props.base}{props.value}</span>;",
+        "import React from 'react'; interface Props { onClick(): void } const Example: React.FC<Props> = props => <button onClick={() => props.onClick()}/>;",
+    };
+    for (sources) |source| {
+        var result = try lint.lintSource(std.testing.allocator, source, "fixture.tsx", propTypesOnly());
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(@as(usize, 0), helpers.countRule(result, lint.rules.react_prop_types.id));
+    }
+}
