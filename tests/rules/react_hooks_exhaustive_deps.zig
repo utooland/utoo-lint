@@ -150,3 +150,29 @@ fn hasMessage(result: lint.Result, needle: []const u8) bool {
     }
     return false;
 }
+
+test "method calls and ref current accesses depend on their objects" {
+    const cases = [_]struct { expression: []const u8, dependency: []const u8 }{
+        .{ .expression = "items.map(x => x)", .dependency = "items" },
+        .{ .expression = "inputRef.current = 1", .dependency = "inputRef" },
+        .{ .expression = "inputRef.current.focus()", .dependency = "inputRef" },
+        .{ .expression = "data.items.map(x => x)", .dependency = "data.items" },
+        .{ .expression = "data.name", .dependency = "data.name" },
+    };
+    for (cases) |case| {
+        for ([_]bool{ false, true }) |include| {
+            const source = try std.fmt.allocPrint(std.testing.allocator, "function Example({{ items, inputRef, data }}) {{ return useMemo(() => {{ return {s}; }}, [{s}]); }}", .{ case.expression, if (include) case.dependency else "" });
+            defer std.testing.allocator.free(source);
+            var options = lint.Options.allDisabled();
+            options.react_hooks_exhaustive_deps = true;
+            var result = try lint.lintSource(std.testing.allocator, source, "fixture.tsx", options);
+            defer result.deinit(std.testing.allocator);
+            try std.testing.expectEqual(@as(usize, if (include) 0 else 1), helpers.countRule(result, lint.rules.react_hooks_exhaustive_deps.id));
+            if (!include) {
+                const expected = try std.fmt.allocPrint(std.testing.allocator, "React Hook useMemo has a missing dependency: '{s}'. Either include it or remove the dependency array.", .{case.dependency});
+                defer std.testing.allocator.free(expected);
+                try std.testing.expectEqualStrings(expected, result.diagnostics[0].message);
+            }
+        }
+    }
+}

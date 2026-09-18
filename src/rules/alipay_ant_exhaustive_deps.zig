@@ -668,6 +668,24 @@ fn topDependencyNode(tree: *const ast.Tree, index: ast.NodeIndex, ctx: *traverse
         switch (tree.data(parent_index)) {
             .member_expression => |member| {
                 if (unwrapTransparent(tree, member.object) != current) return current;
+                if (member.computed) return current;
+                if (propertyName(tree, member)) |name| {
+                    if (std.mem.eql(u8, name, "current")) return current;
+                }
+                var outer_depth = depth + 1;
+                while (ctx.path.ancestor(outer_depth)) |outer| : (outer_depth += 1) {
+                    switch (tree.data(outer)) {
+                        .chain_expression, .parenthesized_expression, .ts_non_null_expression => continue,
+                        .call_expression => |call| {
+                            if (unwrapTransparent(tree, call.callee) == parent_index) return current;
+                        },
+                        .assignment_expression => |assignment| {
+                            if (unwrapTransparent(tree, assignment.left) == parent_index) return current;
+                        },
+                        else => {},
+                    }
+                    break;
+                }
                 current = parent_index;
             },
             .chain_expression => current = parent_index,
