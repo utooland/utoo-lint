@@ -172,7 +172,7 @@ pub fn runWithOptions(
             continue;
         }
 
-        if (std.mem.startsWith(u8, name, "_")) continue;
+        if (!flags.parameter and std.mem.startsWith(u8, name, "_")) continue;
         if (isIgnoredVariableName(name, flags, options)) continue;
         if (isUsedByReactJSX(name, jsx_react_usage)) continue;
         if (ignored_decls.contains(decls[0])) continue;
@@ -214,75 +214,7 @@ fn matchesPatternOption(name: []const u8, pattern: core.NoUnusedVarsIgnorePatter
 }
 
 fn matchesPattern(value: []const u8, pattern: []const u8) bool {
-    var start: usize = 0;
-    while (start <= pattern.len) {
-        const remainder = pattern[start..];
-        const separator = std.mem.indexOfScalar(u8, remainder, '|');
-        const end = if (separator) |offset| start + offset else pattern.len;
-        if (matchesAlternative(value, pattern[start..end])) return true;
-        if (separator == null) break;
-        start = end + 1;
-    }
-    return false;
-}
-
-fn matchesAlternative(value: []const u8, pattern: []const u8) bool {
-    if (pattern.len == 0) return false;
-
-    const anchored_start = std.mem.startsWith(u8, pattern, "^");
-    const anchored_end = std.mem.endsWith(u8, pattern, "$");
-    const body_start: usize = if (anchored_start) 1 else 0;
-    const body_end = if (anchored_end and pattern.len > body_start) pattern.len - 1 else pattern.len;
-    const body = pattern[body_start..body_end];
-
-    if (std.mem.indexOf(u8, body, ".*") != null) {
-        return matchesWildcardSequence(value, body, anchored_start, anchored_end);
-    }
-    if (anchored_start and anchored_end) return std.mem.eql(u8, value, body);
-    if (anchored_start) return std.mem.startsWith(u8, value, body);
-    if (anchored_end) return std.mem.endsWith(u8, value, body);
-    return std.mem.indexOf(u8, value, body) != null;
-}
-
-fn matchesWildcardSequence(value: []const u8, pattern: []const u8, anchored_start: bool, anchored_end: bool) bool {
-    var value_offset: usize = 0;
-    var pattern_offset: usize = 0;
-    var part_index: usize = 0;
-
-    while (pattern_offset <= pattern.len) : (part_index += 1) {
-        const remainder = pattern[pattern_offset..];
-        const wildcard = std.mem.indexOf(u8, remainder, ".*");
-        const part_end = if (wildcard) |offset| pattern_offset + offset else pattern.len;
-        const part = pattern[pattern_offset..part_end];
-
-        if (part.len > 0) {
-            if (part_index == 0 and anchored_start) {
-                if (!std.mem.startsWith(u8, value[value_offset..], part)) return false;
-                value_offset += part.len;
-            } else {
-                const found = std.mem.indexOf(u8, value[value_offset..], part) orelse return false;
-                value_offset += found + part.len;
-            }
-        }
-
-        if (wildcard == null) break;
-        pattern_offset = part_end + 2;
-    }
-
-    if (!anchored_end) return true;
-    const suffix_start = lastWildcardPartStart(pattern);
-    return std.mem.endsWith(u8, value, pattern[suffix_start..]);
-}
-
-fn lastWildcardPartStart(pattern: []const u8) usize {
-    var offset: usize = 0;
-    var start: usize = 0;
-    while (offset < pattern.len) {
-        const wildcard = std.mem.indexOf(u8, pattern[offset..], ".*") orelse break;
-        start = offset + wildcard + 2;
-        offset = start;
-    }
-    return start;
+    return @import("jest_valid_title.zig").regexMatches(pattern, value);
 }
 
 fn isGlobalVariable(

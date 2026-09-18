@@ -173,6 +173,24 @@ test "optional dependency paths match ordinary member paths" {
     try std.testing.expectEqual(@as(usize, 2), helpers.countRule(result, lint.rules.react_hooks_exhaustive_deps.id));
 }
 
+test "functions without reactive captures are stable dependencies" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "function Example() { function getValue() { return 1; } return useMemo(() => getValue(), []); }", .count = 0 },
+        .{ .source = "function Example() { const getValue = () => 1; return useMemo(() => getValue(), []); }", .count = 0 },
+        .{ .source = "function Example() { const count = 1; function getValue() { return count; } return useMemo(() => getValue(), []); }", .count = 0 },
+        .{ .source = "function Example({ value }) { function getValue() { return value; } return useMemo(() => getValue(), []); }", .count = 1 },
+        .{ .source = "function Example({ value }) { const getValue = () => value; return useMemo(() => getValue(), []); }", .count = 1 },
+        .{ .source = "function Example({ value }) { function getValue() { function nested() { return value; } return nested(); } return useMemo(() => getValue(), []); }", .count = 1 },
+    };
+    for (cases) |case| {
+        var options = lint.Options.allDisabled();
+        options.react_hooks_exhaustive_deps = true;
+        var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.tsx", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(case.count, helpers.countRule(result, lint.rules.react_hooks_exhaustive_deps.id));
+    }
+}
+
 test "imports and module bindings are not reactive dependencies" {
     const cases = [_]struct { source: []const u8, count: usize }{
         .{ .source = "import { useEffect } from 'react'; import { log } from './helpers'; export function Example() { useEffect(() => log(), []); return null; }", .count = 0 },
