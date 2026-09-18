@@ -140,7 +140,7 @@ test "addition operand types follow scoped bindings" {
         "function numeric(value: number) { return value + 1; } function dynamic(value: any) { return value + 1; }",
         "function dynamic(value: any) { return value + 1; } function numeric(value: number) { return value + 1; }",
         "const value: any = 1; function numeric(value: number) { return value + 1; } value + 1;",
-        "const value: any = 1; function numeric(value) { return value + 1; } value + 1;",
+        "const value: any = 1; function numeric(value = 0) { return value + 1; } value + 1;",
     };
     for (sources) |source| {
         var result = try lint.lintSource(std.testing.allocator, source, "fixture.ts", options);
@@ -152,4 +152,52 @@ test "addition operand types follow scoped bindings" {
     defer result.deinit(std.testing.allocator);
     try std.testing.expectEqual(@as(usize, 2), helpers.countRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id));
     for (result.diagnostics) |diagnostic| try std.testing.expect(std.mem.indexOf(u8, diagnostic.message, "`boolean`") != null);
+}
+
+test "implicit any parameters and any members respect allowAny" {
+    const sources = [_][]const u8{
+        "export function example(value) { return value + 1; }",
+        "export const example = value => value + 1;",
+        "export const example = function(value) { return 1 + value; };",
+        "export default (value) => value + 1;",
+        "export function example(value: unknown) { return (value as any).count + 1; }",
+        "export function example(value: any) { return value.nested.count + 1; }",
+        "export function example(value: any) { return value['count'] + 1; }",
+        "export function example(value: any) { return value?.nested!.count + 1; }",
+        "export function example(value = (0 as any)) { return value + 1; }",
+        "const value = 0; function example(value) { return value + 1; }",
+    };
+    for ([_]bool{ false, true }) |allow_any| {
+        var options = lint.Options.allDisabled();
+        options.typescript_eslint_restrict_plus_operands = true;
+        options.typescript_eslint_restrict_plus_operands_allow_any = allow_any;
+        for (sources) |source| {
+            var result = try lint.lintSource(std.testing.allocator, source, "fixture.ts", options);
+            defer result.deinit(std.testing.allocator);
+            try std.testing.expectEqual(if (allow_any) @as(usize, 0) else @as(usize, 1), helpers.countRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id));
+        }
+    }
+}
+
+test "does not classify inferred and contextual parameters as implicit any" {
+    const sources = [_][]const u8{
+        "function example(value = 0) { return value + 1; }",
+        "function example(value = 'x') { return value + 'y'; }",
+        "const example = (value = 0) => value + 1;",
+        "const example: (value: number) => number = value => value + 1;",
+        "const example: (value: number) => number = function(value) { return value + 1; };",
+        "[1, 2].map(value => value + 1);",
+        "[1, 2].map(function(value) { return value + 1; });",
+        "function example({ value }: { value: number }) { return value + 1; }",
+        "function example(value: { count: number }) { return value.count + 1; }",
+        "function example<T>(value: T) { return value + 1; }",
+    };
+    var options = lint.Options.allDisabled();
+    options.typescript_eslint_restrict_plus_operands = true;
+    options.typescript_eslint_restrict_plus_operands_allow_any = false;
+    for (sources) |source| {
+        var result = try lint.lintSource(std.testing.allocator, source, "fixture.ts", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(@as(usize, 0), helpers.countRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id));
+    }
 }
