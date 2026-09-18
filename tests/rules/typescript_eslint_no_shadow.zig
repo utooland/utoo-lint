@@ -294,3 +294,24 @@ test "can disable @typescript-eslint/no-shadow and fall back to no-shadow" {
     try std.testing.expect(!helpers.hasRule(result, lint.rules.typescript_eslint_no_shadow.id));
     try std.testing.expectEqual(@as(usize, 1), helpers.countRule(result, lint.rules.no_shadow.id));
 }
+
+test "type-only imports respect ignoreTypeValueShadow" {
+    const cases = [_]struct { source: []const u8, ignored_count: usize }{
+        .{ .source = "import type { Item } from './types'; export function example() { const Item: Item = { value: 1 }; return Item; }", .ignored_count = 0 },
+        .{ .source = "import { type Item } from './types'; export function example() { const Item = 1; return Item; }", .ignored_count = 0 },
+        .{ .source = "import type Item from './types'; export function example(Item: number) { return Item; }", .ignored_count = 0 },
+        .{ .source = "import type * as Item from './types'; export function example() { const Item = 1; return Item; }", .ignored_count = 0 },
+        .{ .source = "import { Item } from './types'; export function example() { const Item = 1; return Item; }", .ignored_count = 1 },
+        .{ .source = "import type { Item } from './types'; export function example() { type Item = number; }", .ignored_count = 1 },
+    };
+    for (cases) |case| {
+        for ([_]bool{ true, false }) |ignore| {
+            var options = lint.Options.allDisabled();
+            options.typescript_eslint_no_shadow = true;
+            options.typescript_eslint_no_shadow_ignore_type_value_shadow = ignore;
+            var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.ts", options);
+            defer result.deinit(std.testing.allocator);
+            try std.testing.expectEqual(if (ignore) case.ignored_count else @as(usize, 1), helpers.countRule(result, lint.rules.typescript_eslint_no_shadow.id));
+        }
+    }
+}
