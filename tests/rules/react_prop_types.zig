@@ -200,3 +200,25 @@ test "can disable react/prop-types" {
 
     try std.testing.expect(!helpers.hasRule(result, lint.rules.react_prop_types.id));
 }
+
+test "React function component type arguments declare props" {
+    const sources = [_][]const u8{
+        "import React from 'react'; export const Example: React.FC<{ value: string }> = props => <span>{props.value}</span>;",
+        "import * as R from 'react'; export const Example: R.FunctionComponent<{ value: string }> = ({ value }) => <span>{value}</span>;",
+        "import type { FC as Component } from 'react'; type Props = { value: string }; export const Example: Component<Props> = props => <span>{props.value}</span>;",
+        "import { FunctionComponent } from 'react'; interface Props { value: string } export const Example: FunctionComponent<Props> = props => <span>{props.value}</span>;",
+    };
+    for (sources) |source| {
+        var result = try lint.lintSource(std.testing.allocator, source, "fixture.tsx", propTypesOnly());
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(@as(usize, 0), helpers.countRule(result, lint.rules.react_prop_types.id));
+    }
+    for ([_][]const u8{
+        "import React from 'react'; export const Example: React.FC<{ declared: string }> = props => <span>{props.missing}</span>;",
+        "import { FC } from './other'; export const Example: FC<{ value: string }> = props => <span>{props.value}</span>;",
+    }) |source| {
+        var result = try lint.lintSource(std.testing.allocator, source, "fixture.tsx", propTypesOnly());
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(@as(usize, 1), helpers.countRule(result, lint.rules.react_prop_types.id));
+    }
+}
