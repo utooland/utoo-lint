@@ -151,30 +151,43 @@ fn hasMessage(result: lint.Result, needle: []const u8) bool {
     return false;
 }
 
-test "method calls and ref current accesses depend on their objects" {
-    const cases = [_]struct { expression: []const u8, dependency: []const u8 }{
-        .{ .expression = "items.map(x => x)", .dependency = "items" },
-        .{ .expression = "items.map!(x => x)", .dependency = "items" },
-        .{ .expression = "inputRef.current = 1", .dependency = "inputRef" },
-        .{ .expression = "inputRef.current.focus()", .dependency = "inputRef" },
-        .{ .expression = "data.items.map(x => x)", .dependency = "data.items" },
-        .{ .expression = "data.name", .dependency = "data.name" },
+test "optional dependency paths match ordinary member paths" {
+    const sources = [_][]const u8{
+        "function Example({ data }) { return useMemo(() => data?.items.map(x => x), [data]); }",
+        "function Example({ data }) { return useCallback(() => data.id, [data?.id]); }",
+        "function Example({ data }) { return useMemo(() => data?.user?.name, [data.user.name]); }",
+        "function Example({ data }) { return useMemo(() => data.user.name, [data?.user]); }",
+        "function Example({ data }) { return useMemo(() => data /* comment */ . name, [data.name]); }",
+    };
+    for (sources) |source| {
+        var options = lint.Options.allDisabled();
+        options.react_hooks_exhaustive_deps = true;
+        var result = try lint.lintSource(std.testing.allocator, source, "fixture.tsx", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(@as(usize, 0), helpers.countRule(result, lint.rules.react_hooks_exhaustive_deps.id));
+    }
+    var options = lint.Options.allDisabled();
+    options.react_hooks_exhaustive_deps = true;
+    var result = try lint.lintSource(std.testing.allocator, "function Example({ data }) { return useMemo(() => data?.name, [data?.id]); }", "fixture.tsx", options);
+    defer result.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 2), helpers.countRule(result, lint.rules.react_hooks_exhaustive_deps.id));
+}
+
+test "functions without reactive captures are stable dependencies" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "function Example() { function getValue() { return 1; } return useMemo(() => getValue(), []); }", .count = 0 },
+        .{ .source = "function Example() { const getValue = () => 1; return useMemo(() => getValue(), []); }", .count = 0 },
+        .{ .source = "function Example() { const count = 1; function getValue() { return count; } return useMemo(() => getValue(), []); }", .count = 0 },
+        .{ .source = "function Example({ value }) { function getValue() { return value; } return useMemo(() => getValue(), []); }", .count = 1 },
+        .{ .source = "function Example({ value }) { const getValue = () => value; return useMemo(() => getValue(), []); }", .count = 1 },
+        .{ .source = "function Example({ value }) { function getValue() { function nested() { return value; } return nested(); } return useMemo(() => getValue(), []); }", .count = 1 },
     };
     for (cases) |case| {
-        for ([_]bool{ false, true }) |include| {
-            const source = try std.fmt.allocPrint(std.testing.allocator, "function Example({{ items, inputRef, data }}) {{ return useMemo(() => {{ return {s}; }}, [{s}]); }}", .{ case.expression, if (include) case.dependency else "" });
-            defer std.testing.allocator.free(source);
-            var options = lint.Options.allDisabled();
-            options.react_hooks_exhaustive_deps = true;
-            var result = try lint.lintSource(std.testing.allocator, source, "fixture.tsx", options);
-            defer result.deinit(std.testing.allocator);
-            try std.testing.expectEqual(@as(usize, if (include) 0 else 1), helpers.countRule(result, lint.rules.react_hooks_exhaustive_deps.id));
-            if (!include) {
-                const expected = try std.fmt.allocPrint(std.testing.allocator, "React Hook useMemo has a missing dependency: '{s}'. Either include it or remove the dependency array.", .{case.dependency});
-                defer std.testing.allocator.free(expected);
-                try std.testing.expectEqualStrings(expected, result.diagnostics[0].message);
-            }
-        }
+        var options = lint.Options.allDisabled();
+        options.react_hooks_exhaustive_deps = true;
+        var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.tsx", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(case.count, helpers.countRule(result, lint.rules.react_hooks_exhaustive_deps.id));
     }
 }
 
@@ -196,20 +209,30 @@ test "imports and module bindings are not reactive dependencies" {
     }
 }
 
-test "functions without reactive captures are stable dependencies" {
-    const cases = [_]struct { source: []const u8, count: usize }{
-        .{ .source = "function Example() { function getValue() { return 1; } return useMemo(() => getValue(), []); }", .count = 0 },
-        .{ .source = "function Example() { const getValue = () => 1; return useMemo(() => getValue(), []); }", .count = 0 },
-        .{ .source = "function Example() { const count = 1; function getValue() { return count; } return useMemo(() => getValue(), []); }", .count = 0 },
-        .{ .source = "function Example({ value }) { function getValue() { return value; } return useMemo(() => getValue(), []); }", .count = 1 },
-        .{ .source = "function Example({ value }) { const getValue = () => value; return useMemo(() => getValue(), []); }", .count = 1 },
-        .{ .source = "function Example({ value }) { function getValue() { function nested() { return value; } return nested(); } return useMemo(() => getValue(), []); }", .count = 1 },
+test "method calls and ref current accesses depend on their objects" {
+    const cases = [_]struct { expression: []const u8, dependency: []const u8 }{
+        .{ .expression = "items.map(x => x)", .dependency = "items" },
+        .{ .expression = "items.map!(x => x)", .dependency = "items" },
+        .{ .expression = "inputRef.current = 1", .dependency = "inputRef" },
+        .{ .expression = "inputRef.current.focus()", .dependency = "inputRef" },
+        .{ .expression = "data.items.map(x => x)", .dependency = "data.items" },
+        .{ .expression = "data?.items?.map!(x => x)", .dependency = "data.items" },
+        .{ .expression = "data.name", .dependency = "data.name" },
     };
     for (cases) |case| {
-        var options = lint.Options.allDisabled();
-        options.react_hooks_exhaustive_deps = true;
-        var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.tsx", options);
-        defer result.deinit(std.testing.allocator);
-        try std.testing.expectEqual(case.count, helpers.countRule(result, lint.rules.react_hooks_exhaustive_deps.id));
+        for ([_]bool{ false, true }) |include| {
+            const source = try std.fmt.allocPrint(std.testing.allocator, "function Example({{ items, inputRef, data }}) {{ return useMemo(() => {{ return {s}; }}, [{s}]); }}", .{ case.expression, if (include) case.dependency else "" });
+            defer std.testing.allocator.free(source);
+            var options = lint.Options.allDisabled();
+            options.react_hooks_exhaustive_deps = true;
+            var result = try lint.lintSource(std.testing.allocator, source, "fixture.tsx", options);
+            defer result.deinit(std.testing.allocator);
+            try std.testing.expectEqual(@as(usize, if (include) 0 else 1), helpers.countRule(result, lint.rules.react_hooks_exhaustive_deps.id));
+            if (!include) {
+                const expected = try std.fmt.allocPrint(std.testing.allocator, "React Hook useMemo has a missing dependency: '{s}'. Either include it or remove the dependency array.", .{case.dependency});
+                defer std.testing.allocator.free(expected);
+                try std.testing.expectEqualStrings(expected, result.diagnostics[0].message);
+            }
+        }
     }
 }
