@@ -390,3 +390,32 @@ test "supports configured no-unused-vars reportUsedIgnorePattern" {
 
     try std.testing.expectEqual(@as(usize, 4), helpers.countRule(result, lint.rules.no_unused_vars.id));
 }
+
+test "underscore parameters follow args and argsIgnorePattern" {
+    const cases = [_]struct { config: []const u8, count: usize }{
+        .{ .config = "[\"error\",{\"args\":\"after-used\",\"argsIgnorePattern\":\"^NEVER$\"}]", .count = 2 },
+        .{ .config = "[\"error\",{\"args\":\"after-used\"}]", .count = 2 },
+        .{ .config = "[\"error\",{\"args\":\"all\"}]", .count = 2 },
+        .{ .config = "[\"error\",{\"args\":\"all\",\"argsIgnorePattern\":\"^_\"}]", .count = 0 },
+        .{ .config = "[\"error\",{\"args\":\"none\"}]", .count = 0 },
+    };
+    for ([_][]const u8{ "no-unused-vars", "@typescript-eslint/no-unused-vars" }) |rule_id| {
+        for (cases) |case| {
+            var config = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, case.config, .{});
+            defer config.deinit();
+            var options = lint.Options.allDisabled();
+            try options.setByRuleConfigValue(rule_id, config.value);
+            var result = try lint.lintSource(std.testing.allocator, "export function example(_first, _second) { return null; }", "fixture.ts", options);
+            defer result.deinit(std.testing.allocator);
+            try std.testing.expectEqual(case.count, helpers.countRule(result, rule_id));
+        }
+        var config = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, "[\"error\",{\"args\":\"after-used\"}]", .{});
+        defer config.deinit();
+        var options = lint.Options.allDisabled();
+        try options.setByRuleConfigValue(rule_id, config.value);
+        var result = try lint.lintSource(std.testing.allocator, "export function example(_before, used, _after) { return used; }", "fixture.ts", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(@as(usize, 1), helpers.countRule(result, rule_id));
+        try std.testing.expect(std.mem.indexOf(u8, result.diagnostics[0].message, "_after") != null);
+    }
+}

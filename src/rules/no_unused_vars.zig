@@ -172,7 +172,7 @@ pub fn runWithOptions(
             continue;
         }
 
-        if (std.mem.startsWith(u8, name, "_")) continue;
+        if (!flags.parameter and std.mem.startsWith(u8, name, "_")) continue;
         if (isIgnoredVariableName(name, flags, options)) continue;
         if (isUsedByReactJSX(name, jsx_react_usage)) continue;
         if (ignored_decls.contains(decls[0])) continue;
