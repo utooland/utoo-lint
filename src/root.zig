@@ -257,7 +257,9 @@ fn isDefinitionFile(path: []const u8) bool {
 }
 
 fn hasSemanticRules(options: Options) bool {
-    return options.parser_semantic_errors or
+    return options.react_prop_types or
+        options.react_no_unused_prop_types or
+        options.parser_semantic_errors or
         options.block_scoped_var or
         options.no_array_constructor or
         options.no_alert or

@@ -12,11 +12,12 @@ pub fn run(
     allocator: Allocator,
     diagnostics: *core.DiagnosticList,
     tree: *const ast.Tree,
+    symbols: @import("../semantic_compat.zig").SymbolTable,
     skip_shape_props: bool,
     ignore: *const core.ReactPropTypesIgnoreNames,
     custom_validators: *const core.ReactPropTypesIgnoreNames,
 ) Allocator.Error!void {
-    var state = try react_prop_types.collectWithCustomValidators(allocator, tree, custom_validators);
+    var state = try react_prop_types.collectWithCustomValidators(allocator, tree, symbols, custom_validators);
     defer state.deinit(allocator);
 
     for (state.components.items) |component| {

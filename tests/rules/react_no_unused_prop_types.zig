@@ -227,3 +227,18 @@ test "reports unused TypeScript parameter props" {
         if (case.count > 0) try std.testing.expectEqualStrings("'unused' PropType is defined but prop is never used", result.diagnostics[0].message);
     }
 }
+
+test "typed component parameters preserve defaults and generic scope" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "const defaults = { unused: 'x' }; const Example = (props: { unused: string } = defaults) => <span />;", .count = 1 },
+        .{ .source = "type T = { unused: string }; function Example<T extends { value: string }>(props: T) { return <span>{props.value}</span>; }", .count = 0 },
+        .{ .source = "type T = { unused: string }; function Example<T>(props: T) { return <span />; }", .count = 0 },
+    };
+    for (cases) |case| {
+        var options = lint.Options.allDisabled();
+        options.react_no_unused_prop_types = true;
+        var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.tsx", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(case.count, helpers.countRule(result, lint.rules.react_no_unused_prop_types.id));
+    }
+}
