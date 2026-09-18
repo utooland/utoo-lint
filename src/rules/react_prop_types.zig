@@ -41,6 +41,7 @@ pub const ComponentInfo = struct {
     name: ?[]const u8 = null,
     node: ast.NodeIndex = .null,
     detected: bool = false,
+    ignore_props_validation: bool = false,
     function_nodes: std.ArrayList(ast.NodeIndex) = .empty,
     class_nodes: std.ArrayList(ast.NodeIndex) = .empty,
     declared_props: std.ArrayList(DeclaredProp) = .empty,
@@ -281,7 +282,7 @@ fn collectVariableDeclarator(
             const component_index = try state.ensureComponent(allocator, name, index, true);
             try appendNode(allocator, &state.components.items[component_index].function_nodes, init);
             if (reactFunctionComponentProps(tree, declarator.id)) |props_type| {
-                try collectTypeProps(allocator, tree, state.symbols, props_type, &state.components.items[component_index].declared_props, 0);
+                state.components.items[component_index].ignore_props_validation = try collectTypeProps(allocator, tree, state.symbols, props_type, &state.components.items[component_index].declared_props, 0);
             }
         },
         .call_expression => |call| {
@@ -297,7 +298,7 @@ fn collectVariableDeclarator(
             const component_index = try state.ensureComponent(allocator, name, index, true);
             try appendNode(allocator, &state.components.items[component_index].function_nodes, wrapped);
             if (reactFunctionComponentProps(tree, declarator.id)) |props_type| {
-                try collectTypeProps(allocator, tree, state.symbols, props_type, &state.components.items[component_index].declared_props, 0);
+                state.components.items[component_index].ignore_props_validation = try collectTypeProps(allocator, tree, state.symbols, props_type, &state.components.items[component_index].declared_props, 0);
             }
         },
         else => {},
@@ -361,44 +362,58 @@ fn isReactFunctionComponentType(tree: *const ast.Tree, type_name: ast.NodeIndex)
     return false;
 }
 
-fn collectTypeProps(allocator: Allocator, tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex, props: *std.ArrayList(DeclaredProp), depth: usize) Allocator.Error!void {
-    if (index == .null or depth >= max_prop_depth) return;
+fn collectTypeProps(allocator: Allocator, tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex, props: *std.ArrayList(DeclaredProp), depth: usize) Allocator.Error!bool {
+    if (index == .null) return false;
+    if (depth >= max_prop_depth) return true;
     const members = switch (tree.data(index)) {
         .ts_type_annotation => |annotation| return collectTypeProps(allocator, tree, symbols, annotation.type_annotation, props, depth + 1),
         .ts_type_literal => |literal| literal.members,
         .ts_interface_body => |body| body.body,
         .ts_intersection_type => |intersection| {
-            for (tree.extra(intersection.types)) |part| try collectTypeProps(allocator, tree, symbols, part, props, depth + 1);
-            return;
+            var unresolved = false;
+            for (tree.extra(intersection.types)) |part| {
+                const part_unresolved = try collectTypeProps(allocator, tree, symbols, part, props, depth + 1);
+                unresolved = unresolved or part_unresolved;
+            }
+            return unresolved;
         },
         .ts_type_reference => |reference| {
-            const symbol = symbols.symbolOf(reference.type_name) orelse return;
+            const symbol = symbols.symbolOf(reference.type_name) orelse return true;
+            var unresolved = false;
+            var found = false;
             for (symbols.symbolDecls(symbol)) |declaration| {
                 const parent = symbols.parentOf(declaration) orelse continue;
-                try collectTypeProps(allocator, tree, symbols, parent, props, depth + 1);
+                found = true;
+                const part_unresolved = try collectTypeProps(allocator, tree, symbols, parent, props, depth + 1);
+                unresolved = unresolved or part_unresolved;
             }
-            return;
+            return !found or unresolved;
         },
         .ts_type_alias_declaration => |alias| return collectTypeProps(allocator, tree, symbols, alias.type_annotation, props, depth + 1),
         .ts_interface_declaration => |interface| return collectTypeProps(allocator, tree, symbols, interface.body, props, depth + 1),
         .ts_type_parameter => |parameter| return collectTypeProps(allocator, tree, symbols, parameter.constraint, props, depth + 1),
 
-        else => return,
+        else => return true,
     };
     for (tree.extra(members)) |member| {
         const property = switch (tree.data(member)) {
             .ts_property_signature => |value| value,
             .ts_method_signature => |method| {
                 const name = propertyName(tree, method.key, method.computed) orelse continue;
-                _ = try ensureDeclaredProp(allocator, props, name, method.key);
+                const prop = try ensureDeclaredProp(allocator, props, name, method.key);
+                prop.accepts_any_children = true;
                 continue;
             },
             else => continue,
         };
         const name = propertyName(tree, property.key, property.computed) orelse continue;
         const prop = try ensureDeclaredProp(allocator, props, name, property.key);
-        try collectTypeProps(allocator, tree, symbols, property.type_annotation, &prop.children, depth + 1);
+        // TypeScript validates members of a declared prop, including built-in
+        // methods and properties of imported types, without runtime validators.
+        prop.accepts_any_children = true;
+        _ = try collectTypeProps(allocator, tree, symbols, property.type_annotation, &prop.children, depth + 1);
     }
+    return false;
 }
 
 fn collectExpressionStatement(
@@ -800,7 +815,8 @@ fn collectComponentParams(
         .array_pattern => |binding| binding.type_annotation,
         else => .null,
     };
-    try collectTypeProps(allocator, tree, state.symbols, annotation, &state.components.items[component_index].declared_props, 0);
+    const unresolved = try collectTypeProps(allocator, tree, state.symbols, annotation, &state.components.items[component_index].declared_props, 0);
+    state.components.items[component_index].ignore_props_validation = state.components.items[component_index].ignore_props_validation or unresolved;
     try collectPatternUsage(allocator, tree, state, &state.components.items[component_index], pattern, &.{});
     if (bindingIdentifierName(tree, pattern)) |name| return name;
     return null;
@@ -868,7 +884,7 @@ fn finish(
     if (skip_undeclared) return;
 
     for (state.components.items) |component| {
-        if (!component.detected) continue;
+        if (!component.detected or component.ignore_props_validation) continue;
         for (component.used_props.items) |used| {
             if (ignore.ignoresPath(used.name)) continue;
             if (isDeclared(component.declared_props.items, used.name)) continue;
