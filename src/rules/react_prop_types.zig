@@ -408,7 +408,8 @@ fn collectTypeProps(allocator: Allocator, tree: *const ast.Tree, symbols: Symbol
         // TypeScript validates members of a declared prop, including built-in
         // methods and properties of imported types, without runtime validators.
         prop.accepts_any_children = true;
-        _ = try collectTypeProps(allocator, tree, symbols, property.type_annotation, &prop.children, depth + 1);
+        // eslint-plugin-react collects TypeScript prop declarations at the
+        // top level only; nested fields are not runtime PropTypes shapes.
     }
     return false;
 }
@@ -705,10 +706,10 @@ const UsageVisitor = struct {
     }
 
     fn propPath(self: *UsageVisitor, tree: *const ast.Tree, index: ast.NodeIndex, buffer: *[max_prop_depth][]const u8) ?[]const []const u8 {
-        if (propSourcePath(tree, index, null, buffer)) |path| return path;
+        if (propSourcePath(tree, unwrapPropFallback(tree, index), null, buffer)) |path| return path;
         var reversed: [max_prop_depth][]const u8 = undefined;
         var len: usize = 0;
-        var current = unwrapTransparent(tree, index);
+        var current = unwrapPropFallback(tree, index);
         while (current != .null) {
             const member = switch (tree.data(current)) {
                 .member_expression => |value| value,
@@ -717,7 +718,7 @@ const UsageVisitor = struct {
             if (len == reversed.len) return null;
             reversed[len] = propertyName(tree, member.property, member.computed) orelse return null;
             len += 1;
-            current = unwrapTransparent(tree, member.object);
+            current = unwrapPropFallback(tree, member.object);
         }
         if (current == .null or tree.data(current) != .identifier_reference) return null;
         const symbol = self.state.symbols.symbolOf(current) orelse return null;
@@ -800,6 +801,19 @@ const UsageVisitor = struct {
         return .proceed;
     }
 };
+
+fn unwrapPropFallback(tree: *const ast.Tree, index: ast.NodeIndex) ast.NodeIndex {
+    var current = unwrapTransparent(tree, index);
+    while (current != .null) {
+        const logical = switch (tree.data(current)) {
+            .logical_expression => |value| value,
+            else => break,
+        };
+        if (logical.operator != .@"or" and logical.operator != .nullish_coalescing) break;
+        current = unwrapTransparent(tree, logical.left);
+    }
+    return current;
+}
 
 fn collectComponentParams(
     allocator: Allocator,
