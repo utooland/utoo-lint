@@ -315,3 +315,20 @@ test "type-only imports respect ignoreTypeValueShadow" {
         }
     }
 }
+
+test "type-value shadows are ignored by default in every configuration form" {
+    try std.testing.expect((lint.Options{}).typescript_eslint_no_shadow_ignore_type_value_shadow);
+    try std.testing.expect(lint.Options.allDisabled().typescript_eslint_no_shadow_ignore_type_value_shadow);
+    const source = "import type { Item } from './types'; export function example() { const Item: Item = { value: 1 }; return Item; }";
+    for ([_][]const u8{ "true", "2", "\"error\"", "[\"error\"]", "[\"error\",{}]" }) |json| {
+        var config = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, json, .{});
+        defer config.deinit();
+        var options = lint.Options.allDisabled();
+        // Reconfiguring a rule must restore omitted options to their defaults.
+        options.typescript_eslint_no_shadow_ignore_type_value_shadow = false;
+        try options.setByRuleConfigValue("@typescript-eslint/no-shadow", config.value);
+        var result = try lint.lintSource(std.testing.allocator, source, "fixture.ts", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(@as(usize, 0), helpers.countRule(result, lint.rules.typescript_eslint_no_shadow.id));
+    }
+}

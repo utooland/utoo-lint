@@ -3264,7 +3264,7 @@ pub const Options = struct {
     typescript_eslint_no_shadow_builtin_globals: bool = false,
     typescript_eslint_no_shadow_hoist: NoShadowHoist = .functions_and_types,
     typescript_eslint_no_shadow_ignore_on_initialization: bool = false,
-    typescript_eslint_no_shadow_ignore_type_value_shadow: bool = false,
+    typescript_eslint_no_shadow_ignore_type_value_shadow: bool = true,
     typescript_eslint_no_shadow_ignore_function_type_parameter_name_value_shadow: bool = true,
     typescript_eslint_no_this_alias: bool = true,
     typescript_eslint_no_this_alias_allowed_names: NoThisAliasAllowedNames = .{},
@@ -4155,7 +4155,7 @@ pub const Options = struct {
             self.typescript_eslint_no_shadow_builtin_globals = try noShadowBuiltinGlobalsFromConfig(value);
             self.typescript_eslint_no_shadow_hoist = try noShadowHoistFromConfig(value, .functions_and_types);
             self.typescript_eslint_no_shadow_ignore_on_initialization = try noShadowBoolOptionFromConfig(value, "ignoreOnInitialization", false);
-            self.typescript_eslint_no_shadow_ignore_type_value_shadow = try noShadowBoolOptionFromConfig(value, "ignoreTypeValueShadow", false);
+            self.typescript_eslint_no_shadow_ignore_type_value_shadow = try noShadowBoolOptionFromConfig(value, "ignoreTypeValueShadow", true);
             self.typescript_eslint_no_shadow_ignore_function_type_parameter_name_value_shadow = try noShadowBoolOptionFromConfig(value, "ignoreFunctionTypeParameterNameValueShadow", true);
         }
         if (std.mem.eql(u8, cli_name, "@typescript-eslint/method-signature-style")) {
