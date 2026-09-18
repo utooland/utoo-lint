@@ -113,7 +113,11 @@ fn isAllowedOperand(value_type: ValueType) bool {
 }
 
 fn inferExpressionType(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex) ValueType {
-    if (index == .null) return .unknown_expression;
+    return inferExpressionTypeAtDepth(tree, symbols, index, 0);
+}
+
+fn inferExpressionTypeAtDepth(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex, depth: usize) ValueType {
+    if (index == .null or depth >= 32) return .unknown_expression;
 
     return switch (tree.data(index)) {
         .numeric_literal => .number,
@@ -121,20 +125,22 @@ fn inferExpressionType(tree: *const ast.Tree, symbols: SymbolTable, index: ast.N
         .bigint_literal => .bigint,
         .boolean_literal => .boolean,
         .null_literal, .array_expression, .object_expression => .invalid,
-        .identifier_reference => referenceType(tree, symbols, index),
-        .parenthesized_expression => |parenthesized| inferExpressionType(tree, symbols, parenthesized.expression),
-        .ts_as_expression => |expression| typeFromAnnotation(tree, expression.type_annotation) orelse inferExpressionType(tree, symbols, expression.expression),
-        .ts_type_assertion => |expression| typeFromAnnotation(tree, expression.type_annotation) orelse inferExpressionType(tree, symbols, expression.expression),
-        .ts_satisfies_expression => |expression| inferExpressionType(tree, symbols, expression.expression),
-        .ts_non_null_expression => |expression| inferExpressionType(tree, symbols, expression.expression),
-        .binary_expression => |binary| if (binary.operator == .add) inferBinaryResultType(tree, symbols, binary) else .unknown_expression,
+        .identifier_reference => referenceType(tree, symbols, index, depth + 1),
+        .parenthesized_expression => |parenthesized| inferExpressionTypeAtDepth(tree, symbols, parenthesized.expression, depth + 1),
+        .ts_as_expression => |expression| typeFromAnnotation(tree, expression.type_annotation) orelse .unknown_expression,
+        .ts_type_assertion => |expression| typeFromAnnotation(tree, expression.type_annotation) orelse .unknown_expression,
+        .ts_satisfies_expression => |expression| inferExpressionTypeAtDepth(tree, symbols, expression.expression, depth + 1),
+        .ts_non_null_expression => |expression| inferExpressionTypeAtDepth(tree, symbols, expression.expression, depth + 1),
+        .chain_expression => |expression| inferExpressionTypeAtDepth(tree, symbols, expression.expression, depth + 1),
+        .member_expression => |member| if (inferExpressionTypeAtDepth(tree, symbols, member.object, depth + 1) == .any) .any else .unknown_expression,
+        .binary_expression => |binary| if (binary.operator == .add) inferBinaryResultType(tree, symbols, binary, depth + 1) else .unknown_expression,
         else => .unknown_expression,
     };
 }
 
-fn inferBinaryResultType(tree: *const ast.Tree, symbols: SymbolTable, expression: ast.BinaryExpression) ValueType {
-    const left = inferExpressionType(tree, symbols, expression.left);
-    const right = inferExpressionType(tree, symbols, expression.right);
+fn inferBinaryResultType(tree: *const ast.Tree, symbols: SymbolTable, expression: ast.BinaryExpression, depth: usize) ValueType {
+    const left = inferExpressionTypeAtDepth(tree, symbols, expression.left, depth + 1);
+    const right = inferExpressionTypeAtDepth(tree, symbols, expression.right, depth + 1);
     if (left == .string and right == .string) return .string;
     if (left == .number and right == .number) return .number;
     return .unknown_expression;
@@ -170,19 +176,54 @@ fn literalType(tree: *const ast.Tree, index: ast.NodeIndex) ?ValueType {
     };
 }
 
-fn referenceType(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex) ValueType {
+fn referenceType(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex, depth: usize) ValueType {
     const symbol = symbols.symbolOf(index) orelse return .unknown_expression;
     for (symbols.symbolDecls(symbol)) |declaration| {
         const annotation = switch (tree.data(declaration)) {
             .binding_identifier => |identifier| identifier.type_annotation,
             else => .null,
         };
-        if (typeFromAnnotation(tree, annotation)) |value| return value;
+        if (annotation != .null) return typeFromAnnotation(tree, annotation) orelse .unknown_expression;
         if (symbols.parentOf(declaration)) |parent| {
             if (tree.data(parent) == .assignment_pattern) {
-                if (typeFromAnnotation(tree, tree.data(parent).assignment_pattern.type_annotation)) |value| return value;
+                const pattern = tree.data(parent).assignment_pattern;
+                if (pattern.type_annotation != .null) return typeFromAnnotation(tree, pattern.type_annotation) orelse .unknown_expression;
+                const parameter = symbols.parentOf(parent) orelse return .unknown_expression;
+                if (tree.data(parameter) != .formal_parameter) return .unknown_expression;
+                const params = symbols.parentOf(parameter) orelse return .unknown_expression;
+                const function = symbols.parentOf(params) orelse return .unknown_expression;
+                if (!hasUncontextualizedParameters(tree, symbols, function)) return .unknown_expression;
+                return inferExpressionTypeAtDepth(tree, symbols, pattern.right, depth + 1);
+            }
+            if (tree.data(parent) == .formal_parameter) {
+                const params = symbols.parentOf(parent) orelse continue;
+                const function = symbols.parentOf(params) orelse continue;
+                if (hasUncontextualizedParameters(tree, symbols, function)) return .any;
             }
         }
     }
     return .unknown_expression;
+}
+
+// Callback parameters and annotated function expressions may be contextually
+// typed. Only infer implicit any where no surrounding signature supplies it.
+fn hasUncontextualizedParameters(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex) bool {
+    switch (tree.data(index)) {
+        .function => |function| if (function.type == .function_declaration) return true,
+        .arrow_function_expression => {},
+        else => return false,
+    }
+    var current = index;
+    while (symbols.parentOf(current)) |parent| {
+        switch (tree.data(parent)) {
+            .parenthesized_expression => current = parent,
+            .variable_declarator => |declarator| return switch (tree.data(declarator.id)) {
+                .binding_identifier => |binding| binding.type_annotation == .null,
+                else => false,
+            },
+            .export_default_declaration => return true,
+            else => return false,
+        }
+    }
+    return false;
 }
