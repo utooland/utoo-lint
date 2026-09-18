@@ -419,3 +419,25 @@ test "underscore parameters follow args and argsIgnorePattern" {
         try std.testing.expect(std.mem.indexOf(u8, result.diagnostics[0].message, "_after") != null);
     }
 }
+
+test "underscore argsIgnorePattern supports regex classes groups and quantifiers" {
+    for ([_][]const u8{ "no-unused-vars", "@typescript-eslint/no-unused-vars" }) |rule_id| {
+        for ([_][]const u8{
+            "^_[A-Z]+$",
+            "^_(?:FOO|BAR)$",
+            "^_[A-Z]{3}$",
+            "^_F[A-Z]*$",
+        }) |pattern| {
+            var options = lint.Options.allDisabled();
+            _ = options.setByCliName(rule_id, true);
+            options.no_unused_vars_args = .all;
+            options.typescript_eslint_no_unused_vars_args = .all;
+            try options.no_unused_vars_args_ignore_pattern.set(pattern);
+            try options.typescript_eslint_no_unused_vars_args_ignore_pattern.set(pattern);
+            var result = try lint.lintSource(std.testing.allocator, "export function example(_FOO, _lower) { return null; }", "fixture.ts", options);
+            defer result.deinit(std.testing.allocator);
+            try std.testing.expectEqual(@as(usize, 1), helpers.countRule(result, rule_id));
+            try std.testing.expect(std.mem.indexOf(u8, result.diagnostics[0].message, "_lower") != null);
+        }
+    }
+}
