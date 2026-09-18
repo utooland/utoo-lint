@@ -127,8 +127,8 @@ fn inferExpressionTypeAtDepth(tree: *const ast.Tree, symbols: SymbolTable, index
         .null_literal, .array_expression, .object_expression => .invalid,
         .identifier_reference => referenceType(tree, symbols, index, depth + 1),
         .parenthesized_expression => |parenthesized| inferExpressionTypeAtDepth(tree, symbols, parenthesized.expression, depth + 1),
-        .ts_as_expression => |expression| typeFromAnnotation(tree, expression.type_annotation) orelse inferExpressionTypeAtDepth(tree, symbols, expression.expression, depth + 1),
-        .ts_type_assertion => |expression| typeFromAnnotation(tree, expression.type_annotation) orelse inferExpressionTypeAtDepth(tree, symbols, expression.expression, depth + 1),
+        .ts_as_expression => |expression| typeFromAnnotation(tree, expression.type_annotation) orelse .unknown_expression,
+        .ts_type_assertion => |expression| typeFromAnnotation(tree, expression.type_annotation) orelse .unknown_expression,
         .ts_satisfies_expression => |expression| inferExpressionTypeAtDepth(tree, symbols, expression.expression, depth + 1),
         .ts_non_null_expression => |expression| inferExpressionTypeAtDepth(tree, symbols, expression.expression, depth + 1),
         .chain_expression => |expression| inferExpressionTypeAtDepth(tree, symbols, expression.expression, depth + 1),
@@ -188,6 +188,11 @@ fn referenceType(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeInd
             if (tree.data(parent) == .assignment_pattern) {
                 const pattern = tree.data(parent).assignment_pattern;
                 if (pattern.type_annotation != .null) return typeFromAnnotation(tree, pattern.type_annotation) orelse .unknown_expression;
+                const parameter = symbols.parentOf(parent) orelse return .unknown_expression;
+                if (tree.data(parameter) != .formal_parameter) return .unknown_expression;
+                const params = symbols.parentOf(parameter) orelse return .unknown_expression;
+                const function = symbols.parentOf(params) orelse return .unknown_expression;
+                if (!hasUncontextualizedParameters(tree, symbols, function)) return .unknown_expression;
                 return inferExpressionTypeAtDepth(tree, symbols, pattern.right, depth + 1);
             }
             if (tree.data(parent) == .formal_parameter) {

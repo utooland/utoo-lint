@@ -190,6 +190,12 @@ test "does not classify inferred and contextual parameters as implicit any" {
         "[1, 2].map(function(value) { return value + 1; });",
         "function example({ value }: { value: number }) { return value + 1; }",
         "function example(value: { count: number }) { return value.count + 1; }",
+        "const example: (value: number) => number = (value = (0 as any)) => value + 1;",
+        "[1, 2].map((value = (0 as any)) => value + 1);",
+        "[1, 2].map(function(value = (0 as any)) { return value + 1; });",
+        "function example(value: unknown) { return (value as any as { count: number }).count + 1; }",
+        "type Data = { count: number }; function example(value: unknown) { return (value as any as Data).count + 1; }",
+        "function example(value: unknown) { return (<{ count: number }><any>value).count + 1; }",
         "function example<T>(value: T) { return value + 1; }",
     };
     var options = lint.Options.allDisabled();
