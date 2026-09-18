@@ -131,3 +131,25 @@ test "explicit any operands respect allowAny" {
         }
     }
 }
+
+test "addition operand types follow scoped bindings" {
+    var options = lint.Options.allDisabled();
+    options.typescript_eslint_restrict_plus_operands = true;
+    options.typescript_eslint_restrict_plus_operands_allow_any = false;
+    const sources = [_][]const u8{
+        "function numeric(value: number) { return value + 1; } function dynamic(value: any) { return value + 1; }",
+        "function dynamic(value: any) { return value + 1; } function numeric(value: number) { return value + 1; }",
+        "const value: any = 1; function numeric(value: number) { return value + 1; } value + 1;",
+        "const value: any = 1; function numeric(value) { return value + 1; } value + 1;",
+    };
+    for (sources) |source| {
+        var result = try lint.lintSource(std.testing.allocator, source, "fixture.ts", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(@as(usize, 1), helpers.countRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id));
+    }
+    options.typescript_eslint_restrict_plus_operands_allow_any = true;
+    var result = try lint.lintSource(std.testing.allocator, "(1 as any) + true; false + (1 as any); (1 as any) + 2;", "fixture.ts", options);
+    defer result.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 2), helpers.countRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id));
+    for (result.diagnostics) |diagnostic| try std.testing.expect(std.mem.indexOf(u8, diagnostic.message, "`boolean`") != null);
+}
