@@ -1,0 +1,24 @@
+---
+fixture: "tests/snapshots/specs/react/no-unused-prop-types/typed-nested.tsx"
+rule: "react/no-unused-prop-types"
+---
+
+# Input
+
+```tsx
+type Data = { name: string; unused: string };
+export function Example(props: { data: Data }) {
+  const { data } = props;
+  const { name } = data || {};
+  return <span>{name}</span>;
+}
+```
+
+# Diagnostics
+
+count: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

@@ -242,3 +242,44 @@ test "typed component parameters preserve defaults and generic scope" {
         try std.testing.expectEqual(case.count, helpers.countRule(result, lint.rules.react_no_unused_prop_types.id));
     }
 }
+
+test "TypeScript nested fields are not unused runtime shape declarations" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "type Data = {name:string; unused:string}; function Example(props:{data:Data}) { const {data}=props; const {name}=data; return <span>{name}</span>; }", .count = 0 },
+        .{ .source = "type Data = {name:string}; function Example(props:{data:Data}) { const {data}=props; const {name}=data||{}; return <span>{name}</span>; }", .count = 0 },
+        .{ .source = "function Example(props:{data:{name:string}}) { return <span/>; }", .count = 1 },
+        .{ .source = "function Example(props:{data:{name:string}; unused:string}) { return <span>{props.data.name}</span>; }", .count = 1 },
+    };
+    for ([_]bool{ true, false }) |skip_shape_props| {
+        var options = noUnusedPropTypesOnly();
+        options.react_no_unused_prop_types_skip_shape_props = skip_shape_props;
+        for (cases) |case| {
+            var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.tsx", options);
+            defer result.deinit(std.testing.allocator);
+            try std.testing.expectEqual(case.count, helpers.countRule(result, lint.rules.react_no_unused_prop_types.id));
+        }
+    }
+}
+
+test "fallback destructuring records used runtime shape fields" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "function Example({data}) { const {name}=data||{}; return <span>{name}</span>; }", .count = 1 },
+        .{ .source = "function Example({data}) { const {name}=data??{}; return <span>{name}</span>; }", .count = 1 },
+        .{ .source = "function Example({data}) { const alias=(data||{}); const {name}=alias; return <span>{name}</span>; }", .count = 1 },
+        .{ .source = "function Example({data}) { return <span>{(data||{}).name}</span>; }", .count = 1 },
+        .{ .source = "function Example({data}) { const {name}=other||{}; return <span>{name}</span>; }", .count = 2 },
+        .{ .source = "function Example({data}) { function inner(data) { const {name}=data||{}; return name; } return <span>{inner({})}</span>; }", .count = 2 },
+        .{ .source = "function Example({data}) { data={}; const {name}=data||{}; return <span>{name}</span>; }", .count = 2 },
+    };
+    var options = noUnusedPropTypesOnly();
+    options.react_no_unused_prop_types_skip_shape_props = false;
+    for (cases) |case| {
+        const source = try std.fmt.allocPrint(std.testing.allocator, "{s} Example.propTypes = {{data: PropTypes.shape({{name: PropTypes.string, unused: PropTypes.string}})}};", .{case.source});
+        defer std.testing.allocator.free(source);
+        var result = try lint.lintSource(std.testing.allocator, source, "fixture.tsx", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(case.count, helpers.countRule(result, lint.rules.react_no_unused_prop_types.id));
+        try std.testing.expect(hasMessage(result, "'data.unused' PropType is defined but prop is never used"));
+        try std.testing.expectEqual(case.count == 2, hasMessage(result, "'data.name' PropType is defined but prop is never used"));
+    }
+}
