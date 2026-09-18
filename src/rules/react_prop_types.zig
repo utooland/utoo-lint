@@ -377,20 +377,17 @@ fn collectTypeProps(allocator: Allocator, tree: *const ast.Tree, symbols: Symbol
             }
             return unresolved;
         },
-        .ts_type_reference => |reference| {
-            const symbol = symbols.symbolOf(reference.type_name) orelse return true;
-            var unresolved = false;
-            var found = false;
-            for (symbols.symbolDecls(symbol)) |declaration| {
-                const parent = symbols.parentOf(declaration) orelse continue;
-                found = true;
-                const part_unresolved = try collectTypeProps(allocator, tree, symbols, parent, props, depth + 1);
-                unresolved = unresolved or part_unresolved;
-            }
-            return !found or unresolved;
-        },
+        .ts_type_reference => |reference| return collectReferencedTypeProps(allocator, tree, symbols, reference.type_name, props, depth),
+        .ts_interface_heritage => |heritage| return collectReferencedTypeProps(allocator, tree, symbols, heritage.expression, props, depth),
         .ts_type_alias_declaration => |alias| return collectTypeProps(allocator, tree, symbols, alias.type_annotation, props, depth + 1),
-        .ts_interface_declaration => |interface| return collectTypeProps(allocator, tree, symbols, interface.body, props, depth + 1),
+        .ts_interface_declaration => |interface| {
+            var unresolved = try collectTypeProps(allocator, tree, symbols, interface.body, props, depth + 1);
+            for (tree.extra(interface.extends)) |base| {
+                const base_unresolved = try collectTypeProps(allocator, tree, symbols, base, props, depth + 1);
+                unresolved = unresolved or base_unresolved;
+            }
+            return unresolved;
+        },
         .ts_type_parameter => |parameter| return collectTypeProps(allocator, tree, symbols, parameter.constraint, props, depth + 1),
 
         else => return true,
@@ -414,6 +411,19 @@ fn collectTypeProps(allocator: Allocator, tree: *const ast.Tree, symbols: Symbol
         _ = try collectTypeProps(allocator, tree, symbols, property.type_annotation, &prop.children, depth + 1);
     }
     return false;
+}
+
+fn collectReferencedTypeProps(allocator: Allocator, tree: *const ast.Tree, symbols: SymbolTable, name: ast.NodeIndex, props: *std.ArrayList(DeclaredProp), depth: usize) Allocator.Error!bool {
+    const symbol = symbols.symbolOf(name) orelse return true;
+    var unresolved = false;
+    var found = false;
+    for (symbols.symbolDecls(symbol)) |declaration| {
+        const parent = symbols.parentOf(declaration) orelse continue;
+        found = true;
+        const part_unresolved = try collectTypeProps(allocator, tree, symbols, parent, props, depth + 1);
+        unresolved = unresolved or part_unresolved;
+    }
+    return !found or unresolved;
 }
 
 fn collectExpressionStatement(
