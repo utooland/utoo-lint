@@ -1,0 +1,35 @@
+---
+fixture: "tests/snapshots/specs/react-hooks/rules-of-hooks/early-return.tsx"
+rule: "react-hooks/rules-of-hooks"
+---
+
+# Input
+
+```tsx
+import { useEffect } from 'react';
+export default function Example({ready}) {
+  if (!ready) { return null; }
+  useEffect(() => {}, []);
+  return null;
+}
+```
+
+# Diagnostics
+
+count: 1
+
+## Diagnostic 1
+
+- rule: "react-hooks/rules-of-hooks"
+- severity: "error"
+- message: "React Hook \"useEffect\" is called conditionally. React Hooks must be called in the exact same order in every component render."
+- byte span: 111..120
+- start: 4:3
+- end: 4:12
+- source: "useEffect"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

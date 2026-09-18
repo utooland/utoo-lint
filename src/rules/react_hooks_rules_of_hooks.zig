@@ -15,6 +15,7 @@ const FunctionContext = struct {
     class_method: bool,
     branch_base: usize,
     loop_base: usize,
+    has_conditional_return: bool = false,
 };
 
 pub fn run(
@@ -71,6 +72,11 @@ const Visitor = struct {
         _: *traverser.basic.Ctx,
     ) void {
         _ = self.function_stack.pop();
+    }
+
+    pub fn exit_return_statement(self: *Visitor, _: ast.ReturnStatement, _: ast.NodeIndex, _: *traverser.basic.Ctx) void {
+        if (self.function_stack.items.len == 0) return;
+        self.function_stack.items[self.function_stack.items.len - 1].has_conditional_return = true;
     }
 
     pub fn enter_if_statement(self: *Visitor, _: ast.IfStatement, _: ast.NodeIndex, _: *traverser.basic.Ctx) traverser.Action {
@@ -151,7 +157,7 @@ const Visitor = struct {
         _: ast.NodeIndex,
         ctx: *traverser.basic.Ctx,
     ) Allocator.Error!traverser.Action {
-        if (isHook(ctx.tree, call.callee)) {
+        if (isHook(ctx.tree, call.callee) and !isUnreachableHook(ctx.tree, call.callee, ctx)) {
             try self.checkHook(ctx.tree, call.callee);
         }
         return .proceed;
@@ -216,7 +222,7 @@ const Visitor = struct {
         }
 
         const branch_delta = self.branch_depth - context.branch_base;
-        if (context.directly_allowed and branch_delta > 0) {
+        if (context.directly_allowed and (branch_delta > 0 or context.has_conditional_return)) {
             try self.report(
                 tree,
                 callee,
@@ -276,6 +282,46 @@ const Visitor = struct {
         );
     }
 };
+
+fn isUnreachableHook(tree: *const ast.Tree, callee: ast.NodeIndex, ctx: *traverser.basic.Ctx) bool {
+    const offset = tree.span(callee).start;
+    var depth: usize = 1;
+    while (ctx.path.ancestor(depth)) |ancestor| : (depth += 1) {
+        const statements = switch (tree.data(ancestor)) {
+            .function, .arrow_function_expression => break,
+            .block_statement => |block| block.body,
+            .function_body => |body| body.body,
+            .switch_case => |case| case.consequent,
+            else => continue,
+        };
+        for (tree.extra(statements)) |statement| {
+            if (tree.span(statement).end > offset) break;
+            if (definitelyTerminates(tree, statement)) return true;
+        }
+    }
+    return false;
+}
+
+fn definitelyTerminates(tree: *const ast.Tree, index: ast.NodeIndex) bool {
+    if (index == .null) return false;
+    return switch (tree.data(index)) {
+        .return_statement, .throw_statement => true,
+        .block_statement => |block| terminatingStatements(tree, block.body),
+        .function_body => |body| terminatingStatements(tree, body.body),
+        .if_statement => |statement| definitelyTerminates(tree, statement.consequent) and definitelyTerminates(tree, statement.alternate),
+        .catch_clause => |clause| definitelyTerminates(tree, clause.body),
+        .try_statement => |statement| definitelyTerminates(tree, statement.finalizer) or
+            (definitelyTerminates(tree, statement.block) and (statement.handler == .null or definitelyTerminates(tree, statement.handler))),
+        else => false,
+    };
+}
+
+fn terminatingStatements(tree: *const ast.Tree, statements: ast.IndexRange) bool {
+    for (tree.extra(statements)) |statement| {
+        if (definitelyTerminates(tree, statement)) return true;
+    }
+    return false;
+}
 
 fn isHook(tree: *const ast.Tree, callee: ast.NodeIndex) bool {
     if (identifierReferenceName(tree, callee)) |name| return isHookName(name);
