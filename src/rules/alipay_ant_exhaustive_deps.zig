@@ -58,6 +58,16 @@ pub fn runWithOptions(
     var stable_symbols = SymbolSet.init(allocator);
     defer stable_symbols.deinit();
 
+    // Bindings outside render scopes cannot change as a result of a render.
+    var external_iter = symbol_table.iterSymbols();
+    while (external_iter.next()) |entry| {
+        if (entry.symbol.flags.import or entry.symbol.flags.type_import or
+            entry.symbol.scope == .root or entry.symbol.scope == .module)
+        {
+            try stable_symbols.put(entry.id, {});
+        }
+    }
+
     var unstable_symbols = SymbolSet.init(allocator);
     defer unstable_symbols.deinit();
 
