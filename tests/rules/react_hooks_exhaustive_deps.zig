@@ -150,3 +150,21 @@ fn hasMessage(result: lint.Result, needle: []const u8) bool {
     }
     return false;
 }
+
+test "imports and module bindings are not reactive dependencies" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "import { useEffect } from 'react'; import { log } from './helpers'; export function Example() { useEffect(() => log(), []); return null; }", .count = 0 },
+        .{ .source = "import { useMemo } from 'react'; const { value } = window.settings; export function Example() { return useMemo(() => value, []); }", .count = 0 },
+        .{ .source = "import { useMemo } from 'react'; export const [value] = window.settings; export function Example() { return useMemo(() => value, []); }", .count = 0 },
+        .{ .source = "import { useMemo } from 'react'; import * as helpers from './helpers'; export function Example() { return useMemo(() => helpers.read(), []); }", .count = 0 },
+        .{ .source = "import { useMemo } from 'react'; import value from './helpers'; export function Example({ value }) { return useMemo(() => value, []); }", .count = 1 },
+        .{ .source = "import { useMemo } from 'react'; export function Example(props) { const { value } = props; return useMemo(() => value, []); }", .count = 1 },
+    };
+    for (cases) |case| {
+        var options = lint.Options.allDisabled();
+        options.react_hooks_exhaustive_deps = true;
+        var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.tsx", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(case.count, helpers.countRule(result, lint.rules.react_hooks_exhaustive_deps.id));
+    }
+}
