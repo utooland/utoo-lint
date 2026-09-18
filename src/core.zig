@@ -3343,7 +3343,10 @@ pub const Options = struct {
     pub fn allDisabled() Options {
         var options = Options{};
         inline for (@typeInfo(Options).@"struct".fields) |field| {
-            if (field.type == bool) {
+            // Only disable rule switches; each rule keeps its option defaults.
+            if (field.type == bool and (@hasDecl(@import("rules/root.zig"), field.name) or
+                std.mem.eql(u8, field.name, "parser_semantic_errors")))
+            {
                 @field(options, field.name) = false;
             }
         }
@@ -10820,6 +10823,20 @@ test "configured globals validate values and resolve the latest layer" {
     defer not_object.deinit();
     try std.testing.expectError(error.InvalidGlobals, options.setConfiguredGlobalsFromConfig(not_object.value));
     try std.testing.expectEqual(@as(usize, 2), options.configured_globals.count);
+}
+
+test "disabled rules preserve boolean option defaults" {
+    const options = Options.allDisabled();
+    try std.testing.expect(!options.jsx_a11y_alt_text);
+    try std.testing.expect(!options.typescript_eslint_no_invalid_void_type);
+    try std.testing.expect(!options.parser_semantic_errors);
+    try std.testing.expect(options.jsx_a11y_alt_text_img);
+    try std.testing.expect(options.jsx_a11y_alt_text_object);
+    try std.testing.expect(options.jsx_a11y_alt_text_area);
+    try std.testing.expect(options.jsx_a11y_alt_text_input_image);
+    try std.testing.expect(options.typescript_eslint_no_invalid_void_type_allow_in_generic_type_arguments);
+    try std.testing.expect(options.react_self_closing_comp_component);
+    try std.testing.expect(options.react_self_closing_comp_html);
 }
 
 test "Options can enable rules by CLI name" {
