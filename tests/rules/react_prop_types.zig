@@ -281,3 +281,27 @@ test "nested destructured props are checked against shape validators" {
         if (case.count == 1) try std.testing.expectEqualStrings("'data.name' is missing in props validation", result.diagnostics[0].message);
     }
 }
+
+test "typed props validate members and unresolved imported intersections" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "import React from 'react'; const Example: React.FC<{value:string}> = ({value}) => <span>{value.slice(1)}</span>;", .count = 0 },
+        .{ .source = "function Example({items}:{items:string[]}) { return <span>{items.length}{items.map(x=>x)}</span>; }", .count = 0 },
+        .{ .source = "import type {Data} from './types'; function Example({data}:{data:Data}) { return <span>{data.name}</span>; }", .count = 0 },
+        .{ .source = "interface Data {name:string} function Example({data}:{data:Data}) { return <span>{data.name}</span>; }", .count = 0 },
+        .{ .source = "import type {Base} from './types'; function Example(props: Base & {other:number}) { const {value} = props; return <span>{value}</span>; }", .count = 0 },
+        .{ .source = "import type {Base} from './types'; interface Props extends Base {other:number} function Example(props: Props) { return <span>{props.value}</span>; }", .count = 0 },
+        .{ .source = "import type {Base} from './types'; interface Middle extends Base {} interface Props extends Middle {other:number} function Example(props: Props) { return <span>{props.value}</span>; }", .count = 0 },
+        .{ .source = "interface Base {value:string} interface Props extends Base {other:number} function Example(props: Props) { return <span>{props.value}{props.missing}</span>; }", .count = 1 },
+        .{ .source = "import type * as Types from './types'; interface Props extends Types.Base {other:number} function Example(props: Props) { return <span>{props.value}</span>; }", .count = 0 },
+        .{ .source = "import type * as Types from './types'; function Example(props: Types.Base) { return <span>{props.value}</span>; }", .count = 0 },
+        .{ .source = "interface Base {value:string} function Example(props: Base & {other:number}) { return <span>{props.value}{props.missing}</span>; }", .count = 1 },
+        .{ .source = "import type {Data} from './types'; function Example(props:{data:Data}) { return <span>{props.data.name}{props.missing}</span>; }", .count = 1 },
+        .{ .source = "function Example(props:{value:string}) { return <span>{props.missing}</span>; }", .count = 1 },
+    };
+    for (cases) |case| {
+        var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.tsx", propTypesOnly());
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(case.count, helpers.countRule(result, lint.rules.react_prop_types.id));
+        if (case.count == 1) try std.testing.expectEqualStrings("'missing' is missing in props validation", result.diagnostics[0].message);
+    }
+}

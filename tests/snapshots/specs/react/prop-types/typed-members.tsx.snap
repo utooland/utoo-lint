@@ -1,0 +1,22 @@
+---
+fixture: "tests/snapshots/specs/react/prop-types/typed-members.tsx"
+rule: "react/prop-types"
+---
+
+# Input
+
+```tsx
+import type { Data } from './types';
+export function Example({ value, items, data }: { value: string; items: string[]; data: Data }) {
+  return <span>{value.slice(1)}{items.length}{items.map(x => x)}{data.name}</span>;
+}
+```
+
+# Diagnostics
+
+count: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0
