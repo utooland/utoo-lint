@@ -693,6 +693,13 @@ fn collectComponentParams(
         else => items[0],
     };
     const pattern = unwrapAssignmentPattern(tree, first);
+    const annotation = switch (tree.data(pattern)) {
+        .binding_identifier => |binding| binding.type_annotation,
+        .object_pattern => |binding| binding.type_annotation,
+        .array_pattern => |binding| binding.type_annotation,
+        else => .null,
+    };
+    try collectTypeProps(allocator, tree, annotation, &state.components.items[component_index].declared_props, 0);
     if (bindingIdentifierName(tree, pattern)) |name| return name;
     try collectPatternUsage(allocator, tree, &state.components.items[component_index], pattern, &.{});
     return null;

@@ -209,3 +209,21 @@ fn hasMessage(result: lint.Result, expected: []const u8) bool {
     }
     return false;
 }
+
+test "reports unused TypeScript parameter props" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "export const Example = (props: { unused?: string }) => <span>hello</span>;", .count = 1 },
+        .{ .source = "export function Example(props: { used: string; unused?: number }) { return <span>{props.used}</span>; }", .count = 1 },
+        .{ .source = "export const Example = ({ used }: { used: string; unused?: number }) => <span>{used}</span>;", .count = 1 },
+        .{ .source = "type Props = { unused: string }; export const Example = (props: Props) => <span />;", .count = 1 },
+        .{ .source = "export const Example = (props: { used: string }) => <span>{props.used}</span>;", .count = 0 },
+    };
+    for (cases) |case| {
+        var options = lint.Options.allDisabled();
+        options.react_no_unused_prop_types = true;
+        var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.tsx", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(case.count, helpers.countRule(result, lint.rules.react_no_unused_prop_types.id));
+        if (case.count > 0) try std.testing.expectEqualStrings("'unused' PropType is defined but prop is never used", result.diagnostics[0].message);
+    }
+}
