@@ -103,7 +103,7 @@ fn readRemoteMap(
 ) Allocator.Error!?export_map.ExportMap {
     const resolved = try export_map.resolveRelativeModule(allocator, io, file_path, source) orelse return null;
     defer allocator.free(resolved);
-    return export_map.readExportMap(allocator, io, resolved);
+    return export_map.readExportMapWithTypes(allocator, io, resolved, true);
 }
 
 fn reportMissing(

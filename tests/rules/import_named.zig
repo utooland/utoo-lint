@@ -113,3 +113,22 @@ test "can disable import/named" {
 
     try std.testing.expect(!helpers.hasRule(result, lint.rules.import_named.id));
 }
+
+test "import named resolves exported interfaces aliases and type reexports" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "types.ts", .data = "export interface Example { count: number; } export type Alias = Example; interface Private {}" });
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "barrel.ts", .data = "export type { Example as Renamed } from './types'; export type * from './types';" });
+    const file_path = try std.fs.path.resolve(std.testing.allocator, &.{ ".zig-cache", "tmp", &tmp.sub_path, "entry.ts" });
+    defer std.testing.allocator.free(file_path);
+    const source = "import { Example, Alias, Private, Missing } from './types';" ++
+        "import { Renamed, Example as ThroughStar } from './barrel';" ++
+        "export const value: Example = { count: 1 };";
+    var options = lint.Options.allDisabled();
+    options.import_named = true;
+    var result = try lint.lintSourceWithIo(std.testing.allocator, std.testing.io, source, file_path, options);
+    defer result.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 2), helpers.countRule(result, lint.rules.import_named.id));
+    try std.testing.expectEqualStrings("Private not found in './types'", result.diagnostics[0].message);
+    try std.testing.expectEqualStrings("Missing not found in './types'", result.diagnostics[1].message);
+}
