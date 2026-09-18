@@ -449,7 +449,7 @@ fn isAsciiWord(byte: u8) bool {
 // It supports anchors, groups, lookaheads, alternation, character classes,
 // common escape classes, and the ?, *, +, and {n,m} quantifiers used by the
 // upstream option examples.
-fn regexMatches(pattern: []const u8, text: []const u8) bool {
+pub fn regexMatches(pattern: []const u8, text: []const u8) bool {
     for (0..text.len + 1) |start| {
         if (matchAlternatives(pattern, 0, pattern.len, text, start, null)) return true;
     }
