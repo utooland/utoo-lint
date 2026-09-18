@@ -60,11 +60,24 @@ pub const ComponentInfo = struct {
     }
 };
 
+const PropPath = struct {
+    parts: [max_prop_depth][]const u8 = undefined,
+    len: usize,
+
+    fn init(parts: []const []const u8) PropPath {
+        var result = PropPath{ .len = parts.len };
+        @memcpy(result.parts[0..parts.len], parts);
+        return result;
+    }
+};
+
 pub const State = struct {
     symbols: SymbolTable,
+    aliases: std.AutoHashMapUnmanaged(@import("../semantic_compat.zig").traverser.semantic.SymbolId, PropPath) = .empty,
     components: std.ArrayList(ComponentInfo) = .empty,
 
     pub fn deinit(self: *State, allocator: Allocator) void {
+        self.aliases.deinit(allocator);
         for (self.components.items) |*component| {
             component.deinit(allocator);
         }
@@ -666,6 +679,44 @@ const UsageVisitor = struct {
         self.popContext();
     }
 
+    fn propPath(self: *UsageVisitor, tree: *const ast.Tree, index: ast.NodeIndex, buffer: *[max_prop_depth][]const u8) ?[]const []const u8 {
+        if (propSourcePath(tree, index, null, buffer)) |path| return path;
+        var reversed: [max_prop_depth][]const u8 = undefined;
+        var len: usize = 0;
+        var current = unwrapTransparent(tree, index);
+        while (current != .null) {
+            const member = switch (tree.data(current)) {
+                .member_expression => |value| value,
+                else => break,
+            };
+            if (len == reversed.len) return null;
+            reversed[len] = propertyName(tree, member.property, member.computed) orelse return null;
+            len += 1;
+            current = unwrapTransparent(tree, member.object);
+        }
+        if (current == .null or tree.data(current) != .identifier_reference) return null;
+        const symbol = self.state.symbols.symbolOf(current) orelse return null;
+        const alias = self.state.aliases.get(symbol) orelse return null;
+        if (alias.len + len > buffer.len) return null;
+        @memcpy(buffer[0..alias.len], alias.parts[0..alias.len]);
+        for (0..len) |i| buffer[alias.len + i] = reversed[len - i - 1];
+        return buffer[0 .. alias.len + len];
+    }
+
+    pub fn exit_assignment_expression(self: *UsageVisitor, assignment: ast.AssignmentExpression, _: ast.NodeIndex, ctx: *traverser.basic.Ctx) void {
+        const target = unwrapTransparent(ctx.tree, assignment.left);
+        if (ctx.tree.data(target) != .identifier_reference) return;
+        const symbol = self.state.symbols.symbolOf(target) orelse return;
+        var buffer: [max_prop_depth][]const u8 = undefined;
+        if (assignment.operator == .assign) {
+            if (self.propPath(ctx.tree, assignment.right, &buffer)) |path| {
+                if (self.state.aliases.getPtr(symbol)) |alias| alias.* = PropPath.init(path);
+                return;
+            }
+        }
+        _ = self.state.aliases.remove(symbol);
+    }
+
     pub fn enter_member_expression(
         self: *UsageVisitor,
         _: ast.MemberExpression,
@@ -674,7 +725,7 @@ const UsageVisitor = struct {
     ) Allocator.Error!traverser.Action {
         const component_index = self.currentComponent() orelse return .proceed;
         var parts_buffer: [max_prop_depth][]const u8 = undefined;
-        const path = memberPropPath(ctx.tree, index, self.currentPropsName(), &parts_buffer) orelse return .proceed;
+        const path = self.propPath(ctx.tree, index, &parts_buffer) orelse return .proceed;
         if (path.len == 0) return .proceed;
         try addUsedProp(self.allocator, &self.state.components.items[component_index], path, memberDiagnosticNode(ctx.tree, index));
         return .proceed;
@@ -689,8 +740,8 @@ const UsageVisitor = struct {
         if (declarator.init == .null) return .proceed;
         const component_index = self.currentComponent() orelse return .proceed;
         var parts_buffer: [max_prop_depth][]const u8 = undefined;
-        const prefix = propSourcePath(ctx.tree, declarator.init, self.currentPropsName(), &parts_buffer) orelse return .proceed;
-        try collectPatternUsage(self.allocator, ctx.tree, &self.state.components.items[component_index], declarator.id, prefix);
+        const prefix = self.propPath(ctx.tree, declarator.init, &parts_buffer) orelse return .proceed;
+        try collectPatternUsage(self.allocator, ctx.tree, self.state, &self.state.components.items[component_index], declarator.id, prefix);
         return .proceed;
     }
 };
@@ -720,19 +771,27 @@ fn collectComponentParams(
         else => .null,
     };
     try collectTypeProps(allocator, tree, state.symbols, annotation, &state.components.items[component_index].declared_props, 0);
+    try collectPatternUsage(allocator, tree, state, &state.components.items[component_index], pattern, &.{});
     if (bindingIdentifierName(tree, pattern)) |name| return name;
-    try collectPatternUsage(allocator, tree, &state.components.items[component_index], pattern, &.{});
     return null;
 }
 
 fn collectPatternUsage(
     allocator: Allocator,
     tree: *const ast.Tree,
+    state: *State,
     component: *ComponentInfo,
     pattern_index: ast.NodeIndex,
     prefix: []const []const u8,
 ) Allocator.Error!void {
-    const pattern = switch (tree.data(unwrapAssignmentPattern(tree, pattern_index))) {
+    const binding = unwrapAssignmentPattern(tree, pattern_index);
+    if (binding == .null) return;
+    const pattern = switch (tree.data(binding)) {
+        .binding_identifier => {
+            const symbol = state.symbols.symbolOf(binding) orelse return;
+            try state.aliases.put(allocator, symbol, PropPath.init(prefix));
+            return;
+        },
         .object_pattern => |pattern| pattern,
         else => return,
     };
@@ -749,7 +808,7 @@ fn collectPatternUsage(
         path_buffer[prefix.len] = key;
         const path = path_buffer[0 .. prefix.len + 1];
         try addUsedProp(allocator, component, path, property.key);
-        try collectPatternUsage(allocator, tree, component, property.value, path);
+        try collectPatternUsage(allocator, tree, state, component, property.value, path);
     }
 }
 

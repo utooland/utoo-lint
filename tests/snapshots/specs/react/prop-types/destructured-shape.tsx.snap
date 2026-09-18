@@ -1,0 +1,32 @@
+---
+fixture: "tests/snapshots/specs/react/prop-types/destructured-shape.tsx"
+rule: "react/prop-types"
+---
+
+# Input
+
+```tsx
+import PropTypes from 'prop-types';
+export function Example({ data }) { return <span>{data.name}</span>; }
+Example.propTypes = { data: PropTypes.shape({}) };
+```
+
+# Diagnostics
+
+count: 1
+
+## Diagnostic 1
+
+- rule: "react/prop-types"
+- severity: "warning"
+- message: "'data.name' is missing in props validation"
+- byte span: 91..95
+- start: 2:56
+- end: 2:60
+- source: "name"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

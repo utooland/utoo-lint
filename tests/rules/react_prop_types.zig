@@ -259,3 +259,21 @@ test "React FC props support wrappers intersections and methods" {
         try std.testing.expectEqual(@as(usize, 0), helpers.countRule(result, lint.rules.react_prop_types.id));
     }
 }
+
+test "nested destructured props are checked against shape validators" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "function Example({ data }) { return <span>{data.name}</span>; } Example.propTypes = { data: PropTypes.shape({}) };", .count = 1 },
+        .{ .source = "function Example({ data: alias }) { return <span>{alias.name}</span>; } Example.propTypes = { data: PropTypes.shape({}) };", .count = 1 },
+        .{ .source = "function Example(props) { const { data } = props; return <span>{data.name}</span>; } Example.propTypes = { data: PropTypes.shape({}) };", .count = 1 },
+        .{ .source = "function Example({ data }) { return <span>{data.name}</span>; } Example.propTypes = { data: PropTypes.shape({ name: PropTypes.string }) };", .count = 0 },
+        .{ .source = "function Example({ data }) { function inner(data) { return data.name; } return <span>{inner({})}</span>; } Example.propTypes = { data: PropTypes.shape({}) };", .count = 0 },
+        .{ .source = "function Example({ data }) { data = {}; return <span>{data.name}</span>; } Example.propTypes = { data: PropTypes.shape({}) };", .count = 0 },
+        .{ .source = "function Example({ data }) { return <span>{data.name}</span>; }", .count = 2 },
+    };
+    for (cases) |case| {
+        var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.tsx", propTypesOnly());
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(case.count, helpers.countRule(result, lint.rules.react_prop_types.id));
+        if (case.count == 1) try std.testing.expectEqualStrings("'data.name' is missing in props validation", result.diagnostics[0].message);
+    }
+}
