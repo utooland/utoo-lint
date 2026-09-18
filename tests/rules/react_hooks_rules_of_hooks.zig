@@ -113,3 +113,21 @@ test "reports hooks after conditional returns without leaking nested returns" {
         try std.testing.expectEqual(case.count, helpers.countRule(result, lint.rules.react_hooks_rules_of_hooks.id));
     }
 }
+
+test "early-return hooks account for catch paths and exhaustive branches" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "function Component() { try { work(); } catch { return null; } if (enabled) useState(); }", .count = 1 },
+        .{ .source = "function Component() { try { work(); } catch { return null; } useState(); }", .count = 1 },
+        .{ .source = "function Component() { if (flag) return null; else return null; useState(); }", .count = 0 },
+        .{ .source = "function Component() { if (flag) { if (other) return null; else return null; } else return null; useState(); }", .count = 0 },
+        .{ .source = "function Component() { try { return null; } catch { return null; } useState(); }", .count = 0 },
+        .{ .source = "function Component() { try { return null; } catch {} useState(); }", .count = 1 },
+    };
+    for (cases) |case| {
+        var options = lint.Options.allDisabled();
+        options.react_hooks_rules_of_hooks = true;
+        var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.tsx", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(case.count, helpers.countRule(result, lint.rules.react_hooks_rules_of_hooks.id));
+    }
+}
