@@ -1,0 +1,20 @@
+---
+fixture: "tests/snapshots/specs/react/prop-types/react-fc.tsx"
+rule: "react/prop-types"
+---
+
+# Input
+
+```tsx
+import React from 'react';
+export const Example: React.FC<{ value: string }> = props => <span>{props.value}</span>;
+```
+
+# Diagnostics
+
+count: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

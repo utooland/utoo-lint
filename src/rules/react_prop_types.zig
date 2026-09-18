@@ -262,6 +262,9 @@ fn collectVariableDeclarator(
             if (!functionReturnsJSXOrNull(tree, init)) return;
             const component_index = try state.ensureComponent(allocator, name, index, true);
             try appendNode(allocator, &state.components.items[component_index].function_nodes, init);
+            if (reactFunctionComponentProps(tree, declarator.id)) |props_type| {
+                try collectTypeProps(allocator, tree, props_type, &state.components.items[component_index].declared_props, 0);
+            }
         },
         .call_expression => |call| {
             if (isCreateReactClassCall(tree, call)) {
@@ -275,8 +278,117 @@ fn collectVariableDeclarator(
             if (!functionReturnsJSXOrNull(tree, wrapped)) return;
             const component_index = try state.ensureComponent(allocator, name, index, true);
             try appendNode(allocator, &state.components.items[component_index].function_nodes, wrapped);
+            if (reactFunctionComponentProps(tree, declarator.id)) |props_type| {
+                try collectTypeProps(allocator, tree, props_type, &state.components.items[component_index].declared_props, 0);
+            }
         },
         else => {},
+    }
+}
+
+fn reactFunctionComponentProps(tree: *const ast.Tree, binding: ast.NodeIndex) ?ast.NodeIndex {
+    const identifier = switch (tree.data(binding)) {
+        .binding_identifier => |value| value,
+        else => return null,
+    };
+    if (identifier.type_annotation == .null) return null;
+    const annotation = tree.data(identifier.type_annotation).ts_type_annotation.type_annotation;
+    const reference = switch (tree.data(annotation)) {
+        .ts_type_reference => |value| value,
+        else => return null,
+    };
+    if (reference.type_arguments == .null or !isReactFunctionComponentType(tree, reference.type_name)) return null;
+    const arguments = tree.extra(tree.data(reference.type_arguments).ts_type_parameter_instantiation.params);
+    return if (arguments.len > 0) arguments[0] else null;
+}
+
+fn isReactFunctionComponentType(tree: *const ast.Tree, type_name: ast.NodeIndex) bool {
+    const qualified = switch (tree.data(type_name)) {
+        .ts_qualified_name => |name| name,
+        else => null,
+    };
+    const local = if (qualified) |name| identifierReferenceName(tree, name.left) else identifierReferenceName(tree, type_name);
+    const local_name = local orelse return false;
+    if (qualified) |name| {
+        const member = propertyName(tree, name.right, false) orelse return false;
+        if (!std.mem.eql(u8, member, "FC") and !std.mem.eql(u8, member, "FunctionComponent")) return false;
+    }
+    for (tree.nodes.items(.data)) |data| {
+        const declaration = switch (data) {
+            .import_declaration => |value| value,
+            else => continue,
+        };
+        const source = switch (tree.data(declaration.source)) {
+            .string_literal => |value| tree.string(value.value),
+            else => continue,
+        };
+        if (!std.mem.eql(u8, source, "react")) continue;
+        for (tree.extra(declaration.specifiers)) |specifier| {
+            switch (tree.data(specifier)) {
+                .import_default_specifier => |value| if (qualified != null and std.mem.eql(u8, bindingIdentifierName(tree, value.local) orelse "", local_name)) {
+                    return true;
+                },
+                .import_namespace_specifier => |value| if (qualified != null and std.mem.eql(u8, bindingIdentifierName(tree, value.local) orelse "", local_name)) {
+                    return true;
+                },
+                .import_specifier => |value| {
+                    if (qualified != null or !std.mem.eql(u8, bindingIdentifierName(tree, value.local) orelse "", local_name)) continue;
+                    const imported = propertyName(tree, value.imported, false) orelse continue;
+                    if (std.mem.eql(u8, imported, "FC") or std.mem.eql(u8, imported, "FunctionComponent")) return true;
+                },
+                else => {},
+            }
+        }
+    }
+    return false;
+}
+
+fn collectTypeProps(allocator: Allocator, tree: *const ast.Tree, index: ast.NodeIndex, props: *std.ArrayList(DeclaredProp), depth: usize) Allocator.Error!void {
+    if (index == .null or depth >= max_prop_depth) return;
+    const members = switch (tree.data(index)) {
+        .ts_type_annotation => |annotation| return collectTypeProps(allocator, tree, annotation.type_annotation, props, depth + 1),
+        .ts_type_literal => |literal| literal.members,
+        .ts_interface_body => |body| body.body,
+        .ts_intersection_type => |intersection| {
+            for (tree.extra(intersection.types)) |part| try collectTypeProps(allocator, tree, part, props, depth + 1);
+            return;
+        },
+        .ts_type_reference => |reference| {
+            const name = identifierReferenceName(tree, reference.type_name) orelse return;
+            const program = tree.data(tree.root).program;
+            for (tree.extra(program.body)) |statement| {
+                const declaration = switch (tree.data(statement)) {
+                    .export_named_declaration => |value| value.declaration,
+                    else => statement,
+                };
+                if (declaration == .null) continue;
+                switch (tree.data(declaration)) {
+                    .ts_type_alias_declaration => |alias| if (std.mem.eql(u8, bindingIdentifierName(tree, alias.id) orelse "", name)) {
+                        return collectTypeProps(allocator, tree, alias.type_annotation, props, depth + 1);
+                    },
+                    .ts_interface_declaration => |interface| if (std.mem.eql(u8, bindingIdentifierName(tree, interface.id) orelse "", name)) {
+                        return collectTypeProps(allocator, tree, interface.body, props, depth + 1);
+                    },
+                    else => {},
+                }
+            }
+            return;
+        },
+        else => return,
+    };
+    for (tree.extra(members)) |member| {
+        const property = switch (tree.data(member)) {
+            .ts_property_signature => |value| value,
+            .ts_method_signature => |method| {
+                const name = propertyName(tree, method.key, method.computed) orelse continue;
+                _ = try ensureDeclaredProp(allocator, props, name, method.key);
+                continue;
+            },
+            else => continue,
+        };
+        const name = propertyName(tree, property.key, property.computed) orelse continue;
+        const prop = try ensureDeclaredProp(allocator, props, name, property.key);
+        try collectTypeProps(allocator, tree, property.type_annotation, &prop.children, depth + 1);
     }
 }
 
