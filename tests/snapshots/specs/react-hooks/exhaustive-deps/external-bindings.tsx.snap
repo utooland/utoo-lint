@@ -1,0 +1,22 @@
+---
+fixture: "tests/snapshots/specs/react-hooks/exhaustive-deps/external-bindings.tsx"
+rule: "react-hooks/exhaustive-deps"
+---
+
+# Input
+
+```tsx
+import { useMemo } from 'react';
+import { log } from './helpers';
+const { value } = window.settings;
+export function Example() { return useMemo(() => { log(); return value; }, []); }
+```
+
+# Diagnostics
+
+count: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

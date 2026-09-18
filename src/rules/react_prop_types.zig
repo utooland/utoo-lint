@@ -198,7 +198,19 @@ fn collectTopLevelDeclaration(
             if (declaration.declaration != .null) try collectTopLevelDeclaration(allocator, tree, declaration.declaration, state, custom_validators);
         },
         .export_default_declaration => |declaration| {
-            if (declaration.declaration != .null) try collectTopLevelDeclaration(allocator, tree, declaration.declaration, state, custom_validators);
+            if (declaration.declaration == .null) return;
+            const exported = unwrapTransparent(tree, declaration.declaration);
+            const anonymous = switch (tree.data(exported)) {
+                .arrow_function_expression => true,
+                .function => |function| function.id == .null,
+                else => false,
+            };
+            if (anonymous and functionReturnsJSXOrNull(tree, exported)) {
+                const component_index = try state.ensureComponent(allocator, null, exported, true);
+                try appendNode(allocator, &state.components.items[component_index].function_nodes, exported);
+            } else {
+                try collectTopLevelDeclaration(allocator, tree, exported, state, custom_validators);
+            }
         },
         else => {},
     }

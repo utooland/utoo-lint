@@ -148,7 +148,7 @@ fn isTypeValueShadow(self_flags: traverser.semantic.Symbol.Flags, candidate_flag
 }
 
 fn isTypeOnlySymbol(flags: traverser.semantic.Symbol.Flags) bool {
-    return flags.inTypeSpace() and !flags.inValueSpace();
+    return (flags.type_import or flags.inTypeSpace()) and !flags.inValueSpace();
 }
 
 fn isValueOnlySymbol(flags: traverser.semantic.Symbol.Flags) bool {

@@ -222,3 +222,26 @@ test "React function component type arguments declare props" {
         try std.testing.expectEqual(@as(usize, 1), helpers.countRule(result, lint.rules.react_prop_types.id));
     }
 }
+
+test "checks anonymous default-export components" {
+    const sources = [_][]const u8{
+        "export default (props) => { const { value } = props; return <span>{value}</span>; };",
+        "export default ({ value }) => <span>{value}</span>;",
+        "export default ((props) => <span>{props.value}</span>);",
+        "export default function(props) { return <span>{props.value}</span>; }",
+    };
+    for (sources) |source| {
+        var result = try lint.lintSource(std.testing.allocator, source, "fixture.tsx", propTypesOnly());
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(@as(usize, 1), helpers.countRule(result, lint.rules.react_prop_types.id));
+        try std.testing.expectEqualStrings("'value' is missing in props validation", result.diagnostics[0].message);
+    }
+    for ([_][]const u8{
+        "export default (props) => props.value;",
+        "export default () => <span>hello</span>;",
+    }) |source| {
+        var result = try lint.lintSource(std.testing.allocator, source, "fixture.tsx", propTypesOnly());
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(@as(usize, 0), helpers.countRule(result, lint.rules.react_prop_types.id));
+    }
+}
