@@ -341,6 +341,11 @@ production output is a server-free static site suitable for public hosting.
 
 ## Contributing
 
+Every issue must include a minimal reproduction URL generated with **Share** in
+the [Playground](https://utlint.umijs.org/playground/). Select a concrete version
+and verify the link before submitting. See the
+[issue guidelines](CONTRIBUTING.md#reporting-issues) for the full process.
+
 Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before
 opening a pull request. The native engine is built with Zig, and Yuku is pinned
 as a git submodule for reproducible parser behavior.

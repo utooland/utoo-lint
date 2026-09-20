@@ -3,6 +3,34 @@
 This guide covers local development, rule implementation, packaging, benchmark
 charts, and publishing for `utoo-lint`.
 
+## Reporting Issues
+
+Every `utoo-lint` issue must include a minimal reproduction URL from the
+[Playground](https://utlint.umijs.org/playground/).
+
+1. Search existing issues to avoid duplicates.
+2. Reduce the example to the smallest relevant code sample in the Playground.
+   Choose the correct file extension and configure the relevant rules and options.
+3. Select a concrete **Version** instead of `latest` so the reproduction stays
+   tied to the engine version you tested.
+4. Click **Share** and copy the full URL, including `?version=...` and
+   `#playground=...`. Reopen it to verify that the code and rule configuration
+   are restored. A link to the Playground homepage is not a reproduction.
+5. Open an issue using the issue form. Include the reproduction URL, steps to
+   reproduce, expected behavior, and actual behavior. For rule requests, use
+   the Playground example to demonstrate the desired diagnostic or fix.
+
+For CLI, configuration discovery, or filesystem issues that cannot be fully
+reproduced in the browser, still include a Playground link with the relevant
+code and explain its limitations. Add a minimal repository, exact commands,
+configuration, and environment details needed to reproduce the full issue.
+
+Issues without a valid Playground reproduction will be asked to provide one
+before investigation proceeds. After a fix is released, verify the same example
+with the fixed version and record the result before closing the issue.
+
+Report security vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+
 ## Prerequisites
 
 Yuku currently tracks Zig nightly. Use a Zig version compatible with the
