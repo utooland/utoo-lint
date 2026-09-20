@@ -197,6 +197,7 @@ fn referenceType(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeInd
         if (annotation != .null) return typeFromAnnotation(tree, symbols, annotation, depth + 1) orelse .unknown_expression;
         if (symbols.parentOf(declaration)) |parent| {
             if (tree.data(parent) == .variable_declarator) {
+                if (bindingHasWrites(symbols, index)) return .unknown_expression;
                 return inferExpressionTypeAtDepth(tree, symbols, tree.data(parent).variable_declarator.init, depth + 1);
             }
             if (tree.data(parent) == .assignment_pattern) {
@@ -266,7 +267,10 @@ fn expressionAnnotation(tree: *const ast.Tree, symbols: SymbolTable, index: ast.
                     .assignment_pattern => |pattern| if (pattern.type_annotation != .null) {
                         break :blk pattern.type_annotation;
                     },
-                    .variable_declarator => |variable| break :blk expressionAnnotation(tree, symbols, variable.init, depth + 1),
+                    .variable_declarator => |variable| {
+                        if (bindingHasWrites(symbols, index)) break :blk .null;
+                        break :blk expressionAnnotation(tree, symbols, variable.init, depth + 1);
+                    },
                     else => {},
                 }
             }
@@ -336,4 +340,10 @@ fn propertyAnnotation(tree: *const ast.Tree, symbols: SymbolTable, index: ast.No
         if (std.mem.eql(u8, key, name)) return property.type_annotation;
     }
     return .null;
+}
+
+fn bindingHasWrites(symbols: SymbolTable, index: ast.NodeIndex) bool {
+    const symbol = symbols.symbolOf(index) orelse return true;
+    for (symbols.model.uses(symbol)) |reference| if (symbols.isWriteReference(reference)) return true;
+    return false;
 }

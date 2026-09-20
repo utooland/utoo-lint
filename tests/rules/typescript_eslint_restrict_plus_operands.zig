@@ -236,3 +236,20 @@ test "resolves scoped aliases and typed properties for addition" {
         }
     }
 }
+
+test "does not infer reassigned variables from stale initializers" {
+    const cases = [_][]const u8{
+        "let value=null; value=1; value+1;",
+        "var value=null; value=1; value+1;",
+        "let value=null; [value]=[1]; value+1;",
+        "let value=null; function change(){value=1;} change(); value+1;",
+    };
+    var options = lint.Options.allDisabled();
+    options.typescript_eslint_restrict_plus_operands = true;
+    options.typescript_eslint_restrict_plus_operands_allow_any = false;
+    for (cases) |source| {
+        var result = try lint.lintSource(std.testing.allocator, source, "fixture.ts", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(@as(usize, 0), helpers.countRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id));
+    }
+}
