@@ -426,7 +426,52 @@ fn narrowedReferenceType(tree: *const ast.Tree, symbols: SymbolTable, index: ast
     return (Flow{ .tree = tree, .symbols = symbols, .symbol = symbol, .reference = index, .baseline = baseline }).run();
 }
 
-const Signature = struct { return_type: ast.NodeIndex, params: ast.NodeIndex, type_parameters: ast.NodeIndex };
+// Keep type-parameter identity alongside alias instantiations. Names alone can
+// collide across nested aliases and function-level generic parameters.
+const TypeBindings = struct {
+    parameters: [16]ast.NodeIndex = undefined,
+    arguments: [16]ast.NodeIndex = undefined,
+    len: usize = 0,
+
+    fn append(self: *TypeBindings, tree: *const ast.Tree, parameters: ast.NodeIndex, arguments: ast.NodeIndex) bool {
+        if (parameters == .null) return true;
+        const params = tree.extra(tree.data(parameters).ts_type_parameter_declaration.params);
+        const args = if (arguments == .null) &.{} else tree.extra(tree.data(arguments).ts_type_parameter_instantiation.params);
+        for (params, 0..) |index, i| {
+            if (self.len == self.parameters.len) return false;
+            const parameter = tree.data(index).ts_type_parameter;
+            self.parameters[self.len] = parameter.name;
+            self.arguments[self.len] = if (i < args.len) args[i] else parameter.default;
+            self.len += 1;
+        }
+        return true;
+    }
+
+    fn resolve(self: TypeBindings, tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex) ast.NodeIndex {
+        var current = unwrapAnnotation(tree, index);
+        for (0..32) |_| {
+            if (current == .null or tree.data(current) != .ts_type_reference) return current;
+            const symbol = symbols.symbolOf(tree.data(current).ts_type_reference.type_name) orelse return current;
+            var found = false;
+            for (self.parameters[0..self.len], self.arguments[0..self.len]) |parameter, argument| {
+                if (symbols.symbolOf(parameter) == symbol) {
+                    current = unwrapAnnotation(tree, argument);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) return current;
+        }
+        return .null;
+    }
+};
+
+const Signature = struct {
+    return_type: ast.NodeIndex,
+    params: ast.NodeIndex,
+    type_parameters: ast.NodeIndex,
+    bindings: TypeBindings = .{},
+};
 
 fn callSignature(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex, depth: usize) ?Signature {
     if (index == .null or depth >= 32) return null;
@@ -435,14 +480,19 @@ fn callSignature(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeInd
         .arrow_function_expression => |function| if (function.async) null else .{ .return_type = function.return_type, .params = function.params, .type_parameters = function.type_parameters },
         .ts_function_type => |function| .{ .return_type = function.return_type, .params = function.params, .type_parameters = function.type_parameters },
         .ts_type_annotation => |annotation| callSignature(tree, symbols, annotation.type_annotation, depth + 1),
-        .ts_type_alias_declaration => |alias| if (alias.type_parameters != .null) null else callSignature(tree, symbols, alias.type_annotation, depth + 1),
+        .ts_type_alias_declaration => |alias| callSignature(tree, symbols, alias.type_annotation, depth + 1),
         .parenthesized_expression => |expression| callSignature(tree, symbols, expression.expression, depth + 1),
         .ts_as_expression => |expression| callSignature(tree, symbols, expression.type_annotation, depth + 1),
         .ts_type_reference => |reference| blk: {
             const symbol = symbols.symbolOf(reference.type_name) orelse break :blk null;
             for (symbols.symbolDecls(symbol)) |declaration| {
                 const parent = symbols.parentOf(declaration) orelse continue;
-                if (callSignature(tree, symbols, parent, depth + 1)) |signature| break :blk signature;
+                if (callSignature(tree, symbols, parent, depth + 1)) |resolved| {
+                    var signature = resolved;
+                    if (tree.data(parent) == .ts_type_alias_declaration and
+                        !signature.bindings.append(tree, tree.data(parent).ts_type_alias_declaration.type_parameters, reference.type_arguments)) break :blk null;
+                    break :blk signature;
+                }
             }
             break :blk null;
         },
@@ -476,7 +526,7 @@ fn callType(tree: *const ast.Tree, symbols: SymbolTable, call: ast.CallExpressio
     if (depth >= 32) return .unknown_expression;
     if (inferExpressionTypeAtDepth(tree, symbols, call.callee, depth + 1) == .any) return .any;
     const signature = callSignature(tree, symbols, call.callee, depth + 1) orelse return .unknown_expression;
-    const result = unwrapAnnotation(tree, signature.return_type);
+    const result = signature.bindings.resolve(tree, symbols, signature.return_type);
     if (result == .null) return .unknown_expression;
     if (signature.type_parameters != .null and tree.data(result) == .ts_type_reference) {
         const result_symbol = symbols.symbolOf(tree.data(result).ts_type_reference.type_name) orelse return .unknown_expression;
@@ -486,8 +536,8 @@ fn callType(tree: *const ast.Tree, symbols: SymbolTable, call: ast.CallExpressio
             if (symbols.symbolOf(parameter.name) != result_symbol) continue;
             if (call.type_arguments != .null) {
                 const arguments = tree.extra(tree.data(call.type_arguments).ts_type_parameter_instantiation.params);
-                if (position < arguments.len) return typeFromAnnotation(tree, symbols, arguments[position], depth + 1) orelse .unknown_expression;
-                return typeFromAnnotation(tree, symbols, parameter.default, depth + 1) orelse .unknown_expression;
+                if (position < arguments.len) return typeFromAnnotation(tree, symbols, signature.bindings.resolve(tree, symbols, arguments[position]), depth + 1) orelse .unknown_expression;
+                return typeFromAnnotation(tree, symbols, signature.bindings.resolve(tree, symbols, parameter.default), depth + 1) orelse .unknown_expression;
             }
             const arguments = tree.extra(call.arguments);
             const formals = tree.extra(tree.data(signature.params).formal_parameters.items);
@@ -505,7 +555,7 @@ fn callType(tree: *const ast.Tree, symbols: SymbolTable, call: ast.CallExpressio
                 } else inferred = actual;
             }
             if (inferred) |actual| return actual;
-            return typeFromAnnotation(tree, symbols, parameter.default, depth + 1) orelse .unknown_expression;
+            return typeFromAnnotation(tree, symbols, signature.bindings.resolve(tree, symbols, parameter.default), depth + 1) orelse .unknown_expression;
         }
     }
     return typeFromAnnotation(tree, symbols, result, depth + 1) orelse .unknown_expression;
@@ -520,17 +570,25 @@ fn isNumericIndex(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIn
 }
 
 fn arrayElementAnnotation(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex, depth: usize) ast.NodeIndex {
+    return arrayElementWithBindings(tree, symbols, index, .{}, depth);
+}
+
+fn arrayElementWithBindings(tree: *const ast.Tree, symbols: SymbolTable, original: ast.NodeIndex, bindings: TypeBindings, depth: usize) ast.NodeIndex {
+    const index = bindings.resolve(tree, symbols, original);
     if (index == .null or depth >= 32) return .null;
     return switch (tree.data(index)) {
-        .ts_type_annotation => |annotation| arrayElementAnnotation(tree, symbols, annotation.type_annotation, depth + 1),
-        .ts_parenthesized_type => |annotation| arrayElementAnnotation(tree, symbols, annotation.type_annotation, depth + 1),
-        .ts_type_alias_declaration => |alias| if (alias.type_parameters != .null) .null else arrayElementAnnotation(tree, symbols, alias.type_annotation, depth + 1),
-        .ts_array_type => |array| array.element_type,
+        .ts_type_annotation => |annotation| arrayElementWithBindings(tree, symbols, annotation.type_annotation, bindings, depth + 1),
+        .ts_parenthesized_type => |annotation| arrayElementWithBindings(tree, symbols, annotation.type_annotation, bindings, depth + 1),
+        .ts_type_alias_declaration => |alias| arrayElementWithBindings(tree, symbols, alias.type_annotation, bindings, depth + 1),
+        .ts_array_type => |array| bindings.resolve(tree, symbols, array.element_type),
         .ts_type_reference => |reference| blk: {
             if (symbols.symbolOf(reference.type_name)) |symbol| {
                 for (symbols.symbolDecls(symbol)) |declaration| {
                     const parent = symbols.parentOf(declaration) orelse continue;
-                    const element = arrayElementAnnotation(tree, symbols, parent, depth + 1);
+                    var instantiated = bindings;
+                    if (tree.data(parent) == .ts_type_alias_declaration and
+                        !instantiated.append(tree, tree.data(parent).ts_type_alias_declaration.type_parameters, reference.type_arguments)) break :blk .null;
+                    const element = arrayElementWithBindings(tree, symbols, parent, instantiated, depth + 1);
                     if (element != .null) break :blk element;
                 }
                 break :blk .null;
@@ -538,7 +596,7 @@ fn arrayElementAnnotation(tree: *const ast.Tree, symbols: SymbolTable, index: as
             const name = memberName(tree, reference.type_name, false) orelse break :blk .null;
             if ((!std.mem.eql(u8, name, "Array") and !std.mem.eql(u8, name, "ReadonlyArray")) or reference.type_arguments == .null) break :blk .null;
             const arguments = tree.extra(tree.data(reference.type_arguments).ts_type_parameter_instantiation.params);
-            break :blk if (arguments.len == 1) arguments[0] else .null;
+            break :blk if (arguments.len == 1) bindings.resolve(tree, symbols, arguments[0]) else .null;
         },
         else => .null,
     };

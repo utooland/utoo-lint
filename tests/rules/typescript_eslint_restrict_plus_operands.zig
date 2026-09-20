@@ -4,6 +4,12 @@ const helpers = @import("../helpers.zig");
 
 test "calls array elements and compound additions retain any operands" {
     const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "type Reader<T>=()=>T; declare const read:Reader<any>; const result=read()+1;", .count = 1 },
+        .{ .source = "type Values<T>=T[]; function f(x:Values<any>){return x[0]+1;}", .count = 1 },
+        .{ .source = "type Reader<T=any>=()=>T; declare const read:Reader; const result=read()+1;", .count = 1 },
+        .{ .source = "type Reader<T>=()=>T; type Outer<U>=Reader<U>; declare const read:Outer<any>; const result=read()+1;", .count = 1 },
+        .{ .source = "type Values<T>=ReadonlyArray<T>; type Outer<U>=Values<U>; function f(x:Outer<any>){return x[0]+1;}", .count = 1 },
+        .{ .source = "type Values<T=number>=T[]; function f(x:Values){return x[0]+1;}", .count = 0 },
         .{ .source = "type Reader<T extends any>=()=>T; declare const read:Reader<number>; const result=read()+1;", .count = 0 },
         .{ .source = "type Values<T extends any>=T[]; function f(x:Values<number>){return x[0]+1;}", .count = 0 },
         .{ .source = "function read<T,U=any>(x:T,y:U):U{return y;} const result=read<number>(1,2)+1;", .count = 1 },
