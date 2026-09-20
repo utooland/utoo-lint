@@ -1,0 +1,31 @@
+---
+fixture: "tests/snapshots/specs/typescript-eslint/restrict-plus-operands/any-call-chain.ts"
+rule: "@typescript-eslint/restrict-plus-operands"
+---
+
+# Input
+
+```ts
+export function dynamic(items: any) { return items.map(value => value).slice(0).map((value, index) => index + 1); }
+export function typed(items: number[]) { return items.map(value => value).slice(0).map((value, index) => index + 1); }
+```
+
+# Diagnostics
+
+count: 1
+
+## Diagnostic 1
+
+- rule: "@typescript-eslint/restrict-plus-operands"
+- severity: "warning"
+- message: "Invalid operand for a '+' operation. Operands must each be a number, string, or bigint. Got `any`."
+- byte span: 102..111
+- start: 1:103
+- end: 1:112
+- source: "index + 1"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0
