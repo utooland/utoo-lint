@@ -283,3 +283,27 @@ test "fallback destructuring records used runtime shape fields" {
         try std.testing.expectEqual(case.count == 2, hasMessage(result, "'data.name' PropType is defined but prop is never used"));
     }
 }
+
+test "JSX spreads forward props and aliases without marking unrelated props used" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "interface Props {value:string;other:number} function Example(props:Props) { const {other}=props; return <Child {...props} other={other}/>; }", .count = 0 },
+        .{ .source = "function Example(props:{value:string}) { const alias=props; return <Child {...alias}/>; }", .count = 0 },
+        .{ .source = "function Example({other,...rest}:{value:string;other:number}) { return <Child {...rest} other={other}/>; }", .count = 0 },
+        .{ .source = "function Example(props:{value:string}) { function inner(props) { return <Child {...props}/>; } return <Child/>; }", .count = 1 },
+        .{ .source = "function Example(props:{value:string}) { const alias={}; return <Child {...alias}/>; }", .count = 1 },
+        .{ .source = "function Example(props:{value:string}) { props={value:''}; return <Child {...props}/>; }", .count = 1 },
+        .{ .source = "function Example(props:{value:string}) { return <Child value={props.value}/>; }", .count = 0 },
+        .{ .source = "function Example(props:{value:string}) { return <Child/>; } function Other(props:{other:string}) { return <Child {...props}/>; }", .count = 1 },
+    };
+    for (cases) |case| {
+        var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.tsx", noUnusedPropTypesOnly());
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(case.count, helpers.countRule(result, lint.rules.react_no_unused_prop_types.id));
+    }
+    var options = noUnusedPropTypesOnly();
+    options.react_no_unused_prop_types_skip_shape_props = false;
+    var result = try lint.lintSource(std.testing.allocator, "function Example(props) { return <Child {...props.data}/>; } Example.propTypes={data:PropTypes.shape({name:PropTypes.string}),other:PropTypes.string};", "fixture.jsx", options);
+    defer result.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 1), helpers.countRule(result, lint.rules.react_no_unused_prop_types.id));
+    try std.testing.expect(hasMessage(result, "'other' PropType is defined but prop is never used"));
+}

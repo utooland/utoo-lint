@@ -46,6 +46,7 @@ pub const ComponentInfo = struct {
     class_nodes: std.ArrayList(ast.NodeIndex) = .empty,
     declared_props: std.ArrayList(DeclaredProp) = .empty,
     used_props: std.ArrayList(UsedProp) = .empty,
+    forwarded_props: std.ArrayList([]const u8) = .empty,
 
     fn deinit(self: *ComponentInfo, allocator: Allocator) void {
         self.function_nodes.deinit(allocator);
@@ -58,6 +59,8 @@ pub const ComponentInfo = struct {
             allocator.free(used.name);
         }
         self.used_props.deinit(allocator);
+        for (self.forwarded_props.items) |path| allocator.free(path);
+        self.forwarded_props.deinit(allocator);
     }
 };
 
@@ -787,6 +790,16 @@ const UsageVisitor = struct {
         return .proceed;
     }
 
+    pub fn enter_jsx_spread_attribute(self: *UsageVisitor, spread: ast.JSXSpreadAttribute, _: ast.NodeIndex, ctx: *traverser.basic.Ctx) Allocator.Error!traverser.Action {
+        const component_index = self.currentComponent() orelse return .proceed;
+        var buffer: [max_prop_depth][]const u8 = undefined;
+        const path = self.propPath(ctx.tree, spread.argument, &buffer) orelse return .proceed;
+        const name = try joinParts(self.allocator, path);
+        errdefer self.allocator.free(name);
+        try self.state.components.items[component_index].forwarded_props.append(self.allocator, name);
+        return .proceed;
+    }
+
     pub fn enter_variable_declarator(
         self: *UsageVisitor,
         declarator: ast.VariableDeclarator,
@@ -854,6 +867,7 @@ fn collectPatternUsage(
     pattern_index: ast.NodeIndex,
     prefix: []const []const u8,
 ) Allocator.Error!void {
+    if (pattern_index == .null) return;
     const binding = unwrapAssignmentPattern(tree, pattern_index);
     if (binding == .null) return;
     const pattern = switch (tree.data(binding)) {
@@ -862,10 +876,12 @@ fn collectPatternUsage(
             try state.aliases.put(allocator, symbol, PropPath.init(prefix));
             return;
         },
+        .binding_rest_element => |rest| return collectPatternUsage(allocator, tree, state, component, rest.argument, prefix),
         .object_pattern => |pattern| pattern,
         else => return,
     };
 
+    try collectPatternUsage(allocator, tree, state, component, pattern.rest, prefix);
     for (tree.extra(pattern.properties)) |property_index| {
         const property = switch (tree.data(property_index)) {
             .binding_property => |property| property,
