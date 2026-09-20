@@ -4170,3 +4170,24 @@ test("React Compiler set-state-in-render resolves CommonJS and indirect values t
     assert.ok(diagnostics.every((item) => item.ruleId === ruleId));
   }
 });
+
+test("react/no-unknown-property previews and applies safe attribute renames", (t) => {
+  const project = createProject(t);
+  write(join(project, "utlint.config.json"), JSON.stringify({ rules: { "react/no-unknown-property": "error" } }));
+  const source = "export const view=<div class='example'/>;\n";
+  const expected = "export const view=<div className='example'/>;\n";
+  const sourcePath = write(join(project, "example.tsx"), source);
+  const options = { cwd: project, binary: testBinary(), encoding: "utf8" };
+  for (const execute of [runCli, commonJSRunCli]) {
+    const dryRun = execute(["--fix-dry-run", "--json", sourcePath], options);
+    assert.equal(dryRun.status, 0, dryRun.stderr);
+    const report = JSON.parse(dryRun.stdout);
+    assert.equal(report.outputs.length, 1);
+    assert.equal(report.outputs[0].output, expected);
+    assert.equal(readFileSync(sourcePath, "utf8"), source);
+    const fixed = execute(["--fix", "--json", sourcePath], options);
+    assert.equal(fixed.status, 0, fixed.stderr);
+    assert.equal(readFileSync(sourcePath, "utf8"), expected);
+    writeFileSync(sourcePath, source);
+  }
+});

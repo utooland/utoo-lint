@@ -157,3 +157,71 @@ fn hasMessage(result: lint.Result, expected: []const u8) bool {
     }
     return false;
 }
+
+test "autofixes DOM property names while preserving values and surrounding source" {
+    const cases = [_]struct { source: []const u8, expected: []const u8 }{
+        .{ .source = "export const view=<div class='example'/>;", .expected = "export const view=<div className='example'/>;" },
+        .{ .source = "const view=<div /* before */ class /* after */ = {name} />;", .expected = "const view=<div /* before */ className /* after */ = {name} />;" },
+        .{ .source = "const view=<label for=\"field\" tabindex={0} />;", .expected = "const view=<label htmlFor=\"field\" tabIndex={0} />;" },
+        .{ .source = "const view=<svg xlink:href='#icon' stroke-width={2} />;", .expected = "const view=<svg xlinkHref='#icon' strokeWidth={2} />;" },
+        .{ .source = "const view=<div {...props} class={name} />;", .expected = "const view=<div {...props} className={name} />;" },
+    };
+    var options = lint.Options.allDisabled();
+    options.react_no_unknown_property = true;
+    for (cases) |case| {
+        var result = try lint.lintSourceAndFix(std.testing.allocator, case.source, "fixture.tsx", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expect(result.fixed);
+        try std.testing.expectEqualStrings(case.expected, result.output);
+        try std.testing.expectEqual(@as(usize, 0), result.result.diagnostics.len);
+    }
+}
+
+test "refuses property renames that create collisions or invalid properties" {
+    const cases = [_][]const u8{
+        "const view=<div class='a' className='b' />;",
+        "const view=<div className='b' class='a' />;",
+        "const view=<div class='a' class='b' />;",
+        "const view=<div class='a' classname='b' />;",
+        "const view=<svg xlink:href='#a' xlinkHref='#b' />;",
+        "const view=<div viewbox='0 0 1 1' />;",
+        "const view=<div unknownProp='x' />;",
+    };
+    var options = lint.Options.allDisabled();
+    options.react_no_unknown_property = true;
+    for (cases) |source| {
+        var result = try lint.lintSourceAndFix(std.testing.allocator, source, "fixture.tsx", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expect(!result.fixed);
+        try std.testing.expectEqualStrings(source, result.output);
+        try std.testing.expect(result.result.diagnostics.len > 0);
+        for (result.result.diagnostics) |diagnostic| try std.testing.expectEqual(@as(usize, 0), diagnostic.fixes.len);
+    }
+}
+
+test "suppressed and ignored unknown properties do not produce fixes" {
+    const cases = [_][]const u8{
+        "// eslint-disable-next-line react/no-unknown-property\nconst view=<div class='a' />;",
+        "// utlint-ignore react/no-unknown-property: intentional\nconst view=<div class='a' />;",
+        "const view=<Button class='a' />;",
+        "const view=<my-widget class='a' />;",
+        "const view=<div is='my-widget' class='a' />;",
+    };
+    var options = lint.Options.allDisabled();
+    options.react_no_unknown_property = true;
+    for (cases) |source| {
+        var result = try lint.lintSourceAndFix(std.testing.allocator, source, "fixture.tsx", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expect(!result.fixed);
+        try std.testing.expectEqualStrings(source, result.output);
+        try std.testing.expectEqual(@as(usize, 0), result.result.diagnostics.len);
+    }
+    var config = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, "[\"error\",{\"ignore\":[\"class\"]}]", .{});
+    defer config.deinit();
+    try options.setByRuleConfigValue("react/no-unknown-property", config.value);
+    const source = "const view=<div class='a' />;";
+    var result = try lint.lintSourceAndFix(std.testing.allocator, source, "fixture.tsx", options);
+    defer result.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings(source, result.output);
+    try std.testing.expectEqual(@as(usize, 0), result.result.diagnostics.len);
+}

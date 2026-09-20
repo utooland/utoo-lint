@@ -1,0 +1,100 @@
+---
+fixture: "tests/snapshots/specs/react/no-unknown-property/aliases.jsx"
+rule: "react/no-unknown-property"
+---
+
+# Input
+
+```jsx
+export const view = <><div class='example' tabindex={0} /><label for='field' /><svg xlink:href='#icon' /></>;
+```
+
+# Diagnostics
+
+count: 4
+
+## Diagnostic 1
+
+- rule: "react/no-unknown-property"
+- severity: "error"
+- message: "Unknown property 'class' found, use 'className' instead"
+- byte span: 27..42
+- start: 1:28
+- end: 1:43
+- source: "class='example'"
+- fixes: 1
+
+### Fix 1.1
+
+- byte span: 27..32
+- start: 1:28
+- end: 1:33
+- source: "class"
+- replacement: "className"
+
+## Diagnostic 2
+
+- rule: "react/no-unknown-property"
+- severity: "error"
+- message: "Unknown property 'tabindex' found, use 'tabIndex' instead"
+- byte span: 43..55
+- start: 1:44
+- end: 1:56
+- source: "tabindex={0}"
+- fixes: 1
+
+### Fix 2.1
+
+- byte span: 43..51
+- start: 1:44
+- end: 1:52
+- source: "tabindex"
+- replacement: "tabIndex"
+
+## Diagnostic 3
+
+- rule: "react/no-unknown-property"
+- severity: "error"
+- message: "Unknown property 'for' found, use 'htmlFor' instead"
+- byte span: 65..76
+- start: 1:66
+- end: 1:77
+- source: "for='field'"
+- fixes: 1
+
+### Fix 3.1
+
+- byte span: 65..68
+- start: 1:66
+- end: 1:69
+- source: "for"
+- replacement: "htmlFor"
+
+## Diagnostic 4
+
+- rule: "react/no-unknown-property"
+- severity: "error"
+- message: "Unknown property 'xlink:href' found, use 'xlinkHref' instead"
+- byte span: 84..102
+- start: 1:85
+- end: 1:103
+- source: "xlink:href='#icon'"
+- fixes: 1
+
+### Fix 4.1
+
+- byte span: 84..94
+- start: 1:85
+- end: 1:95
+- source: "xlink:href"
+- replacement: "xlinkHref"
+
+# First fix pass
+
+- fixed: true
+- applied diagnostics: 4
+- remaining diagnostics: 0
+
+```jsx
+export const view = <><div className='example' tabIndex={0} /><label htmlFor='field' /><svg xlinkHref='#icon' /></>;
+```

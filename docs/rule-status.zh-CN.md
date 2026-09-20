@@ -349,7 +349,7 @@
 | [`react/no-this-in-sfc`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/no-this-in-sfc.md) | 已实现 |
 | [`react/no-typos`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/no-typos.md) | 已实现 |
 | [`react/no-unescaped-entities`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/no-unescaped-entities.md) | 支持 `forbid` 配置 |
-| [`react/no-unknown-property`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/no-unknown-property.md) | 支持 `ignore` 和 `requireDataLowercase` 配置 |
+| [`react/no-unknown-property`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/no-unknown-property.md) | 支持 `ignore` 和 `requireDataLowercase` 配置；自动修复已知 DOM 属性别名和大小写，避免生成重复属性 |
 | [`react/no-unused-prop-types`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/no-unused-prop-types.md) | 支持 `skipShapeProps`、`ignore` 和 `customValidators` 配置 |
 | [`react/no-unused-state`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/no-unused-state.md) | 已实现 |
 | [`react/no-will-update-set-state`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/no-will-update-set-state.md) | 已实现 |

@@ -334,15 +334,13 @@ pub fn check(
     const standard_name = getStandardName(name);
     if (standard_name) |standard| {
         if (std.mem.eql(u8, standard, name)) return;
-        try core.addDiagnosticFmt(
-            allocator,
-            diagnostics,
-            .@"error",
-            id,
-            tree.span(index),
-            "Unknown property '{s}' found, use '{s}' instead",
-            .{ actual_name, standard },
-        );
+        const message = try std.fmt.allocPrint(allocator, "Unknown property '{s}' found, use '{s}' instead", .{ actual_name, standard });
+        defer allocator.free(message);
+        const fix = core.Fix{ .span = tree.span(attribute.name), .replacement = standard };
+        const name_span = tree.span(attribute.name);
+        const can_fix = std.mem.eql(u8, tree.source[name_span.start..name_span.end], actual_name) and
+            try canRenameAttribute(allocator, tree, opening, index, tag_name, standard);
+        try core.addDiagnosticWithFixes(allocator, diagnostics, .@"error", id, message, tree.span(index), if (can_fix) &.{fix} else &.{});
         return;
     }
 
@@ -355,6 +353,25 @@ pub fn check(
         "Unknown property '{s}' found",
         .{actual_name},
     );
+}
+
+// Refuse collisions with both existing properties and other aliases that could
+// be renamed in the same fix pass.
+fn canRenameAttribute(allocator: Allocator, tree: *const ast.Tree, opening: ast.JSXOpeningElement, index: ast.NodeIndex, tag_name: []const u8, replacement: []const u8) Allocator.Error!bool {
+    if (allowedTagsFor(replacement)) |tags| if (!contains(tags, tag_name)) return false;
+    for (tree.extra(opening.attributes)) |other_index| {
+        if (other_index == index) continue;
+        const other = switch (tree.data(other_index)) {
+            .jsx_attribute => |value| value,
+            else => continue,
+        };
+        const text = try jsxNameText(allocator, tree, other.name) orelse continue;
+        defer text.deinit(allocator);
+        const normalized = normalizeAttributeCase(text.value);
+        const target = getStandardName(normalized) orelse normalized;
+        if (std.mem.eql(u8, target, replacement)) return false;
+    }
+    return true;
 }
 
 fn jsxOpeningElement(tree: *const ast.Tree, parent_index: ?ast.NodeIndex) ?ast.JSXOpeningElement {
