@@ -409,6 +409,9 @@ test "any call results propagate through chained calls without erasing typed con
 
 test "destructured any sources retain their type through defaults and callback chains" {
     const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "declare const source: {value:number}; declare const fallback:any; const {value}=source||fallback; value+1;", .count = 0 },
+        .{ .source = "declare const source: {value:number}; declare const fallback:any; const {value}=source??fallback; value+1;", .count = 0 },
+        .{ .source = "declare const source: {value:number}; declare const fallback:any; (source||fallback).value+1;", .count = 0 },
         .{ .source = "function f(input:any){const {value}=input;return value+1;}", .count = 1 },
         .{ .source = "function f(input:any){const {items}=input;return items.map((v,i)=>i+1);}", .count = 1 },
         .{ .source = "function f(input:{items:any}){const {items}=input;return items.map((v,i)=>i+1);}", .count = 1 },

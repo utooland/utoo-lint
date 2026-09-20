@@ -125,6 +125,9 @@ fn inferExpressionTypeAtDepth(tree: *const ast.Tree, symbols: SymbolTable, index
     if (index == .null or depth >= 32) return .unknown_expression;
 
     return switch (tree.data(index)) {
+        // A right-side any may be unreachable (typed objects short-circuit ||/??).
+        // Preserve known any receivers; keep other logical unions conservative.
+        .logical_expression => |logical| if (inferExpressionTypeAtDepth(tree, symbols, logical.left, depth + 1) == .any) .any else .unknown_expression,
         .numeric_literal => .number,
         .string_literal, .template_literal => .string,
         .bigint_literal => .bigint,
@@ -139,7 +142,6 @@ fn inferExpressionTypeAtDepth(tree: *const ast.Tree, symbols: SymbolTable, index
         .chain_expression => |expression| inferExpressionTypeAtDepth(tree, symbols, expression.expression, depth + 1),
         .member_expression => |member| memberType(tree, symbols, member, depth + 1),
         .call_expression => |call| if (inferExpressionTypeAtDepth(tree, symbols, call.callee, depth + 1) == .any) .any else .unknown_expression,
-        .logical_expression => |logical| if (inferExpressionTypeAtDepth(tree, symbols, logical.left, depth + 1) == .any or inferExpressionTypeAtDepth(tree, symbols, logical.right, depth + 1) == .any) .any else .unknown_expression,
         .binary_expression => |binary| if (binary.operator == .add) inferBinaryResultType(tree, symbols, binary, depth + 1) else .unknown_expression,
         else => .unknown_expression,
     };
