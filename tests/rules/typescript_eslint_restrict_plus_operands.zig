@@ -339,3 +339,25 @@ test "typeof guards narrow operands only on the corresponding live path" {
         try std.testing.expectEqual(case.count, count);
     }
 }
+
+test "bigint addition accepts matching operands and rejects mixed numeric types" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "export function example(a:bigint,b:bigint){return a+b;}", .count = 0 },
+        .{ .source = "export const result=1n+2n+3n;", .count = 0 },
+        .{ .source = "export function example(a:bigint,b:number){return a+b;}", .count = 1 },
+        .{ .source = "export const result=1+2n;", .count = 1 },
+        .{ .source = "export const result=1n+2;", .count = 1 },
+        .{ .source = "export const result=1+2;", .count = 0 },
+    };
+    for ([_]bool{ false, true }) |allow_number_and_string| {
+        var options = lint.Options.allDisabled();
+        options.typescript_eslint_restrict_plus_operands = true;
+        options.typescript_eslint_restrict_plus_operands_allow_number_and_string = allow_number_and_string;
+        options.typescript_eslint_restrict_plus_operands_allow_any = false;
+        for (cases) |case| {
+            var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.ts", options);
+            defer result.deinit(std.testing.allocator);
+            try std.testing.expectEqual(case.count, helpers.countRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id));
+        }
+    }
+}
