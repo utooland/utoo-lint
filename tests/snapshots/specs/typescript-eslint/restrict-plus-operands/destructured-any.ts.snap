@@ -1,0 +1,42 @@
+---
+fixture: "tests/snapshots/specs/typescript-eslint/restrict-plus-operands/destructured-any.ts"
+rule: "@typescript-eslint/restrict-plus-operands"
+---
+
+# Input
+
+```ts
+function f(input:any){const {value}=input;return value+1;}
+function g(input:any){const {items=[]}=input;return items.map((v,i)=>i+1);}
+```
+
+# Diagnostics
+
+count: 2
+
+## Diagnostic 1
+
+- rule: "@typescript-eslint/restrict-plus-operands"
+- severity: "warning"
+- message: "Invalid operand for a '+' operation. Operands must each be a number, string, or bigint. Got `any`."
+- byte span: 49..56
+- start: 1:50
+- end: 1:57
+- source: "value+1"
+- fixes: 0
+
+## Diagnostic 2
+
+- rule: "@typescript-eslint/restrict-plus-operands"
+- severity: "warning"
+- message: "Invalid operand for a '+' operation. Operands must each be a number, string, or bigint. Got `any`."
+- byte span: 128..131
+- start: 2:70
+- end: 2:73
+- source: "i+1"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

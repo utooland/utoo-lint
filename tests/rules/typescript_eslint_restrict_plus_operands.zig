@@ -406,3 +406,28 @@ test "any call results propagate through chained calls without erasing typed con
         }
     }
 }
+
+test "destructured any sources retain their type through defaults and callback chains" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "function f(input:any){const {value}=input;return value+1;}", .count = 1 },
+        .{ .source = "function f(input:any){const {items}=input;return items.map((v,i)=>i+1);}", .count = 1 },
+        .{ .source = "function f(input:{items:any}){const {items}=input;return items.map((v,i)=>i+1);}", .count = 1 },
+        .{ .source = "function f(input:any){const {items=[]}=input;return items.map((v,i)=>i+1);}", .count = 1 },
+        .{ .source = "function f(input:any){const {items}=input||{};return items.slice(0).map((v,i)=>i+1);}", .count = 1 },
+        .{ .source = "function f(input:any){const {value:renamed}=input??{};return renamed+1;}", .count = 1 },
+        .{ .source = "function f(input:{nested:any}){const {nested:{value}}=input;return value+1;}", .count = 1 },
+        .{ .source = "function f(input:{value:number}){const {value}=input;return value+1;}", .count = 0 },
+        .{ .source = "function f(input:{items:number[]}){const {items}=input;return items.map((v,i)=>i+1);}", .count = 0 },
+        .{ .source = "function f(input:{value:string}){const {value}=input;return value+1;}", .count = 1 },
+        .{ .source = "function f(input:any){const {value}=input;return typeof value === \"number\" ? value+1 : 0;}", .count = 0 },
+        .{ .source = "function f(input:any){const {value}=input;return (value as number)+1;}", .count = 0 },
+    };
+    for (cases) |case| {
+        var options = lint.Options.allDisabled();
+        options.typescript_eslint_restrict_plus_operands = true;
+        options.typescript_eslint_restrict_plus_operands_allow_any = false;
+        var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.ts", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(case.count, helpers.countRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id));
+    }
+}
