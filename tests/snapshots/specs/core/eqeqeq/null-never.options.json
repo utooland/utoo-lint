@@ -1,0 +1,1 @@
+{"expect":"diagnostics","diagnostic_count":3,"fixes":"any","rule_options":["error","always",{"null":"never"}]}

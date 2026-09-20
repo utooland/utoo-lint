@@ -18,6 +18,7 @@ pub const Severity = enum {
 
 pub const EqeqeqStyle = enum {
     strict,
+    never_null,
     allow_null,
     smart,
 };
@@ -4421,7 +4422,22 @@ pub const Options = struct {
             .string => |style| style,
             else => return error.UnsupportedRuleConfigValue,
         };
-        if (std.mem.eql(u8, style, "always")) return .strict;
+        if (std.mem.eql(u8, style, "always")) {
+            if (items.len < 3) return .strict;
+            const object = switch (items[2]) {
+                .object => |object| object,
+                else => return error.UnsupportedRuleConfigValue,
+            };
+            const null_value = object.get("null") orelse return .strict;
+            const null_style = switch (null_value) {
+                .string => |name| name,
+                else => return error.UnsupportedRuleConfigValue,
+            };
+            if (std.mem.eql(u8, null_style, "ignore")) return .allow_null;
+            if (std.mem.eql(u8, null_style, "never")) return .never_null;
+            if (std.mem.eql(u8, null_style, "always")) return .strict;
+            return error.UnsupportedRuleConfigValue;
+        }
         if (std.mem.eql(u8, style, "allow-null")) return .allow_null;
         if (std.mem.eql(u8, style, "smart")) return .smart;
         return error.UnsupportedRuleConfigValue;

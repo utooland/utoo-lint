@@ -23,7 +23,7 @@
 | [`default-param-last`](https://eslint.org/docs/latest/rules/default-param-last) | 已实现 |
 | [`dot-notation`](https://eslint.org/docs/latest/rules/dot-notation) | 支持自动修复、`allowKeywords` 及常见的 `allowPattern` 配置 |
 | [`eol-last`](https://eslint.org/docs/latest/rules/eol-last) | 支持 `always`、`never`、`unix` 和 `windows` 配置，并支持自动修复 |
-| [`eqeqeq`](https://eslint.org/docs/latest/rules/eqeqeq) | 支持 `always`、`allow-null` 和 `smart` 配置，并提供安全的自动修复 |
+| [`eqeqeq`](https://eslint.org/docs/latest/rules/eqeqeq) | 支持 `always`、`allow-null`、`smart` 及 `null: always/ignore/never` 配置，并提供安全的自动修复 |
 | [`for-direction`](https://eslint.org/docs/latest/rules/for-direction) | 已实现 |
 | [`func-name-matching`](https://eslint.org/docs/latest/rules/func-name-matching) | 支持 `always`、`never`、`includeCommonJSModuleExports` 和 `considerPropertyDescriptor` 配置 |
 | [`func-names`](https://eslint.org/docs/latest/rules/func-names) | 支持 `always`、`as-needed`、`never` 和 `generators` 配置 |

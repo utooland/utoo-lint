@@ -24,7 +24,7 @@ instead of being rewritten.
 | [`default-param-last`](https://eslint.org/docs/latest/rules/default-param-last) | Implemented |
 | [`dot-notation`](https://eslint.org/docs/latest/rules/dot-notation) | Supports autofix plus `allowKeywords` and common `allowPattern` configuration |
 | [`eol-last`](https://eslint.org/docs/latest/rules/eol-last) | Supports `always`, `never`, `unix`, and `windows` configuration with autofix |
-| [`eqeqeq`](https://eslint.org/docs/latest/rules/eqeqeq) | Supports `always`, `allow-null`, and `smart` configuration with safe autofix |
+| [`eqeqeq`](https://eslint.org/docs/latest/rules/eqeqeq) | Supports `always`, `allow-null`, `smart`, and `null: always/ignore/never` configuration with safe autofix |
 | [`for-direction`](https://eslint.org/docs/latest/rules/for-direction) | Implemented |
 | [`func-name-matching`](https://eslint.org/docs/latest/rules/func-name-matching) | Supports `always`, `never`, `includeCommonJSModuleExports`, and `considerPropertyDescriptor` configuration |
 | [`func-names`](https://eslint.org/docs/latest/rules/func-names) | Supports `always`, `as-needed`, `never`, and `generators` configuration |

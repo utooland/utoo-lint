@@ -29,13 +29,16 @@ pub fn checkWithOptions(
     index: ast.NodeIndex,
     options: Options,
 ) Allocator.Error!void {
-    if (expression.operator != .equal and expression.operator != .not_equal) return;
-    if (options.style == .allow_null and
-        (isNullLiteral(tree, expression.left) or isNullLiteral(tree, expression.right)))
-    {
-        return;
+    const null_check = isNullLiteral(tree, expression.left) or isNullLiteral(tree, expression.right);
+    const inverse = null_check and options.style == .never_null;
+    if (inverse) {
+        if (expression.operator != .strict_equal and expression.operator != .strict_not_equal) return;
+    } else {
+        if (expression.operator != .equal and expression.operator != .not_equal) return;
+        if (options.style == .allow_null and null_check) return;
+        if (options.style == .smart and isSmartException(tree, expression)) return;
     }
-    if (options.style == .smart and isSmartException(tree, expression)) return;
+    const message = if (inverse) "Use loose equality operators when comparing with null." else "Use strict equality operators.";
 
     if (canAutofix(tree, expression)) {
         if (operatorSpan(tree, expression)) |fix_span| {
@@ -44,11 +47,17 @@ pub fn checkWithOptions(
                 diagnostics,
                 .warning,
                 id,
-                "Use strict equality operators.",
+                message,
                 tree.span(index),
                 .{
                     .span = fix_span,
-                    .replacement = if (expression.operator == .equal) "===" else "!==",
+                    .replacement = switch (expression.operator) {
+                        .equal => "===",
+                        .not_equal => "!==",
+                        .strict_equal => "==",
+                        .strict_not_equal => "!=",
+                        else => unreachable,
+                    },
                 },
             );
             return;
@@ -60,7 +69,7 @@ pub fn checkWithOptions(
         diagnostics,
         .warning,
         id,
-        "Use strict equality operators.",
+        message,
         tree.span(index),
     );
 }
@@ -73,7 +82,13 @@ fn canAutofix(tree: *const ast.Tree, expression: ast.BinaryExpression) bool {
 }
 
 fn operatorSpan(tree: *const ast.Tree, expression: ast.BinaryExpression) ?ast.Span {
-    const operator = if (expression.operator == .equal) "==" else "!=";
+    const operator = switch (expression.operator) {
+        .equal => "==",
+        .not_equal => "!=",
+        .strict_equal => "===",
+        .strict_not_equal => "!==",
+        else => return null,
+    };
     var cursor: usize = @intCast(tree.span(expression.left).end);
     const end: usize = @intCast(tree.span(expression.right).start);
 
