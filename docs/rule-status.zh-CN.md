@@ -354,7 +354,7 @@
 | [`react/no-unused-state`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/no-unused-state.md) | 已实现 |
 | [`react/no-will-update-set-state`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/no-will-update-set-state.md) | 已实现 |
 | [`react/prefer-es6-class`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/prefer-es6-class.md) | 支持 `always` 和 `never` 配置 |
-| [`react/prop-types`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/prop-types.md) | 支持 `skipUndeclared`、`ignore` 和 `customValidators` 配置 |
+| [`react/prop-types`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/prop-types.md) | 支持 `skipUndeclared`、`ignore` 和 `customValidators` 配置 ；识别 React `forwardRef<Ref, Props>` 泛型及 `memo` 包装 |
 | [`react/require-render-return`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/require-render-return.md) | 已实现 |
 | [`react/self-closing-comp`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/self-closing-comp.md) | 支持 `component` 和 `html` 配置 |
 | [`react/style-prop-object`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/style-prop-object.md) | 已实现 |
