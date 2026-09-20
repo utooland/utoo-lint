@@ -440,4 +440,4 @@ unsupported. See [configuration](configuration.md#react-compiler-related-checks)
 | [`@typescript-eslint/no-wrapper-object-types`](https://typescript-eslint.io/rules/no-wrapper-object-types/) | Implemented |
 | [`@typescript-eslint/prefer-as-const`](https://typescript-eslint.io/rules/prefer-as-const/) | Implemented |
 | [`@typescript-eslint/prefer-namespace-keyword`](https://typescript-eslint.io/rules/prefer-namespace-keyword/) | Implemented |
-| [`@typescript-eslint/restrict-plus-operands`](https://typescript-eslint.io/rules/restrict-plus-operands/) | Supports `allowNumberAndString` configuration for primitive literals and explicit primitive annotations |
+| [`@typescript-eslint/restrict-plus-operands`](https://typescript-eslint.io/rules/restrict-plus-operands/) | Supports `allowNumberAndString`, `allowAny`, and `skipCompoundAssignments`; recognizes primitive annotations, local return signatures, direct generic parameter inference, and array elements |

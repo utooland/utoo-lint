@@ -853,6 +853,7 @@ fn runSemanticBeforeIo(
         try typescript_eslint_restrict_plus_operands.run(allocator, diagnostics, tree, semantic_result.symbol_table, .{
             .allow_number_and_string = options.typescript_eslint_restrict_plus_operands_allow_number_and_string,
             .allow_any = options.typescript_eslint_restrict_plus_operands_allow_any,
+            .skip_compound_assignments = options.typescript_eslint_restrict_plus_operands_skip_compound_assignments,
         });
     }
     if (options.no_invalid_this) {
