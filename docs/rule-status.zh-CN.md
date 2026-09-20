@@ -320,7 +320,7 @@
 | [`react/default-props-match-prop-types`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/default-props-match-prop-types.md) | 支持 `allowRequiredDefaults` 配置 |
 | [`react/display-name`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/display-name.md) | 支持 `checkContextObjects` 和 `ignoreTranspilerName` 配置 |
 | [`react/forbid-prop-types`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/forbid-prop-types.md) | 支持 `forbid`、`checkContextTypes` 和 `checkChildContextTypes` 配置 |
-| [`react/jsx-boolean-value`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-boolean-value.md) | 已实现 `never` 和 `always` 配置 |
+| [`react/jsx-boolean-value`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-boolean-value.md) | 已实现 `never` 和 `always` 配置 ；支持安全自动修复，保留注释 |
 | [`react/jsx-filename-extension`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-filename-extension.md) | 支持 `extensions` 和 `allow` 配置 |
 | [`react/jsx-key`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-key.md) | 支持 `checkKeyMustBeforeSpread`、`checkFragmentShorthand` 和 `warnOnDuplicates` 配置 |
 | [`react/jsx-no-bind`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-no-bind.md) | 支持 `allowArrowFunctions`、`allowFunctions`、`allowBind`、`ignoreRefs` 和 `ignoreDOMComponents` 配置 |
@@ -409,7 +409,7 @@
 | [`@typescript-eslint/no-extra-semi`](https://typescript-eslint.io/rules/no-extra-semi/) | 已实现并支持自动修复 |
 | [`@typescript-eslint/no-extra-non-null-assertion`](https://typescript-eslint.io/rules/no-extra-non-null-assertion/) | 已实现 |
 | [`@typescript-eslint/no-explicit-any`](https://typescript-eslint.io/rules/no-explicit-any/) | 按配置启用；支持 `ignoreRestArgs`、`fixToUnknown` 及替换为 `unknown` 或 `never` 的编辑器建议 |
-| [`@typescript-eslint/no-inferrable-types`](https://typescript-eslint.io/rules/no-inferrable-types/) | 支持 `ignoreParameters` 和 `ignoreProperties` 配置 |
+| [`@typescript-eslint/no-inferrable-types`](https://typescript-eslint.io/rules/no-inferrable-types/) | 支持 `ignoreParameters` 和 `ignoreProperties` 配置 ；支持安全自动修复，保留注释 |
 | [`@typescript-eslint/no-invalid-void-type`](https://typescript-eslint.io/rules/no-invalid-void-type/) | 支持 `allowAsThisParameter`，以及布尔值/字符串列表形式的 `allowInGenericTypeArguments` 配置 |
 | [`@typescript-eslint/no-loop-func`](https://typescript-eslint.io/rules/no-loop-func/) | 已实现 TypeScript 循环捕获检查；禁用时回退到核心 `no-loop-func` |
 | [`@typescript-eslint/no-loss-of-precision`](https://typescript-eslint.io/rules/no-loss-of-precision/) | 已实现 |
@@ -434,6 +434,6 @@
 | [`@typescript-eslint/no-use-before-define`](https://typescript-eslint.io/rules/no-use-before-define/) | 支持 `functions`、`classes`、`variables`、`typedefs`、`enums`、`allowNamedExports` 和 `ignoreTypeReferences` 配置 |
 | [`@typescript-eslint/no-var-requires`](https://typescript-eslint.io/rules/no-var-requires/) | 已实现 |
 | [`@typescript-eslint/no-wrapper-object-types`](https://typescript-eslint.io/rules/no-wrapper-object-types/) | 已实现 |
-| [`@typescript-eslint/prefer-as-const`](https://typescript-eslint.io/rules/prefer-as-const/) | 已实现 |
+| [`@typescript-eslint/prefer-as-const`](https://typescript-eslint.io/rules/prefer-as-const/) | 已实现 ；支持安全自动修复，保留注释 |
 | [`@typescript-eslint/prefer-namespace-keyword`](https://typescript-eslint.io/rules/prefer-namespace-keyword/) | 已实现 |
 | [`@typescript-eslint/restrict-plus-operands`](https://typescript-eslint.io/rules/restrict-plus-operands/) | 支持 `allowNumberAndString`、`allowAny`、`skipCompoundAssignments`，识别原始类型、局部函数返回类型、直接泛型参数推断和数组元素类型 |

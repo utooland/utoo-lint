@@ -1,0 +1,64 @@
+---
+fixture: "tests/snapshots/specs/typescript-eslint/prefer-as-const/safe.ts"
+rule: "@typescript-eslint/prefer-as-const"
+---
+
+# Input
+
+```ts
+const name = 'value' as 'value';
+const count = <42>42;
+```
+
+# Diagnostics
+
+count: 2
+
+## Diagnostic 1
+
+- rule: "@typescript-eslint/prefer-as-const"
+- severity: "warning"
+- message: "Expected a `const` instead of a literal type assertion."
+- byte span: 24..31
+- start: 1:25
+- end: 1:32
+- source: "'value'"
+- fixes: 1
+
+### Fix 1.1
+
+- byte span: 24..31
+- start: 1:25
+- end: 1:32
+- source: "'value'"
+- replacement: "const"
+
+## Diagnostic 2
+
+- rule: "@typescript-eslint/prefer-as-const"
+- severity: "warning"
+- message: "Expected a `const` instead of a literal type assertion."
+- byte span: 48..50
+- start: 2:16
+- end: 2:18
+- source: "42"
+- fixes: 1
+
+### Fix 2.1
+
+- byte span: 48..50
+- start: 2:16
+- end: 2:18
+- source: "42"
+- replacement: "const"
+
+# First fix pass
+
+- fixed: true
+- applied diagnostics: 2
+- remaining diagnostics: 0
+
+```ts
+const name = 'value' as const;
+const count = <const>42;
+```

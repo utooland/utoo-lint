@@ -29,29 +29,23 @@ pub fn checkWithStyle(
     if (style == .never) {
         if (!isExplicitTrue(tree, attribute.value)) return;
 
-        try core.addDiagnosticFmt(
-            allocator,
-            diagnostics,
-            .@"error",
-            id,
-            tree.span(index),
-            "Value must be omitted for boolean attribute `{s}`",
-            .{name},
-        );
+        const span = ast.Span{ .start = tree.span(attribute.name).end, .end = tree.span(attribute.value).end };
+        const message = try std.fmt.allocPrint(allocator, "Value must be omitted for boolean attribute `{s}`", .{name});
+        defer allocator.free(message);
+        const fix = core.Fix{ .span = span, .replacement = "" };
+        try core.addDiagnosticWithFixes(allocator, diagnostics, .@"error", id, message, tree.span(index), if (hasComments(tree, span)) &.{} else &.{fix});
         return;
     }
 
     if (attribute.value != .null) return;
 
-    try core.addDiagnosticFmt(
-        allocator,
-        diagnostics,
-        .@"error",
-        id,
-        tree.span(index),
-        "Value must be set for boolean attribute `{s}`",
-        .{name},
-    );
+    const end = tree.span(attribute.name).end;
+    const message = try std.fmt.allocPrint(allocator, "Value must be set for boolean attribute `{s}`", .{name});
+    defer allocator.free(message);
+    try core.addDiagnosticWithFix(allocator, diagnostics, .@"error", id, message, tree.span(index), .{
+        .span = .{ .start = end, .end = end },
+        .replacement = "={true}",
+    });
 }
 
 fn attributeName(tree: *const ast.Tree, name_index: ast.NodeIndex) ?[]const u8 {
@@ -73,4 +67,11 @@ fn isExplicitTrue(tree: *const ast.Tree, value_index: ast.NodeIndex) bool {
         .boolean_literal => |literal| literal.value,
         else => false,
     };
+}
+
+fn hasComments(tree: *const ast.Tree, span: ast.Span) bool {
+    for (tree.comments) |comment| {
+        if (comment.span.start < span.end and comment.span.end > span.start) return true;
+    }
+    return false;
 }

@@ -66,7 +66,8 @@ fn compareTypes(
 
     if (!std.mem.eql(u8, value_raw, type_raw)) return;
 
-    try core.addDiagnostic(
+    const fix = core.Fix{ .span = tree.span(type_node), .replacement = "const" };
+    try core.addDiagnosticWithFixes(
         allocator,
         diagnostics,
         .warning,
@@ -76,6 +77,7 @@ fn compareTypes(
         else
             "Expected a `const` assertion instead of a literal type annotation.",
         tree.span(type_node),
+        if (can_fix and tree.data(unwrapParenthesized(tree, value_node)) != .null_literal and !hasComments(tree, tree.span(type_node))) &.{fix} else &.{},
     );
 }
 
@@ -123,4 +125,11 @@ fn unwrapParenthesized(tree: *const ast.Tree, index: ast.NodeIndex) ast.NodeInde
     }
 
     return current;
+}
+
+fn hasComments(tree: *const ast.Tree, span: ast.Span) bool {
+    for (tree.comments) |comment| {
+        if (comment.span.start < span.end and comment.span.end > span.start) return true;
+    }
+    return false;
 }

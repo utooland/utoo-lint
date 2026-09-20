@@ -1,0 +1,20 @@
+---
+fixture: "tests/snapshots/specs/typescript-eslint/prefer-as-const/null.ts"
+rule: "@typescript-eslint/prefer-as-const"
+---
+
+# Input
+
+```ts
+const value = null as null;
+const second = <null>null;
+```
+
+# Diagnostics
+
+count: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

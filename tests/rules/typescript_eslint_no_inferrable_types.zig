@@ -110,3 +110,20 @@ test "can disable @typescript-eslint/no-inferrable-types" {
 
     try std.testing.expect(!helpers.hasRule(result, lint.rules.typescript_eslint_no_inferrable_types.id));
 }
+
+test "safe autofixes preserve comments and suppression" {
+    const cases = [_]struct { source: []const u8, output: []const u8 }{
+        .{ .source = "const x: number = 1; function f(a: string = \"hi\") { return a; } class C { x!: number = 1; }", .output = "const x = 1; function f(a = \"hi\") { return a; } class C { x = 1; }" },
+        .{ .source = "const x: /* keep */ number = 1;", .output = "const x: /* keep */ number = 1;" },
+        .{ .source = "const x /* keep */: number = 1;", .output = "const x /* keep */ = 1;" },
+        .{ .source = "class C { readonly x: number = 1; x?: number = 1; }", .output = "class C { readonly x: number = 1; x?: number = 1; }" },
+        .{ .source = "/* eslint-disable @typescript-eslint/no-inferrable-types */ const x: number = 1;", .output = "/* eslint-disable @typescript-eslint/no-inferrable-types */ const x: number = 1;" },
+    };
+    for (cases) |case| {
+        var options = lint.Options.allDisabled();
+        options.typescript_eslint_no_inferrable_types = true;
+        var result = try lint.lintSourceAndFix(std.testing.allocator, case.source, "fixture.tsx", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqualStrings(case.output, result.output);
+    }
+}

@@ -97,3 +97,18 @@ test "can disable react/jsx-boolean-value" {
 
     try std.testing.expect(!helpers.hasRule(result, lint.rules.react_jsx_boolean_value.id));
 }
+
+test "safe autofixes preserve comments and suppression" {
+    const cases = [_]struct { source: []const u8, output: []const u8 }{
+        .{ .source = "const x = <X disabled = {true} other={false} />;", .output = "const x = <X disabled other={false} />;" },
+        .{ .source = "const x = <X disabled={/* keep */ true} />;", .output = "const x = <X disabled={/* keep */ true} />;" },
+        .{ .source = "/* eslint-disable react/jsx-boolean-value */ const x = <X disabled={true} />;", .output = "/* eslint-disable react/jsx-boolean-value */ const x = <X disabled={true} />;" },
+    };
+    for (cases) |case| {
+        var options = lint.Options.allDisabled();
+        options.react_jsx_boolean_value = true;
+        var result = try lint.lintSourceAndFix(std.testing.allocator, case.source, "fixture.tsx", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqualStrings(case.output, result.output);
+    }
+}

@@ -321,7 +321,7 @@ instead of being rewritten.
 | [`react/default-props-match-prop-types`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/default-props-match-prop-types.md) | Supports `allowRequiredDefaults` configuration |
 | [`react/display-name`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/display-name.md) | Supports `checkContextObjects` and `ignoreTranspilerName` configuration |
 | [`react/forbid-prop-types`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/forbid-prop-types.md) | Supports `forbid`, `checkContextTypes`, and `checkChildContextTypes` configuration |
-| [`react/jsx-boolean-value`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-boolean-value.md) | Implemented for `never` and `always` configurations |
+| [`react/jsx-boolean-value`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-boolean-value.md) | Implemented for `never` and `always` configurations ; supports safe autofixes with comment preservation |
 | [`react/jsx-filename-extension`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-filename-extension.md) | Supports `extensions` and `allow` configuration |
 | [`react/jsx-key`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-key.md) | Supports `checkKeyMustBeforeSpread`, `checkFragmentShorthand`, and `warnOnDuplicates` configuration |
 | [`react/jsx-no-bind`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-no-bind.md) | Supports `allowArrowFunctions`, `allowFunctions`, `allowBind`, `ignoreRefs`, and `ignoreDOMComponents` configuration |
@@ -413,7 +413,7 @@ unsupported. See [configuration](configuration.md#react-compiler-related-checks)
 | [`@typescript-eslint/no-extra-semi`](https://typescript-eslint.io/rules/no-extra-semi/) | Implemented with autofix |
 | [`@typescript-eslint/no-extra-non-null-assertion`](https://typescript-eslint.io/rules/no-extra-non-null-assertion/) | Implemented |
 | [`@typescript-eslint/no-explicit-any`](https://typescript-eslint.io/rules/no-explicit-any/) | Opt-in; supports `ignoreRestArgs`, `fixToUnknown`, and editor suggestions for `unknown` and `never` |
-| [`@typescript-eslint/no-inferrable-types`](https://typescript-eslint.io/rules/no-inferrable-types/) | Supports `ignoreParameters` and `ignoreProperties` configuration |
+| [`@typescript-eslint/no-inferrable-types`](https://typescript-eslint.io/rules/no-inferrable-types/) | Supports `ignoreParameters` and `ignoreProperties` configuration ; supports safe autofixes with comment preservation |
 | [`@typescript-eslint/no-invalid-void-type`](https://typescript-eslint.io/rules/no-invalid-void-type/) | Supports `allowAsThisParameter` and boolean/string-list `allowInGenericTypeArguments` configuration |
 | [`@typescript-eslint/no-loop-func`](https://typescript-eslint.io/rules/no-loop-func/) | Implemented for TypeScript loop captures with core `no-loop-func` fallback when disabled |
 | [`@typescript-eslint/no-loss-of-precision`](https://typescript-eslint.io/rules/no-loss-of-precision/) | Implemented |
@@ -438,6 +438,6 @@ unsupported. See [configuration](configuration.md#react-compiler-related-checks)
 | [`@typescript-eslint/no-use-before-define`](https://typescript-eslint.io/rules/no-use-before-define/) | Supports `functions`, `classes`, `variables`, `typedefs`, `enums`, `allowNamedExports`, and `ignoreTypeReferences` configuration |
 | [`@typescript-eslint/no-var-requires`](https://typescript-eslint.io/rules/no-var-requires/) | Implemented |
 | [`@typescript-eslint/no-wrapper-object-types`](https://typescript-eslint.io/rules/no-wrapper-object-types/) | Implemented |
-| [`@typescript-eslint/prefer-as-const`](https://typescript-eslint.io/rules/prefer-as-const/) | Implemented |
+| [`@typescript-eslint/prefer-as-const`](https://typescript-eslint.io/rules/prefer-as-const/) | Implemented ; supports safe autofixes with comment preservation |
 | [`@typescript-eslint/prefer-namespace-keyword`](https://typescript-eslint.io/rules/prefer-namespace-keyword/) | Implemented |
 | [`@typescript-eslint/restrict-plus-operands`](https://typescript-eslint.io/rules/restrict-plus-operands/) | Supports `allowNumberAndString`, `allowAny`, and `skipCompoundAssignments`; recognizes primitive annotations, local return signatures, direct generic parameter inference, and array elements |
