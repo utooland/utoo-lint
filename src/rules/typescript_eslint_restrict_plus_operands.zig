@@ -133,6 +133,9 @@ fn inferExpressionTypeAtDepth(tree: *const ast.Tree, symbols: SymbolTable, index
     if (index == .null or depth >= 32) return .unknown_expression;
 
     return switch (tree.data(index)) {
+        // A right-side any may be unreachable (typed objects short-circuit ||/??).
+        // Preserve known any receivers; keep other logical unions conservative.
+        .logical_expression => |logical| if (inferExpressionTypeAtDepth(tree, symbols, logical.left, depth + 1) == .any) .any else .unknown_expression,
         .numeric_literal => .number,
         .string_literal, .template_literal => .string,
         .bigint_literal => .bigint,
@@ -219,14 +222,14 @@ fn referenceType(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeInd
                 const pattern = tree.data(parent).assignment_pattern;
                 if (pattern.type_annotation != .null) return typeFromAnnotation(tree, symbols, pattern.type_annotation, depth + 1) orelse .unknown_expression;
                 const parameter = symbols.parentOf(parent) orelse return .unknown_expression;
-                if (tree.data(parameter) != .formal_parameter) return parameterPatternType(tree, symbols, declaration, depth + 1);
+                if (tree.data(parameter) != .formal_parameter) return bindingPatternType(tree, symbols, declaration, depth + 1);
                 const params = symbols.parentOf(parameter) orelse return .unknown_expression;
                 const function = symbols.parentOf(params) orelse return .unknown_expression;
                 if (!hasUncontextualizedParameters(tree, symbols, function, depth + 1)) return .unknown_expression;
                 return inferExpressionTypeAtDepth(tree, symbols, pattern.right, depth + 1);
             }
             if (tree.data(parent) == .binding_property or tree.data(parent) == .array_pattern or tree.data(parent) == .object_pattern) {
-                return parameterPatternType(tree, symbols, declaration, depth + 1);
+                return bindingPatternType(tree, symbols, declaration, depth + 1);
             }
             if (tree.data(parent) == .formal_parameter) {
                 const params = symbols.parentOf(parent) orelse continue;
@@ -372,7 +375,7 @@ fn bindingHasWrites(symbols: SymbolTable, index: ast.NodeIndex) bool {
     return false;
 }
 
-fn parameterPatternType(tree: *const ast.Tree, symbols: SymbolTable, declaration: ast.NodeIndex, depth: usize) ValueType {
+fn bindingPatternType(tree: *const ast.Tree, symbols: SymbolTable, declaration: ast.NodeIndex, depth: usize) ValueType {
     if (depth >= 32) return .unknown_expression;
     var current = declaration;
     var path: [16][]const u8 = undefined;
@@ -392,7 +395,10 @@ fn parameterPatternType(tree: *const ast.Tree, symbols: SymbolTable, declaration
         if (annotation != .null) {
             if (typeFromAnnotation(tree, symbols, annotation, depth + 1) == .any) return .any;
             var selected = annotation;
-            for (0..path_len) |i| selected = propertyAnnotation(tree, symbols, selected, path[path_len - i - 1], depth + 1);
+            for (0..path_len) |i| {
+                if (typeFromAnnotation(tree, symbols, selected, depth + 1) == .any) return .any;
+                selected = propertyAnnotation(tree, symbols, selected, path[path_len - i - 1], depth + 1);
+            }
             return typeFromAnnotation(tree, symbols, selected, depth + 1) orelse .unknown_expression;
         }
         switch (tree.data(parent)) {
@@ -404,6 +410,17 @@ fn parameterPatternType(tree: *const ast.Tree, symbols: SymbolTable, declaration
             .object_pattern, .array_pattern => {},
             .assignment_pattern => |pattern| {
                 if (pattern.left == declaration) default_value = pattern.right else aggregate_default = true;
+            },
+            .variable_declarator => |variable| {
+                if (bindingHasWrites(symbols, declaration)) return .unknown_expression;
+                // A default only replaces undefined. It does not narrow an any source.
+                if (inferExpressionTypeAtDepth(tree, symbols, variable.init, depth + 1) == .any) return .any;
+                var selected = expressionAnnotation(tree, symbols, variable.init, depth + 1);
+                for (0..path_len) |i| {
+                    if (typeFromAnnotation(tree, symbols, selected, depth + 1) == .any) return .any;
+                    selected = propertyAnnotation(tree, symbols, selected, path[path_len - i - 1], depth + 1);
+                }
+                return typeFromAnnotation(tree, symbols, selected, depth + 1) orelse .unknown_expression;
             },
             .formal_parameter => {
                 const params = symbols.parentOf(parent) orelse return .unknown_expression;
