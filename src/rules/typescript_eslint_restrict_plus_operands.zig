@@ -207,13 +207,13 @@ fn referenceType(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeInd
                 if (tree.data(parameter) != .formal_parameter) return .unknown_expression;
                 const params = symbols.parentOf(parameter) orelse return .unknown_expression;
                 const function = symbols.parentOf(params) orelse return .unknown_expression;
-                if (!hasUncontextualizedParameters(tree, symbols, function)) return .unknown_expression;
+                if (!hasUncontextualizedParameters(tree, symbols, function, depth + 1)) return .unknown_expression;
                 return inferExpressionTypeAtDepth(tree, symbols, pattern.right, depth + 1);
             }
             if (tree.data(parent) == .formal_parameter) {
                 const params = symbols.parentOf(parent) orelse continue;
                 const function = symbols.parentOf(params) orelse continue;
-                if (hasUncontextualizedParameters(tree, symbols, function)) return .any;
+                if (hasUncontextualizedParameters(tree, symbols, function, depth + 1)) return .any;
             }
         }
     }
@@ -222,7 +222,8 @@ fn referenceType(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeInd
 
 // Callback parameters and annotated function expressions may be contextually
 // typed. Only infer implicit any where no surrounding signature supplies it.
-fn hasUncontextualizedParameters(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex) bool {
+fn hasUncontextualizedParameters(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex, depth: usize) bool {
+    if (depth >= 32) return false;
     switch (tree.data(index)) {
         .function => |function| if (function.type == .function_declaration) return true,
         .arrow_function_expression => {},
@@ -233,9 +234,10 @@ fn hasUncontextualizedParameters(tree: *const ast.Tree, symbols: SymbolTable, in
         switch (tree.data(parent)) {
             .parenthesized_expression => current = parent,
             .variable_declarator => |declarator| return switch (tree.data(declarator.id)) {
-                .binding_identifier => |binding| binding.type_annotation == .null,
+                .binding_identifier => |binding| binding.type_annotation == .null or typeFromAnnotation(tree, symbols, binding.type_annotation, depth + 1) == .any,
                 else => false,
             },
+            .call_expression => |call| return inferExpressionTypeAtDepth(tree, symbols, call.callee, depth + 1) == .any,
             .export_default_declaration => return true,
             else => return false,
         }
