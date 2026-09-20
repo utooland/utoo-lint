@@ -125,7 +125,7 @@ fn inferExpressionTypeAtDepth(tree: *const ast.Tree, symbols: SymbolTable, index
         .bigint_literal => .bigint,
         .boolean_literal => .boolean,
         .null_literal, .array_expression, .object_expression => .invalid,
-        .identifier_reference => referenceType(tree, symbols, index, depth + 1),
+        .identifier_reference => narrowedReferenceType(tree, symbols, index, depth + 1),
         .parenthesized_expression => |parenthesized| inferExpressionTypeAtDepth(tree, symbols, parenthesized.expression, depth + 1),
         .ts_as_expression => |expression| typeFromAnnotation(tree, symbols, expression.type_annotation, depth + 1) orelse .unknown_expression,
         .ts_type_assertion => |expression| typeFromAnnotation(tree, symbols, expression.type_annotation, depth + 1) orelse .unknown_expression,
@@ -397,4 +397,12 @@ fn parameterPatternType(tree: *const ast.Tree, symbols: SymbolTable, declaration
         current = parent;
     }
     return .unknown_expression;
+}
+
+fn narrowedReferenceType(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex, depth: usize) ValueType {
+    const baseline = referenceType(tree, symbols, index, depth);
+    if (depth >= 32 or (baseline != .unknown and baseline != .any)) return baseline;
+    const symbol = symbols.symbolOf(index) orelse return baseline;
+    const Flow = @import("typescript_eslint_restrict_plus_operands_flow.zig").Narrowing(ValueType);
+    return (Flow{ .tree = tree, .symbols = symbols, .symbol = symbol, .reference = index, .baseline = baseline }).run();
 }

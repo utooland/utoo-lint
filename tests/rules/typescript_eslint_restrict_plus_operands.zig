@@ -289,3 +289,53 @@ test "callbacks to any callees have uncontextualized parameters" {
         }
     }
 }
+
+test "typeof guards narrow operands only on the corresponding live path" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "function example(a:unknown){if(typeof a==='number'){return a+1;}return 0;}", .count = 0 },
+        .{ .source = "function example(a:unknown){if(typeof a!=='number')return 0;return a+1;}", .count = 0 },
+        .{ .source = "function example(a:unknown){if(typeof a==='string')return a+'x';return '';}", .count = 0 },
+        .{ .source = "function example(a:unknown){if('number'===typeof a)return a+1;return 0;}", .count = 0 },
+        .{ .source = "function example(a:unknown){if(typeof a!=='number'){}else{return a+1;}return 0;}", .count = 0 },
+        .{ .source = "function example(a:unknown){if(typeof a!=='number'){throw new Error();}return a+1;}", .count = 0 },
+        .{ .source = "function example(a:unknown){if(!(typeof a==='number'))return 0;return a+1;}", .count = 0 },
+        .{ .source = "function example(a:unknown,flag:boolean){if(flag && typeof a==='number')return a+1;return 0;}", .count = 0 },
+        .{ .source = "function example(a:unknown,flag:boolean){if(typeof a!=='number'||flag)return 0;return a+1;}", .count = 0 },
+        .{ .source = "function example(a:unknown){return typeof a==='number' && a+1;}", .count = 0 },
+        .{ .source = "function example(a:unknown){return typeof a==='number' ? a+1 : 0;}", .count = 0 },
+        .{ .source = "function example(a:unknown,other:unknown){if(typeof a==='number'){const inner=()=>{a=other;};return a+1;}return 0;}", .count = 0 },
+        .{ .source = "function example(a:unknown,other:unknown,flag:boolean){if(typeof a==='number'){while(flag){console.log(a+1);a=other;}}}", .count = 1 },
+        .{ .source = "function example(a:unknown,other:unknown,flag:boolean){while(flag){if(typeof a==='number'){console.log(a+1);}a=other;}}", .count = 0 },
+        .{ .source = "function example(a:unknown,other:unknown){while(typeof a==='number'){console.log(a+1);a=other;}}", .count = 0 },
+        .{ .source = "function example(a:unknown,other:unknown,flag:boolean){if(typeof a==='number'){for(;flag;){console.log(a+1);a=other;}}}", .count = 1 },
+        .{ .source = "function example(a:any){a=1;return a+1;}", .count = 1 },
+        .{ .source = "function example(a:any){if(typeof a==='number'){a=1;return a+1;}return 0;}", .count = 1 },
+        .{ .source = "function example(a:unknown){a=1;return a+1;}", .count = 1 },
+        .{ .source = "function example(a:any,values:any[]){if(typeof a==='number'){for(a of values){}return a+1;}return 0;}", .count = 1 },
+        .{ .source = "function example(a:any,values:any[]){if(typeof a==='number'){for(a of values){console.log(a+1);}}}", .count = 1 },
+        .{ .source = "function example(a:any,values:object){if(typeof a==='number'){for(a in values){}return a+1;}return 0;}", .count = 1 },
+        .{ .source = "function example(a:any,values:any[]){for(a of values){if(typeof a==='number')console.log(a+1);}}", .count = 0 },
+        .{ .source = "function example(a:unknown){return a+1;}", .count = 1 },
+        .{ .source = "function example(a:unknown,b=a+1){if(typeof a!=='number')throw 0;}", .count = 1 },
+        .{ .source = "function example(a:unknown){if(typeof a==='number'){}return a+1;}", .count = 1 },
+        .{ .source = "function example(a:unknown){if(typeof a==='number')return 0;return a+1;}", .count = 1 },
+        .{ .source = "function example(a:unknown,flag:boolean){if(typeof a!=='number'){if(flag)return 0;}return a+1;}", .count = 1 },
+        .{ .source = "function example(a:unknown,flag:boolean){if(typeof a==='number'||flag)return a+1;return 0;}", .count = 1 },
+        .{ .source = "function example(a:unknown,other:unknown){if(typeof a!=='number')return 0;a=other;return a+1;}", .count = 1 },
+        .{ .source = "function example(a:unknown,other:unknown){if(typeof a==='number'){[a]=[other];return a+1;}return 0;}", .count = 1 },
+        .{ .source = "function example(a:unknown,other:unknown,flag:boolean){if(typeof a==='number'){while(flag){a=other;}return a+1;}return 0;}", .count = 1 },
+        .{ .source = "function example(a:unknown){if(typeof a==='number'){function inner(a:unknown){return a+1;}return inner(a);}return 0;}", .count = 1 },
+        .{ .source = "function example(a:unknown){function inner(){if(typeof a!=='number')return 0;}return a+1;}", .count = 1 },
+        .{ .source = "function example(a:unknown,other:unknown){if(typeof a==='number' && (a=other,true)){return a+1;}return 0;}", .count = 1 },
+    };
+    var options = lint.Options.allDisabled();
+    options.typescript_eslint_restrict_plus_operands = true;
+    options.typescript_eslint_restrict_plus_operands_allow_any = false;
+    for (cases) |case| {
+        var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.ts", options);
+        defer result.deinit(std.testing.allocator);
+        const count = helpers.countRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id);
+        if (count != case.count) std.debug.print("flow case: {s}\n", .{case.source});
+        try std.testing.expectEqual(case.count, count);
+    }
+}
