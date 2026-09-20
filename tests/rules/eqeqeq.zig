@@ -141,3 +141,29 @@ test "supports configured eqeqeq smart style" {
 
     try std.testing.expectEqual(@as(usize, 3), helpers.countRule(result, lint.rules.eqeqeq.id));
 }
+
+test "null comparison options preserve non-null strictness and safe fixes" {
+    const cases = [_]struct { config: []const u8, source: []const u8, count: usize, output: []const u8 }{
+        .{ .config = "ignore", .source = "x==null; null!=x; x===null; x!==null;", .count = 0, .output = "x==null; null!=x; x===null; x!==null;" },
+        .{ .config = "never", .source = "x==null; null!=x; x===null; null!==x;", .count = 2, .output = "x==null; null!=x; x===null; null!==x;" },
+        .{ .config = "always", .source = "x==null; null!=x; x===null;", .count = 2, .output = "x==null; null!=x; x===null;" },
+        .{ .config = "ignore", .source = "x==1; 1==2;", .count = 2, .output = "x==1; 1===2;" },
+        .{ .config = "never", .source = "x==1; 1==2;", .count = 2, .output = "x==1; 1===2;" },
+        .{ .config = "never", .source = "null /* === */ === null;", .count = 1, .output = "null /* === */ == null;" },
+        .{ .config = "never", .source = "x === (null); (null) !== x;", .count = 2, .output = "x === (null); (null) !== x;" },
+    };
+    for (cases) |case| {
+        const json = try std.fmt.allocPrint(std.testing.allocator, "[\"error\",\"always\",{{\"null\":\"{s}\"}}]", .{case.config});
+        defer std.testing.allocator.free(json);
+        var config = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, json, .{});
+        defer config.deinit();
+        var options = lint.Options.allDisabled();
+        try options.setByRuleConfigValue("eqeqeq", config.value);
+        var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.js", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(case.count, helpers.countRule(result, lint.rules.eqeqeq.id));
+        var fixed = try lint.lintSourceAndFix(std.testing.allocator, case.source, "fixture.js", options);
+        defer fixed.deinit(std.testing.allocator);
+        try std.testing.expectEqualStrings(case.output, fixed.output);
+    }
+}

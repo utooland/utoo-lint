@@ -1,0 +1,81 @@
+---
+fixture: "tests/snapshots/specs/core/eqeqeq/null-never.js"
+rule: "eqeqeq"
+---
+
+# Input
+
+```js
+value === null; null !== value; null === null;
+```
+
+# Diagnostics
+
+count: 3
+
+## Diagnostic 1
+
+- rule: "eqeqeq"
+- severity: "warning"
+- message: "Use loose equality operators when comparing with null."
+- byte span: 0..14
+- start: 1:1
+- end: 1:15
+- source: "value === null"
+- fixes: 0
+
+## Diagnostic 2
+
+- rule: "eqeqeq"
+- severity: "warning"
+- message: "Use loose equality operators when comparing with null."
+- byte span: 16..30
+- start: 1:17
+- end: 1:31
+- source: "null !== value"
+- fixes: 0
+
+## Diagnostic 3
+
+- rule: "eqeqeq"
+- severity: "warning"
+- message: "Use loose equality operators when comparing with null."
+- byte span: 32..45
+- start: 1:33
+- end: 1:46
+- source: "null === null"
+- fixes: 1
+
+### Fix 3.1
+
+- byte span: 37..40
+- start: 1:38
+- end: 1:41
+- source: "==="
+- replacement: "=="
+
+# First fix pass
+
+- fixed: true
+- applied diagnostics: 1
+- remaining diagnostics: 2
+
+```js
+value === null; null !== value; null == null;
+```
+
+## Remaining diagnostics
+
+### Remaining diagnostic 1
+
+- rule: "eqeqeq"
+- severity: "warning"
+- message: "Use loose equality operators when comparing with null."
+- byte span: 0..14
+
+### Remaining diagnostic 2
+
+- rule: "eqeqeq"
+- severity: "warning"
+- message: "Use loose equality operators when comparing with null."
+- byte span: 16..30
