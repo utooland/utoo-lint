@@ -253,3 +253,39 @@ test "does not infer reassigned variables from stale initializers" {
         try std.testing.expectEqual(@as(usize, 0), helpers.countRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id));
     }
 }
+
+test "callbacks to any callees have uncontextualized parameters" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "function example(items:any){return items.map((value,index)=>index+1);}", .count = 1 },
+        .{ .source = "function example(items:any){return items['map'](function(value,index){return index+1;});}", .count = 1 },
+        .{ .source = "type Dynamic=any; function example(items:Dynamic){return items?.map((value,index)=>index+1);}", .count = 1 },
+        .{ .source = "interface Data{map:any} function example(items:Data){return items.map((value,index)=>index+1);}", .count = 1 },
+        .{ .source = "function example(fn:any){return fn((value)=>value+1);}", .count = 1 },
+        .{ .source = "function example(fn:any){return fn(({value})=>value+1);}", .count = 1 },
+        .{ .source = "function example(fn:any){return fn(({data:{value}})=>value+1);}", .count = 1 },
+        .{ .source = "function example(fn:any){return fn(([value])=>value+1);}", .count = 1 },
+        .{ .source = "function example(fn:any){return fn(({value}:{value:any})=>value+1);}", .count = 1 },
+        .{ .source = "function example(fn:any){return fn(({value}:{value:number})=>value+1);}", .count = 0 },
+        .{ .source = "function example(fn:any){return fn(({value=0})=>value+1);}", .count = 0 },
+        .{ .source = "function example(fn:any){return fn(([value]:number[])=>value+1);}", .count = 0 },
+        .{ .source = "function example(items:{value:number}[]){return items.map(({value})=>value+1);}", .count = 0 },
+
+        .{ .source = "const callback:any=(value)=>value+1;", .count = 1 },
+        .{ .source = "function example(items:number[]){return items.map((value,index)=>index+1);}", .count = 0 },
+        .{ .source = "function example(items:any){return items.map((value,index:number)=>index+1);}", .count = 0 },
+        .{ .source = "function example(items:any){return items.map((value,index=0)=>index+1);}", .count = 0 },
+        .{ .source = "function example(items:any){return items.map((value,index:number=0 as any)=>index+1);}", .count = 0 },
+        .{ .source = "function example(fn:(cb:(value:number)=>number)=>number){return fn(value=>value+1);}", .count = 0 },
+        .{ .source = "function example(items:any){function inner(items:number[]){return items.map((value,index)=>index+1);} return inner([]);}", .count = 0 },
+    };
+    for ([_]bool{ false, true }) |allow_any| {
+        var options = lint.Options.allDisabled();
+        options.typescript_eslint_restrict_plus_operands = true;
+        options.typescript_eslint_restrict_plus_operands_allow_any = allow_any;
+        for (cases) |case| {
+            var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.ts", options);
+            defer result.deinit(std.testing.allocator);
+            try std.testing.expectEqual(if (allow_any) @as(usize, 0) else case.count, helpers.countRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id));
+        }
+    }
+}
