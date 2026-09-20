@@ -186,6 +186,7 @@ test "refuses property renames that create collisions or invalid properties" {
         "const view=<svg xlink:href='#a' xlinkHref='#b' />;",
         "const view=<div viewbox='0 0 1 1' />;",
         "const view=<div unknownProp='x' />;",
+        "const view=<svg rendering-intent='auto' />;",
     };
     var options = lint.Options.allDisabled();
     options.react_no_unknown_property = true;

@@ -358,6 +358,8 @@ pub fn check(
 // Refuse collisions with both existing properties and other aliases that could
 // be renamed in the same fix pass.
 fn canRenameAttribute(allocator: Allocator, tree: *const ast.Tree, opening: ast.JSXOpeningElement, index: ast.NodeIndex, tag_name: []const u8, replacement: []const u8) Allocator.Error!bool {
+    const canonical = getStandardName(replacement) orelse return false;
+    if (!std.mem.eql(u8, canonical, replacement)) return false;
     if (allowedTagsFor(replacement)) |tags| if (!contains(tags, tag_name)) return false;
     for (tree.extra(opening.attributes)) |other_index| {
         if (other_index == index) continue;
