@@ -2,6 +2,61 @@ const std = @import("std");
 const lint = @import("utoo_lint");
 const helpers = @import("../helpers.zig");
 
+test "calls array elements and compound additions retain any operands" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "type Reader<T extends any>=()=>T; declare const read:Reader<number>; const result=read()+1;", .count = 0 },
+        .{ .source = "type Values<T extends any>=T[]; function f(x:Values<number>){return x[0]+1;}", .count = 0 },
+        .{ .source = "function read<T,U=any>(x:T,y:U):U{return y;} const result=read<number>(1,2)+1;", .count = 1 },
+        .{ .source = "function read():any{return 1;} const result=read()+1;", .count = 1 },
+        .{ .source = "const read=():any=>1; const result=read()+1;", .count = 1 },
+        .{ .source = "const read:()=>any=()=>1; const result=read()+1;", .count = 1 },
+        .{ .source = "type Reader=()=>any; declare const read:Reader; const result=read()+1;", .count = 1 },
+        .{ .source = "declare function read():any; const result=read()+1;", .count = 1 },
+        .{ .source = "function read<T>(x:T):T{return x;} function f(x:any){return read(x)+1;}", .count = 1 },
+        .{ .source = "function read<T>(x:T):T{return x;} function f(x:number){return read(x)+1;}", .count = 0 },
+        .{ .source = "function read<T>(x:T):T{return x;} function f(x:any){return read<number>(x)+1;}", .count = 0 },
+        .{ .source = "function read<T>(x:T):T{return x;} const result=read<any>(1)+1;", .count = 1 },
+        .{ .source = "function read<T>(x:T):number{return 1;} function f(x:any){return read(x)+1;}", .count = 0 },
+        .{ .source = "function read<T,U>(x:T,y:U):U{return y;} function f(x:any){return read(x,1)+1;}", .count = 0 },
+        .{ .source = "function read<T,U>(x:T,y:U):T{return x;} function f(x:any){return read(x,1)+1;}", .count = 1 },
+        .{ .source = "function f(x:any[]){return x[0]+1;}", .count = 1 },
+        .{ .source = "function f(x:Array<any>){return x[0]+1;}", .count = 1 },
+        .{ .source = "type Values=ReadonlyArray<any>; function f(x:Values,i:number){return x[i]+1;}", .count = 1 },
+        .{ .source = "function f(x:number[]){return x[0]+1;}", .count = 0 },
+        .{ .source = "function f(x:any[]){return x.length+1;}", .count = 0 },
+        .{ .source = "function f(x:any[]){return x[\"0\"]+1;}", .count = 1 },
+        .{ .source = "function f(x:any){let result=1;result+=x;return result;}", .count = 1 },
+        .{ .source = "function f(x:number){let result=1;result+=x;return result;}", .count = 0 },
+        .{ .source = "function f(x:any){let result=1;result-=x;return result;}", .count = 0 },
+        .{ .source = "function f(x:any){let result:any=1;result+=1;return result;}", .count = 1 },
+        .{ .source = "function read():number{return 1;} const result=read()+1;", .count = 0 },
+        .{ .source = "function read():any{return 1;} function f(read:()=>number){return read()+1;}", .count = 0 },
+    };
+    for (cases) |case| {
+        var options = lint.Options.allDisabled();
+        options.typescript_eslint_restrict_plus_operands = true;
+        options.typescript_eslint_restrict_plus_operands_allow_any = false;
+        var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.ts", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(case.count, helpers.countRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id));
+    }
+}
+
+test "configured skipCompoundAssignments leaves ordinary addition enabled" {
+    for ([_]bool{ false, true }) |skip| {
+        var config = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, if (skip)
+            "[\"error\",{\"allowAny\":false,\"skipCompoundAssignments\":true}]"
+        else
+            "[\"error\",{\"allowAny\":false,\"skipCompoundAssignments\":false}]", .{});
+        defer config.deinit();
+        var options = lint.Options.allDisabled();
+        try options.setByRuleConfigValue(lint.rules.typescript_eslint_restrict_plus_operands.id, config.value);
+        var result = try lint.lintSource(std.testing.allocator, "function f(x:any){let result=1;result+=x;return x+1;}", "fixture.ts", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(@as(usize, if (skip) 1 else 2), helpers.countRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id));
+    }
+}
+
 test "reports @typescript-eslint/restrict-plus-operands for mixed and invalid primitive operands" {
     const source =
         \\const count: number = 1;

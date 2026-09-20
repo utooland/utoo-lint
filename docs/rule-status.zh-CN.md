@@ -436,4 +436,4 @@
 | [`@typescript-eslint/no-wrapper-object-types`](https://typescript-eslint.io/rules/no-wrapper-object-types/) | 已实现 |
 | [`@typescript-eslint/prefer-as-const`](https://typescript-eslint.io/rules/prefer-as-const/) | 已实现 |
 | [`@typescript-eslint/prefer-namespace-keyword`](https://typescript-eslint.io/rules/prefer-namespace-keyword/) | 已实现 |
-| [`@typescript-eslint/restrict-plus-operands`](https://typescript-eslint.io/rules/restrict-plus-operands/) | 对原始类型字面量和显式原始类型注解支持 `allowNumberAndString` 配置 |
+| [`@typescript-eslint/restrict-plus-operands`](https://typescript-eslint.io/rules/restrict-plus-operands/) | 支持 `allowNumberAndString`、`allowAny`、`skipCompoundAssignments`，识别原始类型、局部函数返回类型、直接泛型参数推断和数组元素类型 |

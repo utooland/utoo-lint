@@ -1,0 +1,42 @@
+---
+fixture: "tests/snapshots/specs/typescript-eslint/restrict-plus-operands/calls-arrays-compound.ts"
+rule: "@typescript-eslint/restrict-plus-operands"
+---
+
+# Input
+
+```ts
+function read<T>(value:T):T{return value;}
+function example(value:any,items:any[]){let total=1; total+=value; return read(value)+items[0];}
+```
+
+# Diagnostics
+
+count: 2
+
+## Diagnostic 1
+
+- rule: "@typescript-eslint/restrict-plus-operands"
+- severity: "warning"
+- message: "Invalid operand for a '+' operation. Operands must each be a number, string, or bigint. Got `any`."
+- byte span: 96..108
+- start: 2:54
+- end: 2:66
+- source: "total+=value"
+- fixes: 0
+
+## Diagnostic 2
+
+- rule: "@typescript-eslint/restrict-plus-operands"
+- severity: "warning"
+- message: "Invalid operand for a '+' operation. Operands must each be a number, string, or bigint. Got `any`."
+- byte span: 117..137
+- start: 2:75
+- end: 2:95
+- source: "read(value)+items[0]"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0
