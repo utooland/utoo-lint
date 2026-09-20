@@ -1,6 +1,7 @@
 const std = @import("std");
 const parser = @import("parser");
 const core = @import("../core.zig");
+const ReactContext = @import("react_hooks_helpers.zig").Context;
 
 const ast = parser.ast;
 const traverser = parser.traverser;
@@ -285,7 +286,8 @@ fn collectVariableDeclarator(
             const component_index = try state.ensureComponent(allocator, name, index, true);
             try appendNode(allocator, &state.components.items[component_index].function_nodes, init);
             if (reactFunctionComponentProps(tree, declarator.id)) |props_type| {
-                state.components.items[component_index].ignore_props_validation = try collectTypeProps(allocator, tree, state.symbols, props_type, &state.components.items[component_index].declared_props, 0);
+                const unresolved = try collectTypeProps(allocator, tree, state.symbols, props_type, &state.components.items[component_index].declared_props, 0);
+                state.components.items[component_index].ignore_props_validation = state.components.items[component_index].ignore_props_validation or unresolved;
             }
         },
         .call_expression => |call| {
@@ -296,12 +298,16 @@ fn collectVariableDeclarator(
                 return;
             }
 
-            const wrapped = wrapperFunctionArgument(tree, call) orelse return;
+            const wrapped = wrapperFunctionArgument(tree, state.symbols, call) orelse return;
             if (!functionReturnsJSXOrNull(tree, wrapped)) return;
             const component_index = try state.ensureComponent(allocator, name, index, true);
             try appendNode(allocator, &state.components.items[component_index].function_nodes, wrapped);
-            if (reactFunctionComponentProps(tree, declarator.id)) |props_type| {
+            if (wrapperPropsType(tree, state.symbols, call)) |props_type| {
                 state.components.items[component_index].ignore_props_validation = try collectTypeProps(allocator, tree, state.symbols, props_type, &state.components.items[component_index].declared_props, 0);
+            }
+            if (reactFunctionComponentProps(tree, declarator.id)) |props_type| {
+                const unresolved = try collectTypeProps(allocator, tree, state.symbols, props_type, &state.components.items[component_index].declared_props, 0);
+                state.components.items[component_index].ignore_props_validation = state.components.items[component_index].ignore_props_validation or unresolved;
             }
         },
         else => {},
@@ -1052,14 +1058,14 @@ fn createClassObject(tree: *const ast.Tree, call: ast.CallExpression) ?ast.Objec
     };
 }
 
-fn wrapperFunctionArgument(tree: *const ast.Tree, call: ast.CallExpression) ?ast.NodeIndex {
-    if (!isComponentWrapperCall(tree, call)) return null;
+fn wrapperFunctionArgument(tree: *const ast.Tree, symbols: SymbolTable, call: ast.CallExpression) ?ast.NodeIndex {
+    if (!isComponentWrapperCall(tree, symbols, call)) return null;
     const arguments = tree.extra(call.arguments);
     if (arguments.len == 0) return null;
     const first = unwrapTransparent(tree, arguments[0]);
     switch (tree.data(first)) {
         .function, .arrow_function_expression => return first,
-        .call_expression => |inner| return wrapperFunctionArgument(tree, inner),
+        .call_expression => |inner| return wrapperFunctionArgument(tree, symbols, inner),
         else => return null,
     }
 }
@@ -1182,17 +1188,24 @@ fn isCreateReactClassCall(tree: *const ast.Tree, call: ast.CallExpression) bool 
     return std.mem.eql(u8, property, "createClass");
 }
 
-fn isComponentWrapperCall(tree: *const ast.Tree, call: ast.CallExpression) bool {
-    const callee = unwrapTransparent(tree, call.callee);
-    if (identifierReferenceName(tree, callee)) |name| {
-        return std.mem.eql(u8, name, "memo") or std.mem.eql(u8, name, "forwardRef");
+fn isComponentWrapperCall(tree: *const ast.Tree, symbols: SymbolTable, call: ast.CallExpression) bool {
+    const context = ReactContext{ .tree = tree, .symbols = symbols };
+    return context.isReactApi(call.callee, "memo") or context.isReactApi(call.callee, "forwardRef");
+}
+
+fn wrapperPropsType(tree: *const ast.Tree, symbols: SymbolTable, call: ast.CallExpression) ?ast.NodeIndex {
+    const context = ReactContext{ .tree = tree, .symbols = symbols };
+    if (context.isReactApi(call.callee, "forwardRef")) {
+        if (call.type_arguments == .null) return null;
+        const arguments = tree.extra(tree.data(call.type_arguments).ts_type_parameter_instantiation.params);
+        // The first type argument describes the ref, not the component's props.
+        return if (arguments.len > 1) arguments[1] else null;
     }
-    const member = switch (tree.data(callee)) {
-        .member_expression => |member| member,
-        else => return false,
+    if (!context.isReactApi(call.callee, "memo") or call.arguments.len == 0) return null;
+    return switch (tree.data(unwrapTransparent(tree, tree.extra(call.arguments)[0]))) {
+        .call_expression => |inner| wrapperPropsType(tree, symbols, inner),
+        else => null,
     };
-    const property = propertyName(tree, member.property, member.computed) orelse return false;
-    return std.mem.eql(u8, property, "memo") or std.mem.eql(u8, property, "forwardRef");
 }
 
 fn acceptsAnyChildren(name: []const u8) bool {

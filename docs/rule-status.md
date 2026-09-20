@@ -355,7 +355,7 @@ instead of being rewritten.
 | [`react/no-unused-state`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/no-unused-state.md) | Implemented |
 | [`react/no-will-update-set-state`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/no-will-update-set-state.md) | Implemented |
 | [`react/prefer-es6-class`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/prefer-es6-class.md) | Supports `always` and `never` configurations |
-| [`react/prop-types`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/prop-types.md) | Supports `skipUndeclared`, `ignore`, and `customValidators` configuration |
+| [`react/prop-types`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/prop-types.md) | Supports `skipUndeclared`, `ignore`, and `customValidators` configuration ; recognizes React `forwardRef<Ref, Props>` generics through `memo` wrappers |
 | [`react/require-render-return`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/require-render-return.md) | Implemented |
 | [`react/self-closing-comp`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/self-closing-comp.md) | Supports `component` and `html` configuration |
 | [`react/style-prop-object`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/style-prop-object.md) | Implemented |

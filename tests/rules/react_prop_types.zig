@@ -305,3 +305,21 @@ test "typed props validate members and unresolved imported intersections" {
         if (case.count == 1) try std.testing.expectEqualStrings("'missing' is missing in props validation", result.diagnostics[0].message);
     }
 }
+
+test "forwardRef second generic declares props through React wrappers" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "import React from 'react'; type Props={name:string}; export const Example=React.forwardRef<HTMLDivElement,Props>((props,ref)=><div ref={ref}>{props.name}</div>);", .count = 0 },
+        .{ .source = "import {forwardRef} from 'react'; interface Props {name:string} const Example=forwardRef<HTMLDivElement,Props>(({name},ref)=><div ref={ref}>{name}</div>);", .count = 0 },
+        .{ .source = "import {forwardRef as forward, memo} from 'react'; const Example=memo(forward<HTMLDivElement,{name:string}>((props,ref)=><div>{props.name}</div>));", .count = 0 },
+        .{ .source = "import * as React from 'react'; const Example=React.memo(React.forwardRef<HTMLDivElement,{name:string}>((props,ref)=><div>{props.missing}</div>));", .count = 1 },
+        .{ .source = "import React from 'react'; import type {Props} from './props'; const Example=React.forwardRef<HTMLDivElement,Props>((props,ref)=><div>{props.name}</div>);", .count = 0 },
+        .{ .source = "import React from 'react'; const Example=React.forwardRef<{name:string}>((props,ref)=><div>{props.name}</div>);", .count = 1 },
+        .{ .source = "import React from 'react'; const Example=React.forwardRef((props,ref)=><div>{props.name}</div>);", .count = 1 },
+        .{ .source = "import React from 'react'; const Example=React.forwardRef((props:{name:string},ref)=><div>{props.name}</div>);", .count = 0 },
+    };
+    for (cases) |case| {
+        var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.tsx", propTypesOnly());
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(case.count, helpers.countRule(result, lint.rules.react_prop_types.id));
+    }
+}

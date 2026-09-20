@@ -1,0 +1,21 @@
+---
+fixture: "tests/snapshots/specs/react/prop-types/forward-ref.tsx"
+rule: "react/prop-types"
+---
+
+# Input
+
+```tsx
+import React from 'react';
+type Props = { name: string };
+export const Example = React.forwardRef<HTMLDivElement, Props>((props, ref) => <div ref={ref}>{props.name}</div>);
+```
+
+# Diagnostics
+
+count: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0
