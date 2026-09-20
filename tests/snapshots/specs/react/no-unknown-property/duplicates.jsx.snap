@@ -1,0 +1,74 @@
+---
+fixture: "tests/snapshots/specs/react/no-unknown-property/duplicates.jsx"
+rule: "react/no-unknown-property"
+---
+
+# Input
+
+```jsx
+export const view = <><div class='a' className='b' /><div class='a' class='b' /><div class='a' classname='b' /></>;
+```
+
+# Diagnostics
+
+count: 5
+
+## Diagnostic 1
+
+- rule: "react/no-unknown-property"
+- severity: "error"
+- message: "Unknown property 'class' found, use 'className' instead"
+- byte span: 27..36
+- start: 1:28
+- end: 1:37
+- source: "class='a'"
+- fixes: 0
+
+## Diagnostic 2
+
+- rule: "react/no-unknown-property"
+- severity: "error"
+- message: "Unknown property 'class' found, use 'className' instead"
+- byte span: 58..67
+- start: 1:59
+- end: 1:68
+- source: "class='a'"
+- fixes: 0
+
+## Diagnostic 3
+
+- rule: "react/no-unknown-property"
+- severity: "error"
+- message: "Unknown property 'class' found, use 'className' instead"
+- byte span: 68..77
+- start: 1:69
+- end: 1:78
+- source: "class='b'"
+- fixes: 0
+
+## Diagnostic 4
+
+- rule: "react/no-unknown-property"
+- severity: "error"
+- message: "Unknown property 'class' found, use 'className' instead"
+- byte span: 85..94
+- start: 1:86
+- end: 1:95
+- source: "class='a'"
+- fixes: 0
+
+## Diagnostic 5
+
+- rule: "react/no-unknown-property"
+- severity: "error"
+- message: "Unknown property 'classname' found, use 'className' instead"
+- byte span: 95..108
+- start: 1:96
+- end: 1:109
+- source: "classname='b'"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0
