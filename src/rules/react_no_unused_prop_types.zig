@@ -66,6 +66,10 @@ fn reportUnusedProps(
 }
 
 fn componentUsesProp(component: react_prop_types.ComponentInfo, name: []const u8) bool {
+    for (component.forwarded_props.items) |prefix| {
+        if (prefix.len == 0 or std.mem.eql(u8, prefix, name)) return true;
+        if (name.len > prefix.len and std.mem.startsWith(u8, name, prefix) and name[prefix.len] == '.') return true;
+    }
     for (component.used_props.items) |used| {
         if (std.mem.eql(u8, used.name, name)) return true;
     }
