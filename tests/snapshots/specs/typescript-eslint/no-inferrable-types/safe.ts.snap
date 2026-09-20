@@ -1,0 +1,85 @@
+---
+fixture: "tests/snapshots/specs/typescript-eslint/no-inferrable-types/safe.ts"
+rule: "@typescript-eslint/no-inferrable-types"
+---
+
+# Input
+
+```ts
+const value: number = 1;
+function f(value: string = "hi") { return value; }
+class C { value: number = 1; }
+```
+
+# Diagnostics
+
+count: 3
+
+## Diagnostic 1
+
+- rule: "@typescript-eslint/no-inferrable-types"
+- severity: "error"
+- message: "Type number trivially inferred from a number literal, remove type annotation."
+- byte span: 11..19
+- start: 1:12
+- end: 1:20
+- source: ": number"
+- fixes: 1
+
+### Fix 1.1
+
+- byte span: 11..19
+- start: 1:12
+- end: 1:20
+- source: ": number"
+- replacement: ""
+
+## Diagnostic 2
+
+- rule: "@typescript-eslint/no-inferrable-types"
+- severity: "error"
+- message: "Type string trivially inferred from a string literal, remove type annotation."
+- byte span: 41..49
+- start: 2:17
+- end: 2:25
+- source: ": string"
+- fixes: 1
+
+### Fix 2.1
+
+- byte span: 41..49
+- start: 2:17
+- end: 2:25
+- source: ": string"
+- replacement: ""
+
+## Diagnostic 3
+
+- rule: "@typescript-eslint/no-inferrable-types"
+- severity: "error"
+- message: "Type number trivially inferred from a number literal, remove type annotation."
+- byte span: 91..99
+- start: 3:16
+- end: 3:24
+- source: ": number"
+- fixes: 1
+
+### Fix 3.1
+
+- byte span: 91..99
+- start: 3:16
+- end: 3:24
+- source: ": number"
+- replacement: ""
+
+# First fix pass
+
+- fixed: true
+- applied diagnostics: 3
+- remaining diagnostics: 0
+
+```ts
+const value = 1;
+function f(value = "hi") { return value; }
+class C { value = 1; }
+```

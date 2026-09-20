@@ -20,7 +20,7 @@ pub fn checkVariableDeclarator(
 ) Allocator.Error!void {
     if (declarator.init == .null) return;
     const type_annotation = bindingTypeAnnotation(tree, declarator.id);
-    try reportInferrableType(allocator, diagnostics, tree, type_annotation, declarator.init);
+    try reportInferrableType(allocator, diagnostics, tree, type_annotation, declarator.init, false);
 }
 
 pub fn checkAssignmentPattern(
@@ -37,7 +37,7 @@ pub fn checkAssignmentPattern(
     else
         bindingTypeAnnotation(tree, pattern.left);
 
-    try reportInferrableType(allocator, diagnostics, tree, type_annotation, pattern.right);
+    try reportInferrableType(allocator, diagnostics, tree, type_annotation, pattern.right, pattern.optional or (tree.data(pattern.left) == .binding_identifier and tree.data(pattern.left).binding_identifier.optional));
 }
 
 pub fn checkPropertyDefinition(
@@ -50,7 +50,7 @@ pub fn checkPropertyDefinition(
     if (options.ignore_properties) return;
     if (property.readonly or property.optional) return;
     if (property.value == .null) return;
-    try reportInferrableType(allocator, diagnostics, tree, property.type_annotation, property.value);
+    try reportInferrableType(allocator, diagnostics, tree, property.type_annotation, property.value, property.definite);
 }
 
 fn reportInferrableType(
@@ -59,19 +59,33 @@ fn reportInferrableType(
     tree: *const ast.Tree,
     type_annotation: ast.NodeIndex,
     value: ast.NodeIndex,
+    remove_marker: bool,
 ) Allocator.Error!void {
     const type_node = annotationType(tree, type_annotation);
     const type_name = inferrableType(tree, type_node, value) orelse return;
 
-    try core.addDiagnosticFmt(
-        allocator,
-        diagnostics,
-        .@"error",
-        id,
-        tree.span(type_annotation),
-        "Type {s} trivially inferred from a {s} literal, remove type annotation.",
-        .{ type_name, type_name },
-    );
+    const span = tree.span(type_annotation);
+    const message = try std.fmt.allocPrint(allocator, "Type {s} trivially inferred from a {s} literal, remove type annotation.", .{ type_name, type_name });
+    defer allocator.free(message);
+    var fixes: [2]core.Fix = undefined;
+    var count: usize = 0;
+    if (!hasComments(tree, span)) {
+        fixes[0] = .{ .span = span, .replacement = "" };
+        count = 1;
+        if (remove_marker) {
+            // Remove the optional/definite marker as well: it needs an annotation.
+            var end = span.start;
+            while (end > 0 and std.ascii.isWhitespace(tree.source[end - 1])) end -= 1;
+            if (end > 0 and (tree.source[end - 1] == '?' or tree.source[end - 1] == '!')) {
+                fixes[1] = .{ .span = .{ .start = end - 1, .end = end }, .replacement = "" };
+                count = 2;
+            } else {
+                // Comments between the marker and annotation need a separate rewrite.
+                count = 0;
+            }
+        }
+    }
+    try core.addDiagnosticWithFixes(allocator, diagnostics, .@"error", id, message, span, fixes[0..count]);
 }
 
 fn inferrableType(tree: *const ast.Tree, type_node: ast.NodeIndex, value: ast.NodeIndex) ?[]const u8 {
@@ -210,4 +224,11 @@ fn bindingTypeAnnotation(tree: *const ast.Tree, index: ast.NodeIndex) ast.NodeIn
         .binding_identifier => |identifier| identifier.type_annotation,
         else => .null,
     };
+}
+
+fn hasComments(tree: *const ast.Tree, span: ast.Span) bool {
+    for (tree.comments) |comment| {
+        if (comment.span.start < span.end and comment.span.end > span.start) return true;
+    }
+    return false;
 }

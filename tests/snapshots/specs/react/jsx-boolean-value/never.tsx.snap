@@ -1,0 +1,43 @@
+---
+fixture: "tests/snapshots/specs/react/jsx-boolean-value/never.tsx"
+rule: "react/jsx-boolean-value"
+---
+
+# Input
+
+```tsx
+const node = <Widget disabled={true} checked={false} />;
+```
+
+# Diagnostics
+
+count: 1
+
+## Diagnostic 1
+
+- rule: "react/jsx-boolean-value"
+- severity: "error"
+- message: "Value must be omitted for boolean attribute `disabled`"
+- byte span: 21..36
+- start: 1:22
+- end: 1:37
+- source: "disabled={true}"
+- fixes: 1
+
+### Fix 1.1
+
+- byte span: 29..36
+- start: 1:30
+- end: 1:37
+- source: "={true}"
+- replacement: ""
+
+# First fix pass
+
+- fixed: true
+- applied diagnostics: 1
+- remaining diagnostics: 0
+
+```tsx
+const node = <Widget disabled checked={false} />;
+```
