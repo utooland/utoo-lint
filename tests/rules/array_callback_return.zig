@@ -237,3 +237,38 @@ test "can disable array-callback-return" {
 
     try std.testing.expect(!helpers.hasRule(result, lint.rules.array_callback_return.id));
 }
+
+test "switch callback completion tracks default fallthrough and break paths" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "[1].map(x=>{switch(x){case 1:return x;default:return 0;}});", .count = 0 },
+        .{ .source = "[1].map(x=>{switch(x){case 1:return x;default:throw new Error();}});", .count = 0 },
+        .{ .source = "[1].map(x=>{switch(x){case 1:return x;}});", .count = 1 },
+        .{ .source = "[1].map(x=>{switch(x){case 1:return x;}return 0;});", .count = 0 },
+        .{ .source = "[1].map(x=>{switch(x){case 0:case 1:return x;default:return 0;}});", .count = 0 },
+        .{ .source = "[1].map(x=>{switch(x){default:case 1:return x;}});", .count = 0 },
+        .{ .source = "[1].map(x=>{switch(x){case 1:return x;default:}});", .count = 1 },
+        .{ .source = "[1].map(x=>{switch(x){case 1:break;default:return 0;}});", .count = 1 },
+        .{ .source = "[1].map(x=>{switch(x){case 1:break;default:return 0;}return 1;});", .count = 0 },
+        .{ .source = "[1].map(x=>{switch(x){case 1:break;return;default:return 0;}return 1;});", .count = 1 },
+        .{ .source = "[1].map(x=>{switch(x){case 1:if(x>1)break;return 1;default:return 0;}});", .count = 1 },
+        .{ .source = "[1].map(x=>{switch(x){case 1:if(x>1)break;return;default:return 0;}return 1;});", .count = 1 },
+        .{ .source = "[1].map(x=>{switch(x){case 1:if(x>1)return 2;else return 3;default:return 0;}});", .count = 0 },
+        .{ .source = "[1].map(x=>{switch(x){case 1:return;default:return 0;}});", .count = 1 },
+        .{ .source = "[1].map(x=>{switch(x){case 1:{return x;}default:return 0;}});", .count = 0 },
+        .{ .source = "[1].map(x=>{switch(x){case 1:while(x){break;}return 1;default:return 0;}});", .count = 0 },
+        .{ .source = "[1].map(x=>{switch(x){case 1:switch(x){case 2:break;default:break;}return 1;default:return 0;}});", .count = 0 },
+        .{ .source = "[1].map(x=>{switch(x){case 1:try{break;}finally{}return 1;default:return 0;}});", .count = 1 },
+        .{ .source = "[1].map(x=>{switch(x){case 1:try{break;}finally{return 1;}default:return 0;}});", .count = 0 },
+        .{ .source = "[1].map(x=>{switch(x){case 1:try{return 1;}finally{break;}default:return 0;}});", .count = 1 },
+        .{ .source = "[1].map(x=>{switch(x){case 1:const f=()=>1;default:}});", .count = 1 },
+    };
+    var options = lint.Options.allDisabled();
+    options.array_callback_return = true;
+    for (cases) |case| {
+        var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.js", options);
+        defer result.deinit(std.testing.allocator);
+        const actual = helpers.countRule(result, lint.rules.array_callback_return.id);
+        if (actual != case.count) std.debug.print("switch case: {s}\n", .{case.source});
+        try std.testing.expectEqual(case.count, actual);
+    }
+}

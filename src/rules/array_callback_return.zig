@@ -179,8 +179,79 @@ fn statementCompletion(tree: *const ast.Tree, index: ast.NodeIndex, options: Opt
         .block_statement => |block| rangeCompletion(tree, block.body, options),
         .if_statement => |statement| ifCompletion(tree, statement, options),
         .try_statement => |statement| tryCompletion(tree, statement, options),
+        .switch_statement => |statement| switchCompletion(tree, statement, options),
         else => .continues,
     };
+}
+
+// A case may both exit and fall through (for example, a conditional break).
+// Keep those paths separate until the enclosing switch consumes its breaks.
+const CaseFlow = struct {
+    const next: u8 = 1;
+    const terminal: u8 = 2;
+    const invalid: u8 = 4;
+    const breaks: u8 = 8;
+    const escapes: u8 = 16;
+};
+
+fn caseRangeFlow(tree: *const ast.Tree, range: ast.IndexRange, options: Options) u8 {
+    var flow: u8 = CaseFlow.next;
+    for (tree.extra(range)) |statement| {
+        if (flow & CaseFlow.next == 0) {
+            // ESLint reports bare returns even in unreachable statements.
+            flow |= caseNodeFlow(tree, statement, options) & CaseFlow.invalid;
+            continue;
+        }
+        flow = (flow & ~CaseFlow.next) | caseNodeFlow(tree, statement, options);
+    }
+    return flow;
+}
+
+fn caseNodeFlow(tree: *const ast.Tree, index: ast.NodeIndex, options: Options) u8 {
+    if (index == .null) return CaseFlow.next;
+    return switch (tree.data(index)) {
+        .break_statement => |statement| if (statement.label == .null) CaseFlow.breaks else CaseFlow.escapes,
+        .continue_statement => CaseFlow.escapes,
+        .block_statement => |block| caseRangeFlow(tree, block.body, options),
+        .if_statement => |statement| caseNodeFlow(tree, statement.consequent, options) | caseNodeFlow(tree, statement.alternate, options),
+        .try_statement => |statement| blk: {
+            var flow = caseNodeFlow(tree, statement.block, options);
+            if (statement.handler != .null) {
+                const handler = tree.data(statement.handler).catch_clause;
+                flow |= caseNodeFlow(tree, handler.body, options);
+            }
+            if (statement.finalizer != .null) {
+                const finalizer = caseNodeFlow(tree, statement.finalizer, options);
+                flow = (finalizer & ~CaseFlow.next) | (if (finalizer & CaseFlow.next != 0) flow else @as(u8, 0));
+            }
+            break :blk flow;
+        },
+        else => switch (statementCompletion(tree, index, options)) {
+            .continues => CaseFlow.next,
+            .valid_terminal => CaseFlow.terminal,
+            .invalid_return => CaseFlow.invalid,
+        },
+    };
+}
+
+fn switchCompletion(tree: *const ast.Tree, statement: ast.SwitchStatement, options: Options) Completion {
+    const cases = tree.extra(statement.cases);
+    var has_default = false;
+    for (cases) |index| if (tree.data(index).switch_case.@"test" == .null) {
+        has_default = true;
+    };
+    var flow: u8 = if (has_default) 0 else CaseFlow.next;
+    var suffix: u8 = CaseFlow.next;
+    var cursor = cases.len;
+    while (cursor > 0) {
+        cursor -= 1;
+        const current = caseRangeFlow(tree, tree.data(cases[cursor]).switch_case.consequent, options);
+        suffix = (current & ~CaseFlow.next) | (if (current & CaseFlow.next != 0) suffix else @as(u8, 0));
+        flow |= suffix;
+    }
+    if (flow & CaseFlow.invalid != 0) return .invalid_return;
+    if (flow & (CaseFlow.next | CaseFlow.breaks | CaseFlow.escapes) != 0) return .continues;
+    return if (flow & CaseFlow.terminal != 0) .valid_terminal else .continues;
 }
 
 fn returnCompletion(tree: *const ast.Tree, statement: ast.ReturnStatement, options: Options) Completion {
