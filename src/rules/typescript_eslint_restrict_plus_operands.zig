@@ -138,6 +138,7 @@ fn inferExpressionTypeAtDepth(tree: *const ast.Tree, symbols: SymbolTable, index
         .ts_non_null_expression => |expression| inferExpressionTypeAtDepth(tree, symbols, expression.expression, depth + 1),
         .chain_expression => |expression| inferExpressionTypeAtDepth(tree, symbols, expression.expression, depth + 1),
         .member_expression => |member| memberType(tree, symbols, member, depth + 1),
+        .call_expression => |call| if (inferExpressionTypeAtDepth(tree, symbols, call.callee, depth + 1) == .any) .any else .unknown_expression,
         .binary_expression => |binary| if (binary.operator == .add) inferBinaryResultType(tree, symbols, binary, depth + 1) else .unknown_expression,
         else => .unknown_expression,
     };

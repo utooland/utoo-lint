@@ -373,3 +373,36 @@ test "bigint results do not mask invalid operand diagnostics" {
         try std.testing.expect(std.mem.indexOf(u8, result.diagnostics[0].message, "Got `boolean`") != null);
     }
 }
+
+test "any call results propagate through chained calls without erasing typed controls" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "export function example(items:any){return items.map((value,index)=>index+1);}", .count = 1 },
+        .{ .source = "export function example(items:any){return items.map(value=>value).map((value,index)=>index+1);}", .count = 1 },
+        .{ .source = "export function example(items:any){return items.slice(0).map((value,index)=>index+1);}", .count = 1 },
+        .{ .source = "export function example(items:any){return items.map(value=>value).slice(0).map((value,index)=>index+1);}", .count = 1 },
+        .{ .source = "export function example(items:number[]){return items.map(value=>value).slice(0).map((value,index)=>index+1);}", .count = 0 },
+        .{ .source = "export function example(items:any){return items?.slice(0)?.map((value,index)=>index+1);}", .count = 1 },
+        .{ .source = "export function example(items:any){return items['slice'](0)['map'](function(value,index){return index+1;});}", .count = 1 },
+        .{ .source = "export function example(items:any){const sliced=items.slice(0);return sliced.map((value,index)=>index+1);}", .count = 1 },
+        .{ .source = "export function example(items:any){return items.slice(0).map(({value})=>value+1);}", .count = 1 },
+        .{ .source = "export function example(items:any){return items.slice(0).map((value,index:number)=>index+1);}", .count = 0 },
+        .{ .source = "export function example(items:any){return items.slice(0).map((value,index=0)=>index+1);}", .count = 0 },
+        .{ .source = "export function example(items:any){return (items.slice(0) as number[]).map((value,index)=>index+1);}", .count = 0 },
+        .{ .source = "export function example(items:{slice:(start:number)=>number[]}){return items.slice(0).map((value,index)=>index+1);}", .count = 0 },
+        .{ .source = "export function example(fn:any){return fn()+1;}", .count = 1 },
+        .{ .source = "export function example(items:any){function inner(items:number[]){return items.slice(0).map((value,index)=>index+1);}return inner([]);}", .count = 0 },
+    };
+    for ([_]bool{ false, true }) |allow_any| {
+        var options = lint.Options.allDisabled();
+        options.typescript_eslint_restrict_plus_operands = true;
+        options.typescript_eslint_restrict_plus_operands_allow_any = allow_any;
+        for (cases) |case| {
+            var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.ts", options);
+            defer result.deinit(std.testing.allocator);
+            const expected: usize = if (allow_any) 0 else case.count;
+            const actual = helpers.countRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id);
+            if (actual != expected) std.debug.print("call chain case: {s}\n", .{case.source});
+            try std.testing.expectEqual(expected, actual);
+        }
+    }
+}
