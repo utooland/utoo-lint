@@ -61,11 +61,11 @@ pub fn checkBinaryExpression(
     const right = inferExpressionType(tree, symbols, expression.right);
     if (left == .any or right == .any) {
         if (!options.allow_any) {
-            try core.addDiagnostic(allocator, diagnostics, .warning, id, "Invalid operand for a '+' operation. Operands must each be a number or string. Got `any`.", tree.span(index));
+            try core.addDiagnostic(allocator, diagnostics, .warning, id, "Invalid operand for a '+' operation. Operands must each be a number, string, or bigint. Got `any`.", tree.span(index));
             return;
         }
         const other = if (left == .any) right else left;
-        if (other == .any or other == .unknown_expression or other == .bigint or isAllowedOperand(other)) return;
+        if (other == .any or other == .unknown_expression or isAllowedOperand(other)) return;
     }
     if (left == .unknown_expression or right == .unknown_expression) return;
     if (isAllowedPair(left, right, options)) return;
@@ -81,7 +81,7 @@ pub fn checkBinaryExpression(
             .warning,
             id,
             tree.span(index),
-            "Operands of '+' operations must be a number or string. Got `{s}` + `{s}`.",
+            "Operands of '+' operations must be a number, string, or bigint. Got `{s}` + `{s}`.",
             .{ left.text(), right.text() },
         );
         return;
@@ -94,7 +94,7 @@ pub fn checkBinaryExpression(
         .warning,
         id,
         tree.span(index),
-        "Invalid operand for a '+' operation. Operands must each be a number or string. Got `{s}`.",
+        "Invalid operand for a '+' operation. Operands must each be a number, string, or bigint. Got `{s}`.",
         .{invalid.text()},
     );
 }
@@ -114,7 +114,7 @@ fn isAllowedPair(left: ValueType, right: ValueType, options: Options) bool {
 }
 
 fn isAllowedOperand(value_type: ValueType) bool {
-    return value_type == .number or value_type == .string;
+    return value_type == .number or value_type == .string or value_type == .bigint;
 }
 
 fn inferExpressionType(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex) ValueType {

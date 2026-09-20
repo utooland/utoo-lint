@@ -361,3 +361,15 @@ test "bigint addition accepts matching operands and rejects mixed numeric types"
         }
     }
 }
+
+test "bigint results do not mask invalid operand diagnostics" {
+    var options = lint.Options.allDisabled();
+    options.typescript_eslint_restrict_plus_operands = true;
+    const cases = [_][]const u8{ "1n + 2n + true;", "true + (1n + 2n);" };
+    for (cases) |source| {
+        var result = try lint.lintSource(std.testing.allocator, source, "fixture.ts", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(@as(usize, 1), helpers.countRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id));
+        try std.testing.expect(std.mem.indexOf(u8, result.diagnostics[0].message, "Got `boolean`") != null);
+    }
+}
