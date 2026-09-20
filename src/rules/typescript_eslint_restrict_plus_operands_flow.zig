@@ -6,7 +6,7 @@ const SymbolId = parser.traverser.semantic.SymbolId;
 
 // Track one operand's binding through the enclosing function. Nested functions
 // have separate flow, and paths that return or throw do not join later paths.
-pub fn Narrowing(comptime ValueType: type, comptime infer: anytype) type {
+pub fn Narrowing(comptime ValueType: type) type {
     return struct {
         const Self = @This();
         tree: *const ast.Tree,
@@ -14,7 +14,6 @@ pub fn Narrowing(comptime ValueType: type, comptime infer: anytype) type {
         symbol: SymbolId,
         reference: ast.NodeIndex,
         baseline: ValueType,
-        inference_depth: usize,
 
         pub fn run(self: Self) ValueType {
             var scope = self.reference;
@@ -71,6 +70,8 @@ pub fn Narrowing(comptime ValueType: type, comptime infer: anytype) type {
                 },
                 .while_statement => |value| self.atLoop(node, value.@"test", value.body, state, depth),
                 .for_statement => |value| if (self.contains(value.init)) self.at(value.init, state, depth + 1) else self.atLoop(node, value.@"test", value.body, state, depth),
+                .for_of_statement => |value| self.at(value.body, if (self.hasWrite(node, self.tree.span(node).end)) self.baseline else state, depth + 1),
+                .for_in_statement => |value| self.at(value.body, if (self.hasWrite(node, self.tree.span(node).end)) self.baseline else state, depth + 1),
                 .do_while_statement => |value| blk: {
                     const entry = if (self.hasWrite(node, self.tree.span(node).end)) self.baseline else state;
                     break :blk if (self.contains(value.body)) self.at(value.body, entry, depth + 1) else self.at(value.@"test", self.after(value.body, entry, depth + 1) orelse entry, depth + 1);
@@ -127,13 +128,6 @@ pub fn Narrowing(comptime ValueType: type, comptime infer: anytype) type {
                 .sequence_expression => |value| self.afterList(self.tree.extra(value.expressions), state, depth),
                 .variable_declaration => |value| self.afterList(self.tree.extra(value.declarators), state, depth),
                 .variable_declarator => |value| self.after(value.init, state, depth + 1),
-                .assignment_expression => |value| blk: {
-                    if (self.isBinding(value.left) and value.operator == .assign) {
-                        const assigned = infer(self.tree, self.symbols, value.right, self.inference_depth + 1);
-                        break :blk if (assigned == .unknown_expression) self.baseline else assigned;
-                    }
-                    break :blk if (self.hasWrite(node, self.tree.span(node).end)) self.baseline else state;
-                },
                 else => if (self.hasWrite(node, self.tree.span(node).end)) self.baseline else state,
             };
         }
@@ -207,7 +201,7 @@ pub fn Narrowing(comptime ValueType: type, comptime infer: anytype) type {
                             nested = true;
                             break;
                         },
-                        .assignment_expression, .update_expression => if (write == .null) {
+                        .assignment_expression, .update_expression, .for_of_statement, .for_in_statement => if (write == .null) {
                             write = parent;
                         },
                         else => {},

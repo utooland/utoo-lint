@@ -403,6 +403,6 @@ fn narrowedReferenceType(tree: *const ast.Tree, symbols: SymbolTable, index: ast
     const baseline = referenceType(tree, symbols, index, depth);
     if (depth >= 32 or (baseline != .unknown and baseline != .any)) return baseline;
     const symbol = symbols.symbolOf(index) orelse return baseline;
-    const Flow = @import("typescript_eslint_restrict_plus_operands_flow.zig").Narrowing(ValueType, inferExpressionTypeAtDepth);
-    return (Flow{ .tree = tree, .symbols = symbols, .symbol = symbol, .reference = index, .baseline = baseline, .inference_depth = depth }).run();
+    const Flow = @import("typescript_eslint_restrict_plus_operands_flow.zig").Narrowing(ValueType);
+    return (Flow{ .tree = tree, .symbols = symbols, .symbol = symbol, .reference = index, .baseline = baseline }).run();
 }
