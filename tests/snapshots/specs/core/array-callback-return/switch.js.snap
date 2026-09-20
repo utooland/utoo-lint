@@ -1,0 +1,31 @@
+---
+fixture: "tests/snapshots/specs/core/array-callback-return/switch.js"
+rule: "array-callback-return"
+---
+
+# Input
+
+```js
+[1].map(x => { switch (x) { case 1: return x; default: throw new Error(); } });
+[1].map(x => { switch (x) { case 1: if (x > 1) break; return x; default: return 0; } });
+```
+
+# Diagnostics
+
+count: 1
+
+## Diagnostic 1
+
+- rule: "array-callback-return"
+- severity: "warning"
+- message: "Expected to return a value in array callback."
+- byte span: 88..166
+- start: 2:9
+- end: 2:87
+- source: "x => { switch (x) { case 1: if (x > 1) break; return x; default: return 0; } }"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0
