@@ -69,6 +69,7 @@ test "can disable @typescript-eslint/prefer-as-const" {
 
 test "safe autofixes preserve comments and suppression" {
     const cases = [_]struct { source: []const u8, output: []const u8 }{
+        .{ .source = "const x = null as null;", .output = "const x = null as null;" },
         .{ .source = "const x = 'value' as 'value';", .output = "const x = 'value' as const;" },
         .{ .source = "const x = 'value' as /* keep */ 'value';", .output = "const x = 'value' as /* keep */ const;" },
         .{ .source = "const x: 'value' = 'value';", .output = "const x: 'value' = 'value';" },

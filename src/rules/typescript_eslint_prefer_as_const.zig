@@ -77,7 +77,7 @@ fn compareTypes(
         else
             "Expected a `const` assertion instead of a literal type annotation.",
         tree.span(type_node),
-        if (can_fix and !hasComments(tree, tree.span(type_node))) &.{fix} else &.{},
+        if (can_fix and tree.data(unwrapParenthesized(tree, value_node)) != .null_literal and !hasComments(tree, tree.span(type_node))) &.{fix} else &.{},
     );
 }
 
