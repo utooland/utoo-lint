@@ -61,7 +61,7 @@ pub fn checkBinaryExpression(
     const right = inferExpressionType(tree, symbols, expression.right);
     if (left == .any or right == .any) {
         if (!options.allow_any) {
-            try core.addDiagnostic(allocator, diagnostics, .warning, id, "Invalid operand for a '+' operation. Operands must each be a number or string. Got `any`.", tree.span(index));
+            try core.addDiagnostic(allocator, diagnostics, .warning, id, "Invalid operand for a '+' operation. Operands must each be a number, string, or bigint. Got `any`.", tree.span(index));
             return;
         }
         const other = if (left == .any) right else left;
@@ -70,6 +70,10 @@ pub fn checkBinaryExpression(
     if (left == .unknown_expression or right == .unknown_expression) return;
     if (isAllowedPair(left, right, options)) return;
 
+    if ((left == .bigint and right == .number) or (left == .number and right == .bigint)) {
+        try core.addDiagnosticFmt(allocator, diagnostics, .warning, id, tree.span(index), "Numeric '+' operations must either be both bigints or both numbers. Got `{s}` + `{s}`.", .{ left.text(), right.text() });
+        return;
+    }
     if (isAllowedOperand(left) and isAllowedOperand(right)) {
         try core.addDiagnosticFmt(
             allocator,
@@ -77,7 +81,7 @@ pub fn checkBinaryExpression(
             .warning,
             id,
             tree.span(index),
-            "Operands of '+' operations must be a number or string. Got `{s}` + `{s}`.",
+            "Operands of '+' operations must be a number, string, or bigint. Got `{s}` + `{s}`.",
             .{ left.text(), right.text() },
         );
         return;
@@ -90,14 +94,15 @@ pub fn checkBinaryExpression(
         .warning,
         id,
         tree.span(index),
-        "Invalid operand for a '+' operation. Operands must each be a number or string. Got `{s}`.",
+        "Invalid operand for a '+' operation. Operands must each be a number, string, or bigint. Got `{s}`.",
         .{invalid.text()},
     );
 }
 
 fn isAllowedPair(left: ValueType, right: ValueType, options: Options) bool {
     if ((left == .number and right == .number) or
-        (left == .string and right == .string))
+        (left == .string and right == .string) or
+        (left == .bigint and right == .bigint))
     {
         return true;
     }
@@ -109,7 +114,7 @@ fn isAllowedPair(left: ValueType, right: ValueType, options: Options) bool {
 }
 
 fn isAllowedOperand(value_type: ValueType) bool {
-    return value_type == .number or value_type == .string;
+    return value_type == .number or value_type == .string or value_type == .bigint;
 }
 
 fn inferExpressionType(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex) ValueType {
@@ -143,6 +148,7 @@ fn inferBinaryResultType(tree: *const ast.Tree, symbols: SymbolTable, expression
     const right = inferExpressionTypeAtDepth(tree, symbols, expression.right, depth + 1);
     if (left == .string and right == .string) return .string;
     if (left == .number and right == .number) return .number;
+    if (left == .bigint and right == .bigint) return .bigint;
     return .unknown_expression;
 }
 
