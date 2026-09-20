@@ -207,3 +207,32 @@ test "does not classify inferred and contextual parameters as implicit any" {
         try std.testing.expectEqual(@as(usize, 0), helpers.countRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id));
     }
 }
+
+test "resolves scoped aliases and typed properties for addition" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "type Value=any; function example(a:Value){return a+1;}", .count = 1 },
+        .{ .source = "type First=any; type Value=First; function example(a:Value){return a+1;}", .count = 1 },
+        .{ .source = "interface Data{value:any} function example(a:Data){return a.value+1;}", .count = 1 },
+        .{ .source = "type Data={value:any}; function example(a:Data){return a['value']+1;}", .count = 1 },
+        .{ .source = "interface Base{value:any} interface Data extends Base{} function example(a:Data){return a.value+1;}", .count = 1 },
+        .{ .source = "interface Data{nested:{value:any}} function example(a:Data){return a.nested.value+1;}", .count = 1 },
+        .{ .source = "type Value=any; interface Data{value:Value} function example(a:Data){return a?.value+1;}", .count = 1 },
+        .{ .source = "type Value=any; function example(){const a=0 as Value; return a+1;}", .count = 1 },
+        .{ .source = "type Value=number; function example(a:Value){return a+1;}", .count = 0 },
+        .{ .source = "interface Data{value:number} function example(a:Data){return a.value+1;}", .count = 0 },
+        .{ .source = "type Value=any; function example(){type Value=number; const a:Value=0;return a+1;}", .count = 0 },
+        .{ .source = "type Value=any; function example<Value extends number>(a:Value){return a+1;}", .count = 0 },
+        .{ .source = "interface Data{value:any} function example(){interface Data{value:number} const a:Data={value:0};return a.value+1;}", .count = 0 },
+        .{ .source = "type Value=Value; function example(a:Value){return a+1;}", .count = 0 },
+    };
+    for ([_]bool{ false, true }) |allow_any| {
+        var options = lint.Options.allDisabled();
+        options.typescript_eslint_restrict_plus_operands = true;
+        options.typescript_eslint_restrict_plus_operands_allow_any = allow_any;
+        for (cases) |case| {
+            var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.ts", options);
+            defer result.deinit(std.testing.allocator);
+            try std.testing.expectEqual(if (allow_any) @as(usize, 0) else case.count, helpers.countRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id));
+        }
+    }
+}

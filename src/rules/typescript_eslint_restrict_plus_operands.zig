@@ -127,12 +127,12 @@ fn inferExpressionTypeAtDepth(tree: *const ast.Tree, symbols: SymbolTable, index
         .null_literal, .array_expression, .object_expression => .invalid,
         .identifier_reference => referenceType(tree, symbols, index, depth + 1),
         .parenthesized_expression => |parenthesized| inferExpressionTypeAtDepth(tree, symbols, parenthesized.expression, depth + 1),
-        .ts_as_expression => |expression| typeFromAnnotation(tree, expression.type_annotation) orelse .unknown_expression,
-        .ts_type_assertion => |expression| typeFromAnnotation(tree, expression.type_annotation) orelse .unknown_expression,
+        .ts_as_expression => |expression| typeFromAnnotation(tree, symbols, expression.type_annotation, depth + 1) orelse .unknown_expression,
+        .ts_type_assertion => |expression| typeFromAnnotation(tree, symbols, expression.type_annotation, depth + 1) orelse .unknown_expression,
         .ts_satisfies_expression => |expression| inferExpressionTypeAtDepth(tree, symbols, expression.expression, depth + 1),
         .ts_non_null_expression => |expression| inferExpressionTypeAtDepth(tree, symbols, expression.expression, depth + 1),
         .chain_expression => |expression| inferExpressionTypeAtDepth(tree, symbols, expression.expression, depth + 1),
-        .member_expression => |member| if (inferExpressionTypeAtDepth(tree, symbols, member.object, depth + 1) == .any) .any else .unknown_expression,
+        .member_expression => |member| memberType(tree, symbols, member, depth + 1),
         .binary_expression => |binary| if (binary.operator == .add) inferBinaryResultType(tree, symbols, binary, depth + 1) else .unknown_expression,
         else => .unknown_expression,
     };
@@ -146,8 +146,8 @@ fn inferBinaryResultType(tree: *const ast.Tree, symbols: SymbolTable, expression
     return .unknown_expression;
 }
 
-fn typeFromAnnotation(tree: *const ast.Tree, index: ast.NodeIndex) ?ValueType {
-    if (index == .null) return null;
+fn typeFromAnnotation(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex, depth: usize) ?ValueType {
+    if (index == .null or depth >= 32) return null;
     const type_index = switch (tree.data(index)) {
         .ts_type_annotation => |annotation| annotation.type_annotation,
         else => index,
@@ -161,6 +161,17 @@ fn typeFromAnnotation(tree: *const ast.Tree, index: ast.NodeIndex) ?ValueType {
         .ts_unknown_keyword => .unknown,
         .ts_any_keyword => .any,
         .ts_literal_type => |literal| literalType(tree, literal.literal),
+        .ts_parenthesized_type => |value| typeFromAnnotation(tree, symbols, value.type_annotation, depth + 1),
+        .ts_type_alias_declaration => |alias| typeFromAnnotation(tree, symbols, alias.type_annotation, depth + 1),
+        .ts_type_parameter => |parameter| typeFromAnnotation(tree, symbols, parameter.constraint, depth + 1),
+        .ts_type_reference => |reference| blk: {
+            const symbol = symbols.symbolOf(reference.type_name) orelse break :blk null;
+            for (symbols.symbolDecls(symbol)) |declaration| {
+                const parent = symbols.parentOf(declaration) orelse continue;
+                if (typeFromAnnotation(tree, symbols, parent, depth + 1)) |value| break :blk value;
+            }
+            break :blk null;
+        },
         else => null,
     };
 }
@@ -183,11 +194,14 @@ fn referenceType(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeInd
             .binding_identifier => |identifier| identifier.type_annotation,
             else => .null,
         };
-        if (annotation != .null) return typeFromAnnotation(tree, annotation) orelse .unknown_expression;
+        if (annotation != .null) return typeFromAnnotation(tree, symbols, annotation, depth + 1) orelse .unknown_expression;
         if (symbols.parentOf(declaration)) |parent| {
+            if (tree.data(parent) == .variable_declarator) {
+                return inferExpressionTypeAtDepth(tree, symbols, tree.data(parent).variable_declarator.init, depth + 1);
+            }
             if (tree.data(parent) == .assignment_pattern) {
                 const pattern = tree.data(parent).assignment_pattern;
-                if (pattern.type_annotation != .null) return typeFromAnnotation(tree, pattern.type_annotation) orelse .unknown_expression;
+                if (pattern.type_annotation != .null) return typeFromAnnotation(tree, symbols, pattern.type_annotation, depth + 1) orelse .unknown_expression;
                 const parameter = symbols.parentOf(parent) orelse return .unknown_expression;
                 if (tree.data(parameter) != .formal_parameter) return .unknown_expression;
                 const params = symbols.parentOf(parameter) orelse return .unknown_expression;
@@ -226,4 +240,100 @@ fn hasUncontextualizedParameters(tree: *const ast.Tree, symbols: SymbolTable, in
         }
     }
     return false;
+}
+
+fn memberType(tree: *const ast.Tree, symbols: SymbolTable, member: ast.MemberExpression, depth: usize) ValueType {
+    if (depth >= 32) return .unknown_expression;
+    if (inferExpressionTypeAtDepth(tree, symbols, member.object, depth + 1) == .any) return .any;
+    const annotation = expressionAnnotation(tree, symbols, member.object, depth + 1);
+    const name = memberName(tree, member.property, member.computed) orelse return .unknown_expression;
+    const property = propertyAnnotation(tree, symbols, annotation, name, depth + 1);
+    return typeFromAnnotation(tree, symbols, property, depth + 1) orelse .unknown_expression;
+}
+
+fn expressionAnnotation(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex, depth: usize) ast.NodeIndex {
+    if (index == .null or depth >= 32) return .null;
+    return switch (tree.data(index)) {
+        .identifier_reference => blk: {
+            const symbol = symbols.symbolOf(index) orelse break :blk .null;
+            for (symbols.symbolDecls(symbol)) |declaration| {
+                if (tree.data(declaration) == .binding_identifier) {
+                    const annotation = tree.data(declaration).binding_identifier.type_annotation;
+                    if (annotation != .null) break :blk annotation;
+                }
+                const parent = symbols.parentOf(declaration) orelse continue;
+                switch (tree.data(parent)) {
+                    .assignment_pattern => |pattern| if (pattern.type_annotation != .null) {
+                        break :blk pattern.type_annotation;
+                    },
+                    .variable_declarator => |variable| break :blk expressionAnnotation(tree, symbols, variable.init, depth + 1),
+                    else => {},
+                }
+            }
+            break :blk .null;
+        },
+        .ts_as_expression => |value| value.type_annotation,
+        .ts_type_assertion => |value| value.type_annotation,
+        .parenthesized_expression => |value| expressionAnnotation(tree, symbols, value.expression, depth + 1),
+        .ts_non_null_expression => |value| expressionAnnotation(tree, symbols, value.expression, depth + 1),
+        .chain_expression => |value| expressionAnnotation(tree, symbols, value.expression, depth + 1),
+        .ts_satisfies_expression => |value| expressionAnnotation(tree, symbols, value.expression, depth + 1),
+        .member_expression => |member| blk: {
+            const name = memberName(tree, member.property, member.computed) orelse break :blk .null;
+            break :blk propertyAnnotation(tree, symbols, expressionAnnotation(tree, symbols, member.object, depth + 1), name, depth + 1);
+        },
+        else => .null,
+    };
+}
+
+fn memberName(tree: *const ast.Tree, index: ast.NodeIndex, computed: bool) ?[]const u8 {
+    return switch (tree.data(index)) {
+        .identifier_name => |name| if (!computed) tree.string(name.name) else null,
+        .identifier_reference => |name| if (!computed) tree.string(name.name) else null,
+        .string_literal => |literal| tree.string(literal.value),
+        else => null,
+    };
+}
+
+fn referencedPropertyAnnotation(tree: *const ast.Tree, symbols: SymbolTable, reference: ast.NodeIndex, name: []const u8, depth: usize) ast.NodeIndex {
+    const symbol = symbols.symbolOf(reference) orelse return .null;
+    for (symbols.symbolDecls(symbol)) |declaration| {
+        const parent = symbols.parentOf(declaration) orelse continue;
+        const annotation = propertyAnnotation(tree, symbols, parent, name, depth + 1);
+        if (annotation != .null) return annotation;
+    }
+    return .null;
+}
+
+fn propertyAnnotation(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex, name: []const u8, depth: usize) ast.NodeIndex {
+    if (index == .null or depth >= 32) return .null;
+    const members = switch (tree.data(index)) {
+        .ts_type_annotation => |value| return propertyAnnotation(tree, symbols, value.type_annotation, name, depth + 1),
+        .ts_parenthesized_type => |value| return propertyAnnotation(tree, symbols, value.type_annotation, name, depth + 1),
+        .ts_type_alias_declaration => |value| return propertyAnnotation(tree, symbols, value.type_annotation, name, depth + 1),
+        .ts_type_reference => |reference| return referencedPropertyAnnotation(tree, symbols, reference.type_name, name, depth + 1),
+        .ts_type_parameter => |value| return propertyAnnotation(tree, symbols, value.constraint, name, depth + 1),
+        .ts_interface_declaration => |value| {
+            const own = propertyAnnotation(tree, symbols, value.body, name, depth + 1);
+            if (own != .null) return own;
+            for (tree.extra(value.extends)) |base| {
+                const inherited = propertyAnnotation(tree, symbols, base, name, depth + 1);
+                if (inherited != .null) return inherited;
+            }
+            return .null;
+        },
+        .ts_interface_heritage => |base| return referencedPropertyAnnotation(tree, symbols, base.expression, name, depth + 1),
+        .ts_type_literal => |value| value.members,
+        .ts_interface_body => |value| value.body,
+        else => return .null,
+    };
+    for (tree.extra(members)) |member| {
+        const property = switch (tree.data(member)) {
+            .ts_property_signature => |value| value,
+            else => continue,
+        };
+        const key = memberName(tree, property.key, property.computed) orelse continue;
+        if (std.mem.eql(u8, key, name)) return property.type_annotation;
+    }
+    return .null;
 }
