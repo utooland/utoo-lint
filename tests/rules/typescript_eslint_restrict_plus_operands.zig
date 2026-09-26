@@ -193,6 +193,50 @@ test "explicit any operands respect allowAny" {
     }
 }
 
+test "imported explicit any operands respect allowAny" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(std.testing.io, "src");
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "src/values.ts",
+        .data =
+        \\export function readAny(): any { return 1; }
+        \\export const anyValue: any = 1;
+        \\export function readNumber(): number { return 1; }
+        \\export const numberValue: number = 1;
+        ,
+    });
+
+    const file_path = try std.fs.path.resolve(std.testing.allocator, &.{
+        ".zig-cache",
+        "tmp",
+        &tmp.sub_path,
+        "src",
+        "entry.ts",
+    });
+    defer std.testing.allocator.free(file_path);
+
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "import { readAny } from './values'; readAny() + 1;", .count = 1 },
+        .{ .source = "import { anyValue } from './values'; 1 + anyValue;", .count = 1 },
+        .{ .source = "import { readNumber } from './values'; readNumber() + 1;", .count = 0 },
+        .{ .source = "import { numberValue } from './values'; numberValue + 1;", .count = 0 },
+        .{ .source = "import { anyValue } from './values'; if (typeof anyValue === 'number') { anyValue + 1; }", .count = 0 },
+        .{ .source = "import { anyValue } from './values'; function numeric(anyValue: number) { return anyValue + 1; }", .count = 0 },
+        .{ .source = "import { readAny as renamedRead, anyValue as renamedValue } from './values'; renamedRead() + renamedValue;", .count = 1 },
+    };
+    for ([_]bool{ false, true }) |allow_any| {
+        var options = lint.Options.allDisabled();
+        options.typescript_eslint_restrict_plus_operands = true;
+        options.typescript_eslint_restrict_plus_operands_allow_any = allow_any;
+        for (cases) |case| {
+            var result = try lint.lintSourceWithIo(std.testing.allocator, std.testing.io, case.source, file_path, options);
+            defer result.deinit(std.testing.allocator);
+            try std.testing.expectEqual(if (allow_any) @as(usize, 0) else case.count, helpers.countRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id));
+        }
+    }
+}
+
 test "addition operand types follow scoped bindings" {
     var options = lint.Options.allDisabled();
     options.typescript_eslint_restrict_plus_operands = true;
