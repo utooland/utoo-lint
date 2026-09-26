@@ -4,6 +4,7 @@ const core = @import("../core.zig");
 
 const ast = parser.ast;
 const SymbolTable = @import("../semantic_compat.zig").SymbolTable;
+const imported_types = @import("typescript_eslint_restrict_plus_operands_imports.zig");
 const Allocator = std.mem.Allocator;
 
 pub const id = "@typescript-eslint/restrict-plus-operands";
@@ -38,10 +39,59 @@ const ValueType = enum {
     }
 };
 
+const Types = struct {
+    symbols: SymbolTable,
+    imports: ?*const imported_types.Map = null,
+
+    fn symbolOf(self: Types, index: ast.NodeIndex) ?parser.traverser.semantic.SymbolId {
+        return self.symbols.symbolOf(index);
+    }
+
+    fn symbolDecls(self: Types, symbol: parser.traverser.semantic.SymbolId) []const ast.NodeIndex {
+        return self.symbols.symbolDecls(symbol);
+    }
+
+    fn parentOf(self: Types, index: ast.NodeIndex) ?ast.NodeIndex {
+        return self.symbols.parentOf(index);
+    }
+
+    fn isWriteReference(self: Types, reference_id: parser.traverser.semantic.ReferenceId) bool {
+        return self.symbols.isWriteReference(reference_id);
+    }
+
+    fn imported(self: Types, index: ast.NodeIndex) ?imported_types.Binding {
+        const map = self.imports orelse return null;
+        const symbol = self.symbolOf(index) orelse return null;
+        return map.get(symbol);
+    }
+};
+
+fn importedValue(value: imported_types.ImportedType) ValueType {
+    return switch (value) {
+        .unknown => .unknown_expression,
+        .any => .any,
+        .number => .number,
+        .string => .string,
+        .bigint => .bigint,
+        .boolean => .boolean,
+    };
+}
+
 pub fn run(allocator: Allocator, diagnostics: *core.DiagnosticList, tree: *const ast.Tree, symbols: SymbolTable, options: Options) Allocator.Error!void {
+    try runWithTypes(allocator, diagnostics, tree, .{ .symbols = symbols }, options);
+}
+
+pub fn runWithIo(allocator: Allocator, io: std.Io, diagnostics: *core.DiagnosticList, tree: *const ast.Tree, file_path: []const u8, symbols: SymbolTable, options: Options) Allocator.Error!void {
+    if (options.allow_any) return run(allocator, diagnostics, tree, symbols, options);
+    var imports = try imported_types.collect(allocator, io, tree, symbols, file_path);
+    defer imports.deinit();
+    try runWithTypes(allocator, diagnostics, tree, .{ .symbols = symbols, .imports = &imports }, options);
+}
+
+fn runWithTypes(allocator: Allocator, diagnostics: *core.DiagnosticList, tree: *const ast.Tree, symbols: Types, options: Options) Allocator.Error!void {
     for (tree.nodes.items(.data), 0..) |data, raw_index| {
         switch (data) {
-            .binary_expression => |expression| try checkBinaryExpression(allocator, diagnostics, tree, expression, @enumFromInt(raw_index), symbols, options),
+            .binary_expression => |expression| try checkBinaryExpressionWithTypes(allocator, diagnostics, tree, expression, @enumFromInt(raw_index), symbols, options),
             .assignment_expression => |expression| if (expression.operator == .add_assign and !options.skip_compound_assignments) {
                 try checkOperands(allocator, diagnostics, tree, expression.left, expression.right, @enumFromInt(raw_index), symbols, options);
             },
@@ -59,12 +109,24 @@ pub fn checkBinaryExpression(
     symbols: SymbolTable,
     options: Options,
 ) Allocator.Error!void {
+    try checkBinaryExpressionWithTypes(allocator, diagnostics, tree, expression, index, .{ .symbols = symbols }, options);
+}
+
+fn checkBinaryExpressionWithTypes(
+    allocator: Allocator,
+    diagnostics: *core.DiagnosticList,
+    tree: *const ast.Tree,
+    expression: ast.BinaryExpression,
+    index: ast.NodeIndex,
+    symbols: Types,
+    options: Options,
+) Allocator.Error!void {
     if (expression.operator != .add) return;
 
     try checkOperands(allocator, diagnostics, tree, expression.left, expression.right, index, symbols, options);
 }
 
-fn checkOperands(allocator: Allocator, diagnostics: *core.DiagnosticList, tree: *const ast.Tree, left_node: ast.NodeIndex, right_node: ast.NodeIndex, index: ast.NodeIndex, symbols: SymbolTable, options: Options) Allocator.Error!void {
+fn checkOperands(allocator: Allocator, diagnostics: *core.DiagnosticList, tree: *const ast.Tree, left_node: ast.NodeIndex, right_node: ast.NodeIndex, index: ast.NodeIndex, symbols: Types, options: Options) Allocator.Error!void {
     const left = inferExpressionType(tree, symbols, left_node);
     const right = inferExpressionType(tree, symbols, right_node);
     if (left == .any or right == .any) {
@@ -125,11 +187,11 @@ fn isAllowedOperand(value_type: ValueType) bool {
     return value_type == .number or value_type == .string or value_type == .bigint;
 }
 
-fn inferExpressionType(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex) ValueType {
+fn inferExpressionType(tree: *const ast.Tree, symbols: Types, index: ast.NodeIndex) ValueType {
     return inferExpressionTypeAtDepth(tree, symbols, index, 0);
 }
 
-fn inferExpressionTypeAtDepth(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex, depth: usize) ValueType {
+fn inferExpressionTypeAtDepth(tree: *const ast.Tree, symbols: Types, index: ast.NodeIndex, depth: usize) ValueType {
     if (index == .null or depth >= 32) return .unknown_expression;
 
     return switch (tree.data(index)) {
@@ -155,7 +217,7 @@ fn inferExpressionTypeAtDepth(tree: *const ast.Tree, symbols: SymbolTable, index
     };
 }
 
-fn inferBinaryResultType(tree: *const ast.Tree, symbols: SymbolTable, expression: ast.BinaryExpression, depth: usize) ValueType {
+fn inferBinaryResultType(tree: *const ast.Tree, symbols: Types, expression: ast.BinaryExpression, depth: usize) ValueType {
     const left = inferExpressionTypeAtDepth(tree, symbols, expression.left, depth + 1);
     const right = inferExpressionTypeAtDepth(tree, symbols, expression.right, depth + 1);
     if (left == .string and right == .string) return .string;
@@ -164,7 +226,7 @@ fn inferBinaryResultType(tree: *const ast.Tree, symbols: SymbolTable, expression
     return .unknown_expression;
 }
 
-fn typeFromAnnotation(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex, depth: usize) ?ValueType {
+fn typeFromAnnotation(tree: *const ast.Tree, symbols: Types, index: ast.NodeIndex, depth: usize) ?ValueType {
     if (index == .null or depth >= 32) return null;
     const type_index = switch (tree.data(index)) {
         .ts_type_annotation => |annotation| annotation.type_annotation,
@@ -205,7 +267,10 @@ fn literalType(tree: *const ast.Tree, index: ast.NodeIndex) ?ValueType {
     };
 }
 
-fn referenceType(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex, depth: usize) ValueType {
+fn referenceType(tree: *const ast.Tree, symbols: Types, index: ast.NodeIndex, depth: usize) ValueType {
+    if (symbols.imported(index)) |binding| {
+        if (binding.value != .unknown) return importedValue(binding.value);
+    }
     const symbol = symbols.symbolOf(index) orelse return .unknown_expression;
     for (symbols.symbolDecls(symbol)) |declaration| {
         const annotation = switch (tree.data(declaration)) {
@@ -243,7 +308,7 @@ fn referenceType(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeInd
 
 // Callback parameters and annotated function expressions may be contextually
 // typed. Only infer implicit any where no surrounding signature supplies it.
-fn hasUncontextualizedParameters(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex, depth: usize) bool {
+fn hasUncontextualizedParameters(tree: *const ast.Tree, symbols: Types, index: ast.NodeIndex, depth: usize) bool {
     if (depth >= 32) return false;
     switch (tree.data(index)) {
         .function => |function| if (function.type == .function_declaration) return true,
@@ -266,7 +331,7 @@ fn hasUncontextualizedParameters(tree: *const ast.Tree, symbols: SymbolTable, in
     return false;
 }
 
-fn memberType(tree: *const ast.Tree, symbols: SymbolTable, member: ast.MemberExpression, depth: usize) ValueType {
+fn memberType(tree: *const ast.Tree, symbols: Types, member: ast.MemberExpression, depth: usize) ValueType {
     if (depth >= 32) return .unknown_expression;
     if (inferExpressionTypeAtDepth(tree, symbols, member.object, depth + 1) == .any) return .any;
     const annotation = expressionAnnotation(tree, symbols, member.object, depth + 1);
@@ -279,7 +344,7 @@ fn memberType(tree: *const ast.Tree, symbols: SymbolTable, member: ast.MemberExp
     return typeFromAnnotation(tree, symbols, property, depth + 1) orelse .unknown_expression;
 }
 
-fn expressionAnnotation(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex, depth: usize) ast.NodeIndex {
+fn expressionAnnotation(tree: *const ast.Tree, symbols: Types, index: ast.NodeIndex, depth: usize) ast.NodeIndex {
     if (index == .null or depth >= 32) return .null;
     return switch (tree.data(index)) {
         .identifier_reference => blk: {
@@ -326,7 +391,7 @@ fn memberName(tree: *const ast.Tree, index: ast.NodeIndex, computed: bool) ?[]co
     };
 }
 
-fn referencedPropertyAnnotation(tree: *const ast.Tree, symbols: SymbolTable, reference: ast.NodeIndex, name: []const u8, depth: usize) ast.NodeIndex {
+fn referencedPropertyAnnotation(tree: *const ast.Tree, symbols: Types, reference: ast.NodeIndex, name: []const u8, depth: usize) ast.NodeIndex {
     const symbol = symbols.symbolOf(reference) orelse return .null;
     for (symbols.symbolDecls(symbol)) |declaration| {
         const parent = symbols.parentOf(declaration) orelse continue;
@@ -336,7 +401,7 @@ fn referencedPropertyAnnotation(tree: *const ast.Tree, symbols: SymbolTable, ref
     return .null;
 }
 
-fn propertyAnnotation(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex, name: []const u8, depth: usize) ast.NodeIndex {
+fn propertyAnnotation(tree: *const ast.Tree, symbols: Types, index: ast.NodeIndex, name: []const u8, depth: usize) ast.NodeIndex {
     if (index == .null or depth >= 32) return .null;
     const members = switch (tree.data(index)) {
         .ts_type_annotation => |value| return propertyAnnotation(tree, symbols, value.type_annotation, name, depth + 1),
@@ -369,13 +434,13 @@ fn propertyAnnotation(tree: *const ast.Tree, symbols: SymbolTable, index: ast.No
     return .null;
 }
 
-fn bindingHasWrites(symbols: SymbolTable, index: ast.NodeIndex) bool {
+fn bindingHasWrites(symbols: Types, index: ast.NodeIndex) bool {
     const symbol = symbols.symbolOf(index) orelse return true;
-    for (symbols.model.uses(symbol)) |reference| if (symbols.isWriteReference(reference)) return true;
+    for (symbols.symbols.model.uses(symbol)) |reference| if (symbols.isWriteReference(reference)) return true;
     return false;
 }
 
-fn bindingPatternType(tree: *const ast.Tree, symbols: SymbolTable, declaration: ast.NodeIndex, depth: usize) ValueType {
+fn bindingPatternType(tree: *const ast.Tree, symbols: Types, declaration: ast.NodeIndex, depth: usize) ValueType {
     if (depth >= 32) return .unknown_expression;
     var current = declaration;
     var path: [16][]const u8 = undefined;
@@ -435,12 +500,12 @@ fn bindingPatternType(tree: *const ast.Tree, symbols: SymbolTable, declaration: 
     return .unknown_expression;
 }
 
-fn narrowedReferenceType(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex, depth: usize) ValueType {
+fn narrowedReferenceType(tree: *const ast.Tree, symbols: Types, index: ast.NodeIndex, depth: usize) ValueType {
     const baseline = referenceType(tree, symbols, index, depth);
     if (depth >= 32 or (baseline != .unknown and baseline != .any)) return baseline;
     const symbol = symbols.symbolOf(index) orelse return baseline;
     const Flow = @import("typescript_eslint_restrict_plus_operands_flow.zig").Narrowing(ValueType);
-    return (Flow{ .tree = tree, .symbols = symbols, .symbol = symbol, .reference = index, .baseline = baseline }).run();
+    return (Flow{ .tree = tree, .symbols = symbols.symbols, .symbol = symbol, .reference = index, .baseline = baseline }).run();
 }
 
 // Keep type-parameter identity alongside alias instantiations. Names alone can
@@ -464,7 +529,7 @@ const TypeBindings = struct {
         return true;
     }
 
-    fn resolve(self: TypeBindings, tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex) ast.NodeIndex {
+    fn resolve(self: TypeBindings, tree: *const ast.Tree, symbols: Types, index: ast.NodeIndex) ast.NodeIndex {
         var current = unwrapAnnotation(tree, index);
         for (0..32) |_| {
             if (current == .null or tree.data(current) != .ts_type_reference) return current;
@@ -490,7 +555,7 @@ const Signature = struct {
     bindings: TypeBindings = .{},
 };
 
-fn callSignature(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex, depth: usize) ?Signature {
+fn callSignature(tree: *const ast.Tree, symbols: Types, index: ast.NodeIndex, depth: usize) ?Signature {
     if (index == .null or depth >= 32) return null;
     return switch (tree.data(index)) {
         .function => |function| if (function.async or function.generator) null else .{ .return_type = function.return_type, .params = function.params, .type_parameters = function.type_parameters },
@@ -539,9 +604,12 @@ fn unwrapAnnotation(tree: *const ast.Tree, index: ast.NodeIndex) ast.NodeIndex {
     };
 }
 
-fn callType(tree: *const ast.Tree, symbols: SymbolTable, call: ast.CallExpression, depth: usize) ValueType {
+fn callType(tree: *const ast.Tree, symbols: Types, call: ast.CallExpression, depth: usize) ValueType {
     if (depth >= 32) return .unknown_expression;
     if (inferExpressionTypeAtDepth(tree, symbols, call.callee, depth + 1) == .any) return .any;
+    if (symbols.imported(call.callee)) |binding| {
+        if (binding.return_type != .unknown) return importedValue(binding.return_type);
+    }
     const signature = callSignature(tree, symbols, call.callee, depth + 1) orelse return .unknown_expression;
     const result = signature.bindings.resolve(tree, symbols, signature.return_type);
     if (result == .null) return .unknown_expression;
@@ -578,7 +646,7 @@ fn callType(tree: *const ast.Tree, symbols: SymbolTable, call: ast.CallExpressio
     return typeFromAnnotation(tree, symbols, result, depth + 1) orelse .unknown_expression;
 }
 
-fn isNumericIndex(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex, depth: usize) bool {
+fn isNumericIndex(tree: *const ast.Tree, symbols: Types, index: ast.NodeIndex, depth: usize) bool {
     if (tree.data(index) == .string_literal) {
         _ = std.fmt.parseInt(usize, tree.string(tree.data(index).string_literal.value), 10) catch return false;
         return true;
@@ -586,11 +654,11 @@ fn isNumericIndex(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIn
     return inferExpressionTypeAtDepth(tree, symbols, index, depth + 1) == .number;
 }
 
-fn arrayElementAnnotation(tree: *const ast.Tree, symbols: SymbolTable, index: ast.NodeIndex, depth: usize) ast.NodeIndex {
+fn arrayElementAnnotation(tree: *const ast.Tree, symbols: Types, index: ast.NodeIndex, depth: usize) ast.NodeIndex {
     return arrayElementWithBindings(tree, symbols, index, .{}, depth);
 }
 
-fn arrayElementWithBindings(tree: *const ast.Tree, symbols: SymbolTable, original: ast.NodeIndex, bindings: TypeBindings, depth: usize) ast.NodeIndex {
+fn arrayElementWithBindings(tree: *const ast.Tree, symbols: Types, original: ast.NodeIndex, bindings: TypeBindings, depth: usize) ast.NodeIndex {
     const index = bindings.resolve(tree, symbols, original);
     if (index == .null or depth >= 32) return .null;
     return switch (tree.data(index)) {

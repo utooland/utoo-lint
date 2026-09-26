@@ -817,7 +817,18 @@ pub fn runSemanticWithIo(
         );
     }
 
-    try runSemanticBeforeIo(allocator, diagnostics, tree, semantic_result, options);
+    // The filesystem-aware pass handles imported operand types for this rule.
+    var local_options = options;
+    local_options.typescript_eslint_restrict_plus_operands = false;
+    try runSemanticBeforeIo(allocator, diagnostics, tree, semantic_result, local_options);
+
+    if (options.typescript_eslint_restrict_plus_operands) {
+        try typescript_eslint_restrict_plus_operands.runWithIo(allocator, io, diagnostics, tree, file_path, semantic_result.symbol_table, .{
+            .allow_number_and_string = options.typescript_eslint_restrict_plus_operands_allow_number_and_string,
+            .allow_any = options.typescript_eslint_restrict_plus_operands_allow_any,
+            .skip_compound_assignments = options.typescript_eslint_restrict_plus_operands_skip_compound_assignments,
+        });
+    }
 
     try runIoSemantic(allocator, diagnostics, tree, io, file_path, semantic_result, options);
 

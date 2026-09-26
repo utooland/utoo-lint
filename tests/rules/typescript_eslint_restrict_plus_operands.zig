@@ -193,6 +193,105 @@ test "explicit any operands respect allowAny" {
     }
 }
 
+test "imported explicit any operands respect allowAny" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(std.testing.io, "src");
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "src/values.ts",
+        .data =
+        \\export function readAny(): any { return 1; }
+        \\export const anyValue: any = 1;
+        \\export function readNumber(): number { return 1; }
+        \\export const numberValue: number = 1;
+        ,
+    });
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "src/arrow-values.ts",
+        .data = "export const readAny = (): any => 1;\n",
+    });
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "src/typed-values.ts",
+        .data = "export const readAny: () => any = () => 1;\n",
+    });
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "src/declarations.d.ts",
+        .data =
+        \\export declare const value: any;
+        \\export declare function read(): any;
+        ,
+    });
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "src/js-values.js",
+        .data = "export const value = 1;\n",
+    });
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "src/js-values.d.ts",
+        .data = "export declare const value: any;\n",
+    });
+    try tmp.dir.createDirPath(std.testing.io, "src/dir-values");
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "src/dir-values.js",
+        .data = "export const value = 1;\n",
+    });
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "src/dir-values/index.d.ts",
+        .data = "export declare const value: any;\n",
+    });
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "src/jsx-values.jsx",
+        .data = "export const value = 1;\n",
+    });
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "src/jsx-values.ts",
+        .data = "export const value: number = 1;\n",
+    });
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "src/jsx-values.tsx",
+        .data = "export const value: any = 1;\n",
+    });
+
+    const file_path = try std.fs.path.resolve(std.testing.allocator, &.{
+        ".zig-cache",
+        "tmp",
+        &tmp.sub_path,
+        "src",
+        "entry.ts",
+    });
+    defer std.testing.allocator.free(file_path);
+
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "import { readAny } from './values'; readAny() + 1;", .count = 1 },
+        .{ .source = "import { anyValue } from './values'; 1 + anyValue;", .count = 1 },
+        .{ .source = "import { readAny } from './arrow-values'; readAny() + 1;", .count = 1 },
+        .{ .source = "import { readAny } from './typed-values'; readAny() + 1;", .count = 1 },
+        .{ .source = "import { value } from './declarations'; value + 1;", .count = 1 },
+        .{ .source = "import { read } from './declarations'; read() + 1;", .count = 1 },
+        .{ .source = "import { value } from './js-values'; value + 1;", .count = 1 },
+        .{ .source = "import { value } from './js-values.js'; value + 1;", .count = 1 },
+        .{ .source = "import { value } from './dir-values'; value + 1;", .count = 1 },
+        .{ .source = "import { value } from './jsx-values.jsx'; value + 1;", .count = 1 },
+        .{ .source = "import { readNumber } from './values'; readNumber() + 1;", .count = 0 },
+        .{ .source = "import { numberValue } from './values'; numberValue + 1;", .count = 0 },
+        .{ .source = "import { anyValue } from './values'; if (typeof anyValue === 'number') { anyValue + 1; }", .count = 0 },
+        .{ .source = "import { anyValue } from './values'; function numeric(anyValue: number) { return anyValue + 1; }", .count = 0 },
+        .{ .source = "import { readAny as renamedRead, anyValue as renamedValue } from './values'; renamedRead() + renamedValue;", .count = 1 },
+    };
+    for ([_]bool{ false, true }) |allow_any| {
+        var options = lint.Options.allDisabled();
+        options.typescript_eslint_restrict_plus_operands = true;
+        options.typescript_eslint_restrict_plus_operands_allow_any = allow_any;
+        for (cases) |case| {
+            var result = try lint.lintSourceWithIo(std.testing.allocator, std.testing.io, case.source, file_path, options);
+            defer result.deinit(std.testing.allocator);
+            const expected: usize = if (allow_any) 0 else case.count;
+            const actual = helpers.countRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id);
+            if (actual != expected) std.debug.print("imported operand case: {s}, allowAny={}\n", .{ case.source, allow_any });
+            try std.testing.expectEqual(expected, actual);
+        }
+    }
+}
+
 test "addition operand types follow scoped bindings" {
     var options = lint.Options.allDisabled();
     options.typescript_eslint_restrict_plus_operands = true;
