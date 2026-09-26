@@ -1715,20 +1715,30 @@ test("migrator expands representable classic extglobs and rejects unsupported fo
     );
   }
 
-  const unsupportedConfig = write(
-    join(project, "unsupported.eslintrc.json"),
-    JSON.stringify({
-      overrides: [{ files: "**/*.!(test).js", rules: { "no-console": "error" } }]
-    })
-  );
-  const unsupported = spawnSync(
-    process.execPath,
-    [cliPath, "migrate", "eslint", `--from=${unsupportedConfig}`, "--print"],
-    { cwd: project, encoding: "utf8" }
-  );
-  assert.equal(unsupported.status, 2, unsupported.stderr);
-  assert.equal(unsupported.stdout, "");
-  assert.match(unsupported.stderr, /cannot migrate classic selector pattern .*only literal @\(one\|two\)/u);
+  for (const [index, pattern] of [
+    "**/*.!(test).js",
+    "src/@(foo/bar|baz).js",
+    "src/@(foo\\bar|baz).js"
+  ].entries()) {
+    const unsupportedConfig = write(
+      join(project, `unsupported-${index}.eslintrc.json`),
+      JSON.stringify({
+        overrides: [{ files: pattern, rules: { "no-console": "error" } }]
+      })
+    );
+    const unsupported = spawnSync(
+      process.execPath,
+      [cliPath, "migrate", "eslint", `--from=${unsupportedConfig}`, "--print"],
+      { cwd: project, encoding: "utf8" }
+    );
+    assert.equal(unsupported.status, 2, `${pattern}: ${unsupported.stderr}`);
+    assert.equal(unsupported.stdout, "", pattern);
+    assert.match(
+      unsupported.stderr,
+      /cannot migrate classic selector pattern .*only literal @\(one\|two\).*without path separators/u,
+      pattern
+    );
+  }
 });
 
 test("migrated unscoped rules keep project-wide default lint coverage", (t) => {

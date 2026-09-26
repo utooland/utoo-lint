@@ -487,7 +487,12 @@ function expandClassicExtglobs(pattern) {
         return value;
       }
       const alternatives = match[1].split("|");
-      if (alternatives.some((alternative) => !alternative || /[*?[\]{}()]/u.test(alternative))) {
+      if (alternatives.some((alternative) =>
+        !alternative ||
+        alternative.includes("/") ||
+        alternative.includes("\\") ||
+        /[*?[\]{}()]/u.test(alternative)
+      )) {
         throw unsupportedClassicExtglobError(pattern);
       }
       return alternatives.map((alternative) =>
@@ -504,7 +509,7 @@ function expandClassicExtglobs(pattern) {
 function unsupportedClassicExtglobError(pattern) {
   return new Error(
     `utoo-lint migrate eslint: cannot migrate classic selector pattern "${pattern}": ` +
-    "only literal @(one|two) extglob alternatives are supported"
+    "only literal @(one|two) extglob alternatives without path separators are supported"
   );
 }
 
