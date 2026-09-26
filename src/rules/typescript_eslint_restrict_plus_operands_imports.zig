@@ -52,7 +52,7 @@ pub fn collect(
         }
         if (!has_named_value) continue;
         const source = import_export_map.importSource(tree, declaration) orelse continue;
-        const path = try import_export_map.resolveRelativeModule(allocator, io, file_path, source) orelse continue;
+        const path = try resolveTypedRelativeModule(allocator, io, file_path, source) orelse continue;
         defer allocator.free(path);
 
         const contents = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(max_source_size)) catch |err| switch (err) {
@@ -85,6 +85,70 @@ pub fn collect(
     return map;
 }
 
+fn resolveTypedRelativeModule(allocator: Allocator, io: std.Io, file_path: []const u8, source: []const u8) Allocator.Error!?[]const u8 {
+    if (!import_export_map.isRelativeImport(source)) return null;
+
+    const directory = std.fs.path.dirname(file_path) orelse ".";
+    const imported_path = try std.fs.path.resolve(allocator, &.{ directory, source });
+    defer allocator.free(imported_path);
+
+    if (std.fs.path.extension(source).len == 0) {
+        if (try typedSource(allocator, io, imported_path)) |path| return path;
+        const index_path = try std.fs.path.join(allocator, &.{ imported_path, "index" });
+        defer allocator.free(index_path);
+        if (try typedSource(allocator, io, index_path)) |path| return path;
+    }
+
+    // TypeScript substitutes source/declaration files for explicit JavaScript
+    // specifiers and prefers declarations over a JavaScript implementation.
+    if (try typedCompanion(allocator, io, imported_path)) |path| return path;
+    if (try import_export_map.resolveRelativeModule(allocator, io, file_path, source)) |resolved| {
+        errdefer allocator.free(resolved);
+        if (try typedCompanion(allocator, io, resolved)) |path| {
+            allocator.free(resolved);
+            return path;
+        }
+        return resolved;
+    }
+    return null;
+}
+
+fn typedSource(allocator: Allocator, io: std.Io, base: []const u8) Allocator.Error!?[]const u8 {
+    for ([_][]const u8{ ".ts", ".tsx", ".mts", ".cts", ".d.ts", ".d.mts", ".d.cts" }) |extension| {
+        if (try fileWithExtension(allocator, io, base, extension)) |path| return path;
+    }
+    return null;
+}
+
+fn typedCompanion(allocator: Allocator, io: std.Io, runtime_path: []const u8) Allocator.Error!?[]const u8 {
+    const extension = std.fs.path.extension(runtime_path);
+    const alternatives: []const []const u8 = if (std.mem.eql(u8, extension, ".js"))
+        &.{ ".ts", ".tsx", ".d.ts" }
+    else if (std.mem.eql(u8, extension, ".jsx"))
+        &.{ ".tsx", ".ts", ".d.ts" }
+    else if (std.mem.eql(u8, extension, ".mjs"))
+        &.{ ".mts", ".d.mts" }
+    else if (std.mem.eql(u8, extension, ".cjs"))
+        &.{ ".cts", ".d.cts" }
+    else
+        return null;
+    const stem = runtime_path[0 .. runtime_path.len - extension.len];
+    for (alternatives) |candidate| {
+        if (try fileWithExtension(allocator, io, stem, candidate)) |path| return path;
+    }
+    return null;
+}
+
+fn fileWithExtension(allocator: Allocator, io: std.Io, base: []const u8, extension: []const u8) Allocator.Error!?[]const u8 {
+    const path = try std.mem.concat(allocator, u8, &.{ base, extension });
+    const file = std.Io.Dir.cwd().openFile(io, path, .{}) catch {
+        allocator.free(path);
+        return null;
+    };
+    file.close(io);
+    return path;
+}
+
 const Lookup = struct {
     count: usize = 0,
     binding: Binding = .{},
@@ -111,12 +175,14 @@ fn bindingForExport(tree: *const ast.Tree, exported_name: []const u8) Binding {
             .export_named_declaration => |value| value,
             else => continue,
         };
-        if (export_declaration.export_kind == .type) continue;
         if (export_declaration.declaration != .null) {
+            // The parser marks `export declare const/function` as type exports,
+            // but these declarations still name imported values.
             const direct = bindingForDeclaration(tree, export_declaration.declaration, exported_name);
             if (direct.count != 0) found.add(direct.result());
             continue;
         }
+        if (export_declaration.export_kind == .type) continue;
         // Re-exports need a separate module resolution step. They cannot be
         // assumed to have the annotation of a same-named local declaration.
         if (export_declaration.source != .null) continue;
@@ -177,12 +243,31 @@ fn bindingForDeclaration(tree: *const ast.Tree, declaration_index: ast.NodeIndex
                 const id = bindingName(tree, declarator.id) orelse continue;
                 if (!std.mem.eql(u8, id, name)) continue;
                 const binding = tree.data(declarator.id).binding_identifier;
-                found.add(.{ .value = annotationType(tree, binding.type_annotation) });
+                found.add(.{
+                    .value = annotationType(tree, binding.type_annotation),
+                    .return_type = if (binding.type_annotation == .null)
+                        callableReturnType(tree, declarator.init, 0)
+                    else
+                        callableReturnType(tree, binding.type_annotation, 0),
+                });
             }
         },
         else => {},
     }
     return found;
+}
+
+fn callableReturnType(tree: *const ast.Tree, index: ast.NodeIndex, depth: usize) ImportedType {
+    if (index == .null or depth >= 32) return .unknown;
+    return switch (tree.data(index)) {
+        .ts_type_annotation => |value| callableReturnType(tree, value.type_annotation, depth + 1),
+        .ts_parenthesized_type => |value| callableReturnType(tree, value.type_annotation, depth + 1),
+        .parenthesized_expression => |value| callableReturnType(tree, value.expression, depth + 1),
+        .ts_function_type => |value| annotationType(tree, value.return_type),
+        .arrow_function_expression => |value| if (value.async) .unknown else annotationType(tree, value.return_type),
+        .function => |value| if (value.async or value.generator) .unknown else annotationType(tree, value.return_type),
+        else => .unknown,
+    };
 }
 
 fn annotationType(tree: *const ast.Tree, index: ast.NodeIndex) ImportedType {
