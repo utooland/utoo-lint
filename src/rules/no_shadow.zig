@@ -80,8 +80,11 @@ pub fn runWithOptions(
         const shadowed_decls = symbol_table.symbolDecls(shadowed_id);
         if (shadowed_decls.len == 0) continue;
         const shadowed_flags = symbol_table.getSymbol(shadowed_id).flags;
+        // Yuku exposes import and namespace flags separately from value space.
+        // Ordinary imports and namespace names still count as value bindings
+        // for the function type parameter shadow option.
         if (signature_parameter and options.ignore_function_type_parameter_name_value_shadow and
-            shadowed_flags.inValueSpace()) continue;
+            (shadowed_flags.inValueSpace() or shadowed_flags.import or shadowed_flags.namespace_module)) continue;
         if (isAllowedByHoist(tree, decls[0], shadowed_decls[0], shadowed_flags, options)) continue;
         if (options.ignore_on_initialization and isAllowedOnInitialization(tree, decls[0], shadowed_decls[0])) continue;
 

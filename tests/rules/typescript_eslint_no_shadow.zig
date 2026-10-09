@@ -304,6 +304,8 @@ test "handles parameter shadows in TypeScript signatures without duplicate repor
 test "signature parameter shadow option preserves type shadows and runtime parameter shadows" {
     const cases = [_][]const u8{
         "type value = string; type Fn = (value: string) => void;",
+        "import type { value } from 'module'; type Fn = (value: string) => void;",
+        "import { type value } from 'module'; type Fn = (value: string) => void;",
         "const value = 1; function fn(value: string) { return value; }",
     };
 
@@ -315,6 +317,27 @@ test "signature parameter shadow option preserves type shadows and runtime param
         defer result.deinit(std.testing.allocator);
 
         try std.testing.expectEqual(@as(usize, 1), helpers.countRule(result, lint.rules.typescript_eslint_no_shadow.id));
+    }
+}
+
+test "signature parameter shadow option handles imported values and namespaces" {
+    const cases = [_][]const u8{
+        "import { value } from 'module'; type Fn = (value: string) => typeof value;",
+        "import * as value from 'module'; type Fn = (value: string) => typeof value;",
+        "namespace value { export interface Item {} } type Fn = (value: string) => typeof value;",
+    };
+
+    for (cases) |source| {
+        for ([_]bool{ true, false }) |ignore| {
+            var options = lint.Options.allDisabled();
+            options.typescript_eslint_no_shadow = true;
+            options.typescript_eslint_no_shadow_ignore_type_value_shadow = false;
+            options.typescript_eslint_no_shadow_ignore_function_type_parameter_name_value_shadow = ignore;
+            var result = try lint.lintSource(std.testing.allocator, source, "fixture.ts", options);
+            defer result.deinit(std.testing.allocator);
+
+            try std.testing.expectEqual(if (ignore) @as(usize, 0) else @as(usize, 1), helpers.countRule(result, lint.rules.typescript_eslint_no_shadow.id));
+        }
     }
 }
 
