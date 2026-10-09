@@ -14,7 +14,7 @@ pub fn check(
     text: ast.JSXText,
     index: ast.NodeIndex,
 ) Allocator.Error!void {
-    if (!startsWithCommentToken(tree.string(text.value))) return;
+    if (!startsWithCommentToken(tree.string(text.raw))) return;
 
     try core.addDiagnostic(
         allocator,

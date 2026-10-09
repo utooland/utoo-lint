@@ -92,7 +92,7 @@
     "eslint-scope": "9.1.2",
     "esquery": "1.7.0",
     "jiti": "2.7.0",
-    "yuku-parser": "0.10.1"
+    "yuku-parser": "0.18.0"
   },
   "publishConfig": {
     "access": "public",

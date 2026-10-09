@@ -8,11 +8,15 @@ import {
 } from './protocol';
 
 const workerScope = self as unknown as DedicatedWorkerGlobalScope;
-let parserPromise: Promise<typeof import('@yuku-parser/wasm')> | undefined;
+type Parser = typeof import('yuku-parser') & { core: import('yuku-parser').Core };
+let parserPromise: Promise<Parser> | undefined;
 
 function getParser() {
   if (!parserPromise) {
-    const candidate = import('@yuku-parser/wasm');
+    const candidate = Promise.all([
+      import('yuku-parser'),
+      import('@yuku-core/wasm'),
+    ]).then(async ([parser, { load }]) => ({ ...parser, core: await load() }));
     parserPromise = candidate;
     void candidate.catch(() => {
       if (parserPromise === candidate) parserPromise = undefined;
@@ -32,10 +36,11 @@ workerScope.onmessage = async ({ data }: MessageEvent<ASTWorkerRequest>) => {
       );
     }
 
-    const { langFromPath, parse, sourceTypeFromPath } = await getParser();
+    const { core, langFromPath, parse, sourceTypeFromPath } = await getParser();
     const startedAt = performance.now();
     const parsed = parse(source, {
       attachComments: false,
+      core,
       lang: langFromPath(filePath),
       preserveParens: true,
       semanticErrors: false,

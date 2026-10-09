@@ -275,6 +275,66 @@ test "supports configured @typescript-eslint/no-shadow ignoreFunctionTypeParamet
     try std.testing.expect(!helpers.hasRule(report_result, lint.rules.no_shadow.id));
 }
 
+test "handles parameter shadows in TypeScript signatures without duplicate reports" {
+    const signatures = [_][]const u8{
+        "type Fn = (value: string) => typeof value;",
+        "type Constructor = new (value: string) => object;",
+        "interface Shape { method(value: string): typeof value; }",
+        "interface Shape { (value: string): typeof value; }",
+        "interface Shape { new (value: string): object; }",
+        "declare function fn(value: string): typeof value;",
+        "abstract class Shape { abstract method(value: string): typeof value; }",
+    };
+
+    for (signatures) |signature| {
+        const source = try std.fmt.allocPrint(std.testing.allocator, "const value = 1; {s}", .{signature});
+        defer std.testing.allocator.free(source);
+        for ([_]bool{ true, false }) |ignore| {
+            var options = lint.Options.allDisabled();
+            options.typescript_eslint_no_shadow = true;
+            options.typescript_eslint_no_shadow_ignore_function_type_parameter_name_value_shadow = ignore;
+            var result = try lint.lintSource(std.testing.allocator, source, "fixture.ts", options);
+            defer result.deinit(std.testing.allocator);
+
+            try std.testing.expectEqual(if (ignore) @as(usize, 0) else @as(usize, 1), helpers.countRule(result, lint.rules.typescript_eslint_no_shadow.id));
+        }
+    }
+}
+
+test "signature parameter shadow option preserves type shadows and runtime parameter shadows" {
+    const cases = [_][]const u8{
+        "type value = string; type Fn = (value: string) => void;",
+        "const value = 1; function fn(value: string) { return value; }",
+    };
+
+    for (cases) |source| {
+        var options = lint.Options.allDisabled();
+        options.typescript_eslint_no_shadow = true;
+        options.typescript_eslint_no_shadow_ignore_type_value_shadow = false;
+        var result = try lint.lintSource(std.testing.allocator, source, "fixture.ts", options);
+        defer result.deinit(std.testing.allocator);
+
+        try std.testing.expectEqual(@as(usize, 1), helpers.countRule(result, lint.rules.typescript_eslint_no_shadow.id));
+    }
+}
+
+test "index signature labels never shadow variables in either no-shadow rule" {
+    const source = "const key = 1; export interface Map { [key: string]: number; }";
+    for ([_]bool{ true, false }) |typescript| {
+        for ([_]bool{ true, false }) |ignore| {
+            var options = lint.Options.allDisabled();
+            options.typescript_eslint_no_shadow = typescript;
+            options.no_shadow = !typescript;
+            options.typescript_eslint_no_shadow_ignore_function_type_parameter_name_value_shadow = ignore;
+            var result = try lint.lintSource(std.testing.allocator, source, "fixture.ts", options);
+            defer result.deinit(std.testing.allocator);
+
+            try std.testing.expect(!helpers.hasRule(result, lint.rules.typescript_eslint_no_shadow.id));
+            try std.testing.expect(!helpers.hasRule(result, lint.rules.no_shadow.id));
+        }
+    }
+}
+
 test "can disable @typescript-eslint/no-shadow and fall back to no-shadow" {
     const source =
         \\const value = 1;

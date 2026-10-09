@@ -149,6 +149,7 @@ pub fn runWithOptions(
         if (options.vars == .local and isGlobalVariable(scope_tree, symbol.scope, flags)) continue;
         if (flags.catch_var and !options.check_caught_errors) continue;
         if (flags.parameter) {
+            if (isTypeSignatureParameter(tree, scope_tree, symbol.scope)) continue;
             if (!options.check_parameters) continue;
             if (options.args_after_used and !shouldCheckParameter(entry.id, symbol.scope, parameters.items)) continue;
         }
@@ -237,6 +238,25 @@ fn isLintableSymbol(flags: traverser.semantic.Symbol.Flags, options: Options) bo
         flags.interface or
         flags.type_alias or
         (options.check_type_parameters and flags.type_parameter);
+}
+
+fn isTypeSignatureParameter(
+    tree: *const ast.Tree,
+    scope_tree: traverser.semantic.ScopeTree,
+    scope_id: traverser.semantic.ScopeId,
+) bool {
+    const scope = scope_tree.getScope(scope_id);
+    return switch (tree.data(scope.node)) {
+        .ts_function_type,
+        .ts_constructor_type,
+        .ts_method_signature,
+        .ts_call_signature_declaration,
+        .ts_construct_signature_declaration,
+        .ts_index_signature,
+        => true,
+        .function => |function| function.body == .null,
+        else => false,
+    };
 }
 
 fn isParameterProperty(tree: *const ast.Tree, symbol_table: traverser.semantic.SymbolTable, declaration: ast.NodeIndex) bool {

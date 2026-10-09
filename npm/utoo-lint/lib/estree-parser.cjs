@@ -178,32 +178,6 @@ function forEachChild(node, callback) {
   }
 }
 
-const JSX_ENTITIES = {
-  amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: "\u00a0", copy: "\u00a9", reg: "\u00ae",
-  trade: "\u2122", hellip: "\u2026", mdash: "\u2014", ndash: "\u2013", laquo: "\u00ab", raquo: "\u00bb",
-  lsquo: "\u2018", rsquo: "\u2019", ldquo: "\u201c", rdquo: "\u201d", times: "\u00d7", divide: "\u00f7",
-  euro: "\u20ac", pound: "\u00a3", yen: "\u00a5", cent: "\u00a2", deg: "\u00b0", plusmn: "\u00b1",
-  middot: "\u00b7", bull: "\u2022", larr: "\u2190", rarr: "\u2192", uarr: "\u2191", darr: "\u2193",
-  hearts: "\u2665", sect: "\u00a7", para: "\u00b6", iexcl: "\u00a1", iquest: "\u00bf", frac12: "\u00bd",
-  frac14: "\u00bc", frac34: "\u00be", micro: "\u00b5", ensp: "\u2002", emsp: "\u2003", thinsp: "\u2009",
-  zwnj: "\u200c", zwj: "\u200d", shy: "\u00ad", infin: "\u221e", ne: "\u2260", le: "\u2264", ge: "\u2265"
-};
-
-// ESLint's parsers expose entity-decoded JSX text and attribute values while
-// keeping `raw` intact; mirror that for the common entities.
-function decodeJsxEntities(value) {
-  if (typeof value !== "string" || !value.includes("&")) {
-    return value;
-  }
-  return value.replace(/&(#x[0-9a-fA-F]+|#[0-9]+|[a-zA-Z][a-zA-Z0-9]*);/gu, (match, entity) => {
-    if (entity[0] === "#") {
-      const codePoint = entity[1] === "x" || entity[1] === "X" ? Number.parseInt(entity.slice(2), 16) : Number.parseInt(entity.slice(1), 10);
-      return Number.isFinite(codePoint) && codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : match;
-    }
-    return Object.hasOwn(JSX_ENTITIES, entity) ? JSX_ENTITIES[entity] : match;
-  });
-}
-
 function setParent(node, parent) {
   Object.defineProperty(node, "parent", {
     value: parent,
@@ -230,9 +204,6 @@ function normalizeTree(program, text, locate) {
     }
     decorateNode(node, locate);
     setParent(node, parent);
-    if (node.type === "JSXText" || (node.type === "Literal" && parent?.type === "JSXAttribute")) {
-      node.value = decodeJsxEntities(node.value);
-    }
     forEachChild(node, (child) => stack.push([child, node]));
   }
   program.start = 0;

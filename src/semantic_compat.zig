@@ -21,6 +21,8 @@ pub const Reference = struct {
     scope: yuku_semantic.ScopeId,
     node: ast.NodeIndex,
     kind: Kind,
+    space: yuku_semantic.Reference.Space,
+    type_position: bool,
 
     pub const Kind = enum(u1) { value, type };
 
@@ -30,9 +32,12 @@ pub const Reference = struct {
             .scope = reference.scope,
             .node = reference.node,
             .kind = switch (reference.flags.space) {
-                .type, .namespace => .type,
-                .value, .typeof, .any => .value,
+                .type => .type,
+                .namespace, .any => if (reference.flags.type_position) .type else .value,
+                .value, .typeof => .value,
             },
+            .space = reference.flags.space,
+            .type_position = reference.flags.type_position,
         };
     }
 };
@@ -238,5 +243,41 @@ test "adapts Yuku's space-aware symbol resolution" {
     const symbol_id = result.symbol_table.referenceSymbol(entry.id);
     try std.testing.expect(symbol_id != .none);
     try std.testing.expect(model.symbol(symbol_id).flags.type_alias);
+    try std.testing.expectEqual(null, references.next());
+}
+
+test "distinguishes runtime aliases from erased exports and value queries" {
+    const source =
+        \\namespace NS { export const Value = 1; export interface Item {} }
+        \\import Alias = NS.Value;
+        \\import type TypeAlias = NS.Item;
+        \\export type { Alias };
+        \\export { type TypeAlias };
+        \\type Query = typeof Alias;
+    ;
+    var tree = try parser.parse(std.testing.allocator, source, .{ .lang = .ts });
+    defer tree.deinit();
+
+    const model = try parser.semantic.analyze(&tree);
+    const result = Result.init(&tree, model);
+    var references = result.symbol_table.iterReferences();
+    const Expected = struct {
+        name: []const u8,
+        kind: Reference.Kind,
+        type_position: bool,
+    };
+    const expected = [_]Expected{
+        .{ .name = "NS", .kind = .value, .type_position = false },
+        .{ .name = "NS", .kind = .type, .type_position = true },
+        .{ .name = "Alias", .kind = .type, .type_position = true },
+        .{ .name = "TypeAlias", .kind = .type, .type_position = true },
+        .{ .name = "Alias", .kind = .value, .type_position = true },
+    };
+    for (expected) |item| {
+        const entry = references.next().?;
+        try std.testing.expectEqualStrings(item.name, tree.string(entry.reference.name));
+        try std.testing.expectEqual(item.kind, entry.reference.kind);
+        try std.testing.expectEqual(item.type_position, entry.reference.type_position);
+    }
     try std.testing.expectEqual(null, references.next());
 }

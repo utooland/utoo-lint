@@ -40,7 +40,7 @@ vendored Yuku commit:
 zig version
 ```
 
-The vendored Yuku `build.zig.zon` currently asks for
+The vendored Yuku v0.18.0 `build.zig.zon` currently asks for
 `0.16.0` or newer. The repository is currently tested with
 `0.17.0-dev.224+c166c49b1`.
 

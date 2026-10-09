@@ -376,9 +376,12 @@ test('rejects oversized AST input before starting a worker', async () => {
 });
 
 test('keeps Yuku spans aligned with Monaco UTF-16 offsets', async () => {
-  const { parse } = await import('@yuku-parser/wasm');
+  const { parse } = await import('yuku-parser');
+  const { load } = await import('@yuku-core/wasm');
+  const core = await load();
   const source = "const 前缀 = '🐰';\nfunction greet() {}";
   const { program } = parse(source, {
+    core,
     lang: 'ts',
     sourceType: 'module',
   });
@@ -399,7 +402,9 @@ test('keeps Yuku spans aligned with Monaco UTF-16 offsets', async () => {
 
 test('fixes every diagnostic in each default Playground fixture', async () => {
   const { createUtooLint } = await import('@utoo/lint-wasm');
-  const { langFromPath, parse } = await import('@yuku-parser/wasm');
+  const { langFromPath, parse } = await import('yuku-parser');
+  const { load } = await import('@yuku-core/wasm');
+  const core = await load();
   const linter = await createUtooLint();
 
   for (const [language, source] of Object.entries(INITIAL_SOURCES)) {
@@ -426,6 +431,7 @@ test('fixes every diagnostic in each default Playground fixture', async () => {
     );
 
     const ast = parse(source, {
+      core,
       lang: langFromPath(options.filePath),
       preserveParens: true,
       sourceType: 'module',

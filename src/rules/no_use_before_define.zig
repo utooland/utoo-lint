@@ -86,14 +86,14 @@ pub fn runWithOptions(
     var reference_iter = symbol_table.iterReferences();
     while (reference_iter.next()) |entry| {
         const reference = entry.reference;
-        if (reference.kind == .type and !options.check_type_references) continue;
+        if (reference.type_position and !options.check_type_references) continue;
         if (options.allow_named_exports and named_export_refs.contains(reference.node)) continue;
 
         const symbol_id = symbol_table.referenceSymbol(entry.id);
         if (symbol_id == .none) continue;
 
         const symbol = symbol_table.getSymbol(symbol_id);
-        if (!isLintableReferenceSymbol(symbol.flags, reference.kind, options)) continue;
+        if (!isLintableReferenceSymbol(symbol.flags, reference, options)) continue;
         if (reference.kind == .value and shouldIgnoreVariableReference(scope_tree, reference.scope, symbol.scope, symbol.flags, options)) continue;
 
         const decls = symbol_table.symbolDecls(symbol_id);
@@ -294,10 +294,14 @@ fn isLintableSymbol(flags: traverser.semantic.Symbol.Flags, options: Options) bo
 
 fn isLintableReferenceSymbol(
     flags: traverser.semantic.Symbol.Flags,
-    kind: traverser.semantic.Reference.Kind,
+    reference: traverser.semantic.Reference,
     options: Options,
 ) bool {
-    return switch (kind) {
+    // Type-only exports can name a value that consumers use in a typeof query.
+    if (reference.space == .any and reference.type_position and !flags.inTypeSpace() and !flags.type_import) {
+        return isLintableValueSymbol(flags, options);
+    }
+    return switch (reference.kind) {
         .value => isLintableValueSymbol(flags, options),
         .type => isLintableTypeSymbol(flags, options),
     };

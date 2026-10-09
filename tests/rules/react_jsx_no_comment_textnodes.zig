@@ -42,6 +42,26 @@ test "allows JSX expression comments and ordinary JSX text" {
     try std.testing.expect(!helpers.hasRule(result, lint.rules.react_jsx_no_comment_textnodes.id));
 }
 
+test "allows entity-escaped comment delimiters in JSX text" {
+    const source =
+        \\const node = <div>
+        \\  <pre>&#x2F;&#x2F; text</pre>
+        \\  <pre>&#47;&#42; text &#42;&#47;</pre>
+        \\  <pre>&#32;// text</pre>
+        \\</div>;
+    ;
+
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.tsx", .{
+        .eol_last = false,
+        .no_undef = false,
+        .no_unused_vars = false,
+        .parser_semantic_errors = false,
+    });
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expect(!helpers.hasRule(result, lint.rules.react_jsx_no_comment_textnodes.id));
+}
+
 test "can disable react/jsx-no-comment-textnodes" {
     const source =
         \\const node = <div>// text comment</div>;

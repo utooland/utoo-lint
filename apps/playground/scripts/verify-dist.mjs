@@ -64,7 +64,7 @@ let parserWasm;
 let bundledLintWasm;
 for (const file of wasmFiles) {
   const name = path.basename(file);
-  const isParser = name.includes('yuku-parser');
+  const isParser = name.includes('yuku-core');
   const isLintVersion = /^utoo-lint-v\d+\.\d+\.\d+\.wasm$/.test(name);
   const isBundledLint = /^utoo-lint\.[^.]+\.wasm$/.test(name);
   if (!isParser && !isLintVersion && !isBundledLint) {
