@@ -1,4 +1,4 @@
-import type { Diagnostic, Program } from '@yuku-parser/wasm';
+import type { Diagnostic, Program } from 'yuku-parser';
 
 export const AST_SOURCE_LENGTH_MAX = 256 * 1024;
 

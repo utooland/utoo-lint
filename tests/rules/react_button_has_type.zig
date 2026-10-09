@@ -51,6 +51,19 @@ test "allows static valid button type values" {
     try std.testing.expect(!helpers.hasRule(result, lint.rules.react_button_has_type.id));
 }
 
+test "decodes entities in JSX button type attributes" {
+    const source =
+        \\const a = <button type="subm&#105;t" />;
+        \\const b = <button type="b&#x75;tton" />;
+        \\const c = <button type={"subm&#105;t"} />;
+    ;
+
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.jsx", test_options);
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), helpers.countRule(result, lint.rules.react_button_has_type.id));
+}
+
 test "supports configured react/button-has-type allowed values" {
     var config = try std.json.parseFromSlice(
         std.json.Value,

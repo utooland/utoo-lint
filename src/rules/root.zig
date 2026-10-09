@@ -794,7 +794,15 @@ pub fn runBasicWithOptionsPtr(
     defer visitor.max_nested_callbacks_state.deinit(allocator);
     defer visitor.id_denylist_state.deinit(allocator);
 
-    try traverser.basic.traverse(BasicVisitor, tree, &visitor);
+    const VisitorLayer = comptime blk: {
+        // Yuku validates every hook; the combined rule visitor needs more than
+        // Zig's default comptime branch budget.
+        @setEvalBranchQuota(10_000);
+        break :blk parser.traverser.Layer(traverser.basic.Ctx, BasicVisitor);
+    };
+    var ctx = traverser.basic.Ctx{ .tree = tree };
+    var layer = VisitorLayer{ .inner = &visitor };
+    try parser.traverser.walk(traverser.basic.Ctx, VisitorLayer, &layer, &ctx);
 }
 
 pub fn runSemanticWithIo(

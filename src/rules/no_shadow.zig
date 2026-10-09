@@ -49,6 +49,12 @@ pub fn runWithOptions(
         const symbol = entry.symbol;
         if (!isLintableSymbol(symbol.flags, options)) continue;
         if (symbol.scope == .root or symbol.scope == .module) continue;
+        // Yuku binds index signature labels for type resolution, but they do
+        // not introduce variables for either no-shadow rule.
+        if (symbol.flags.parameter and
+            tree.data(scope_tree.getScope(symbol.scope).node) == .ts_index_signature) continue;
+        const signature_parameter = isFunctionTypeParameter(tree, scope_tree, symbol);
+        if (signature_parameter and options.mode == .javascript) continue;
 
         const name = tree.string(symbol.name);
         if (options.allow.contains(name)) continue;
@@ -57,6 +63,7 @@ pub fn runWithOptions(
         if (decls.len == 0) continue;
 
         if (options.builtin_globals and core.isKnownGlobal(name)) {
+            if (signature_parameter and options.ignore_function_type_parameter_name_value_shadow) continue;
             try core.addDiagnosticFmt(
                 allocator,
                 diagnostics,
@@ -73,6 +80,11 @@ pub fn runWithOptions(
         const shadowed_decls = symbol_table.symbolDecls(shadowed_id);
         if (shadowed_decls.len == 0) continue;
         const shadowed_flags = symbol_table.getSymbol(shadowed_id).flags;
+        // Yuku exposes import and namespace flags separately from value space.
+        // Ordinary imports and namespace names still count as value bindings
+        // for the function type parameter shadow option.
+        if (signature_parameter and options.ignore_function_type_parameter_name_value_shadow and
+            (shadowed_flags.inValueSpace() or shadowed_flags.import or shadowed_flags.namespace_module)) continue;
         if (isAllowedByHoist(tree, decls[0], shadowed_decls[0], shadowed_flags, options)) continue;
         if (options.ignore_on_initialization and isAllowedOnInitialization(tree, decls[0], shadowed_decls[0])) continue;
 
@@ -86,10 +98,6 @@ pub fn runWithOptions(
             "'{s}' is already declared in the upper scope on line {d} column {d}.",
             .{ name, shadowed_position.line, shadowed_position.column },
         );
-    }
-
-    if (options.mode == .typescript and !options.ignore_function_type_parameter_name_value_shadow) {
-        try checkFunctionTypeParameterNameValueShadows(allocator, diagnostics, tree, scope_tree, symbol_table, options);
     }
 }
 
@@ -231,248 +239,22 @@ fn containsNode(tree: *const ast.Tree, container: ast.NodeIndex, node: ast.NodeI
     return container_span.start <= node_span.start and node_span.end <= container_span.end;
 }
 
-fn checkFunctionTypeParameterNameValueShadows(
-    allocator: Allocator,
-    diagnostics: *core.DiagnosticList,
+fn isFunctionTypeParameter(
     tree: *const ast.Tree,
     scope_tree: traverser.semantic.ScopeTree,
-    symbol_table: traverser.semantic.SymbolTable,
-    options: Options,
-) Allocator.Error!void {
-    for (tree.nodes.items(.data), 0..) |data, raw_index| {
-        const function_type = switch (data) {
-            .ts_function_type => |function_type| function_type,
-            else => continue,
-        };
-
-        const scope_id = scopeIdForNode(scope_tree, @enumFromInt(@as(u32, @intCast(raw_index)))) orelse continue;
-        try checkFunctionTypeParameters(
-            allocator,
-            diagnostics,
-            tree,
-            scope_tree,
-            symbol_table,
-            function_type.params,
-            scope_id,
-            options,
-        );
-    }
-}
-
-fn checkFunctionTypeParameters(
-    allocator: Allocator,
-    diagnostics: *core.DiagnosticList,
-    tree: *const ast.Tree,
-    scope_tree: traverser.semantic.ScopeTree,
-    symbol_table: traverser.semantic.SymbolTable,
-    params_index: ast.NodeIndex,
-    scope_id: traverser.semantic.ScopeId,
-    options: Options,
-) Allocator.Error!void {
-    if (params_index == .null) return;
-
-    const params = switch (tree.data(params_index)) {
-        .formal_parameters => |params| params,
-        else => return,
+    symbol: traverser.semantic.Symbol,
+) bool {
+    if (!symbol.flags.parameter) return false;
+    return switch (tree.data(scope_tree.getScope(symbol.scope).node)) {
+        .ts_function_type,
+        .ts_constructor_type,
+        .ts_method_signature,
+        .ts_call_signature_declaration,
+        .ts_construct_signature_declaration,
+        => true,
+        .function => |function| function.body == .null,
+        else => false,
     };
-
-    for (tree.extra(params.items)) |item_index| {
-        switch (tree.data(item_index)) {
-            .formal_parameter => |parameter| try checkFunctionTypeParameterBinding(
-                allocator,
-                diagnostics,
-                tree,
-                scope_tree,
-                symbol_table,
-                parameter.pattern,
-                scope_id,
-                options,
-            ),
-            else => {},
-        }
-    }
-
-    try checkFunctionTypeParameterBinding(
-        allocator,
-        diagnostics,
-        tree,
-        scope_tree,
-        symbol_table,
-        params.rest,
-        scope_id,
-        options,
-    );
-}
-
-fn checkFunctionTypeParameterBinding(
-    allocator: Allocator,
-    diagnostics: *core.DiagnosticList,
-    tree: *const ast.Tree,
-    scope_tree: traverser.semantic.ScopeTree,
-    symbol_table: traverser.semantic.SymbolTable,
-    index: ast.NodeIndex,
-    scope_id: traverser.semantic.ScopeId,
-    options: Options,
-) Allocator.Error!void {
-    if (index == .null) return;
-
-    switch (tree.data(index)) {
-        .binding_identifier => |identifier| try checkFunctionTypeParameterIdentifier(
-            allocator,
-            diagnostics,
-            tree,
-            scope_tree,
-            symbol_table,
-            index,
-            tree.string(identifier.name),
-            scope_id,
-            options,
-        ),
-        .assignment_pattern => |pattern| try checkFunctionTypeParameterBinding(
-            allocator,
-            diagnostics,
-            tree,
-            scope_tree,
-            symbol_table,
-            pattern.left,
-            scope_id,
-            options,
-        ),
-        .binding_rest_element => |element| try checkFunctionTypeParameterBinding(
-            allocator,
-            diagnostics,
-            tree,
-            scope_tree,
-            symbol_table,
-            element.argument,
-            scope_id,
-            options,
-        ),
-        .array_pattern => |pattern| {
-            for (tree.extra(pattern.elements)) |element| {
-                try checkFunctionTypeParameterBinding(
-                    allocator,
-                    diagnostics,
-                    tree,
-                    scope_tree,
-                    symbol_table,
-                    element,
-                    scope_id,
-                    options,
-                );
-            }
-            try checkFunctionTypeParameterBinding(
-                allocator,
-                diagnostics,
-                tree,
-                scope_tree,
-                symbol_table,
-                pattern.rest,
-                scope_id,
-                options,
-            );
-        },
-        .object_pattern => |pattern| {
-            for (tree.extra(pattern.properties)) |property_index| {
-                const property = switch (tree.data(property_index)) {
-                    .binding_property => |property| property,
-                    else => continue,
-                };
-                try checkFunctionTypeParameterBinding(
-                    allocator,
-                    diagnostics,
-                    tree,
-                    scope_tree,
-                    symbol_table,
-                    property.value,
-                    scope_id,
-                    options,
-                );
-            }
-            try checkFunctionTypeParameterBinding(
-                allocator,
-                diagnostics,
-                tree,
-                scope_tree,
-                symbol_table,
-                pattern.rest,
-                scope_id,
-                options,
-            );
-        },
-        else => {},
-    }
-}
-
-fn checkFunctionTypeParameterIdentifier(
-    allocator: Allocator,
-    diagnostics: *core.DiagnosticList,
-    tree: *const ast.Tree,
-    scope_tree: traverser.semantic.ScopeTree,
-    symbol_table: traverser.semantic.SymbolTable,
-    index: ast.NodeIndex,
-    name: []const u8,
-    scope_id: traverser.semantic.ScopeId,
-    options: Options,
-) Allocator.Error!void {
-    if (options.allow.contains(name)) return;
-
-    if (options.builtin_globals and core.isKnownGlobal(name)) {
-        try core.addDiagnosticFmt(
-            allocator,
-            diagnostics,
-            options.severity,
-            options.rule_id,
-            tree.span(index),
-            "'{s}' is already a global variable.",
-            .{name},
-        );
-        return;
-    }
-
-    const shadowed_id = findShadowedValueSymbol(scope_tree, symbol_table, scope_id, name) orelse return;
-    const shadowed_decls = symbol_table.symbolDecls(shadowed_id);
-    if (shadowed_decls.len == 0) return;
-
-    const shadowed_flags = symbol_table.getSymbol(shadowed_id).flags;
-    if (isAllowedByHoist(tree, index, shadowed_decls[0], shadowed_flags, options)) return;
-
-    const shadowed_position = offsetToLineColumn(tree.source, tree.span(shadowed_decls[0]).start);
-    try core.addDiagnosticFmt(
-        allocator,
-        diagnostics,
-        options.severity,
-        options.rule_id,
-        tree.span(index),
-        "'{s}' is already declared in the upper scope on line {d} column {d}.",
-        .{ name, shadowed_position.line, shadowed_position.column },
-    );
-}
-
-fn findShadowedValueSymbol(
-    scope_tree: traverser.semantic.ScopeTree,
-    symbol_table: traverser.semantic.SymbolTable,
-    scope: traverser.semantic.ScopeId,
-    name: []const u8,
-) ?traverser.semantic.SymbolId {
-    var current = scope_tree.getScope(scope).parent;
-    while (current != .none) {
-        if (symbol_table.findInScope(current, name)) |candidate_id| {
-            const candidate_flags = symbol_table.getSymbol(candidate_id).flags;
-            if (candidate_flags.inValueSpace() or candidate_flags.import or candidate_flags.namespace_module) {
-                return candidate_id;
-            }
-        }
-        current = scope_tree.getScope(current).parent;
-    }
-    return null;
-}
-
-fn scopeIdForNode(scope_tree: traverser.semantic.ScopeTree, node: ast.NodeIndex) ?traverser.semantic.ScopeId {
-    for (scope_tree.scopes, 0..) |scope, index| {
-        if (scope.node == node) return @enumFromInt(@as(u32, @intCast(index)));
-    }
-    return null;
 }
 
 fn isAllowedByHoist(

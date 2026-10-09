@@ -46,6 +46,78 @@ test "does not report @typescript-eslint/no-use-before-define for type reference
     try std.testing.expect(!helpers.hasRule(result, lint.rules.typescript_eslint_no_use_before_define.id));
 }
 
+test "ignores erased exports and typeof queries unless type references are configured" {
+    const source =
+        \\export type { Later };
+        \\export { type Other };
+        \\type Query = typeof value;
+        \\type Later = string;
+        \\type Other = number;
+        \\const value = 1;
+    ;
+
+    var options = lint.Options{};
+    options.parser_semantic_errors = false;
+
+    var ignored = try lint.lintSource(std.testing.allocator, source, "fixture.ts", options);
+    defer ignored.deinit(std.testing.allocator);
+    try std.testing.expect(!helpers.hasRule(ignored, lint.rules.typescript_eslint_no_use_before_define.id));
+
+    var config = try std.json.parseFromSlice(
+        std.json.Value,
+        std.testing.allocator,
+        "[\"error\",{\"ignoreTypeReferences\":false}]",
+        .{},
+    );
+    defer config.deinit();
+    try options.setByRuleConfigValue("@typescript-eslint/no-use-before-define", config.value);
+
+    var checked = try lint.lintSource(std.testing.allocator, source, "fixture.ts", options);
+    defer checked.deinit(std.testing.allocator);
+    try std.testing.expectEqual(
+        @as(usize, 3),
+        helpers.countRule(checked, lint.rules.typescript_eslint_no_use_before_define.id),
+    );
+}
+
+test "type-only value exports preserve no-use-before-define declaration options" {
+    const source =
+        \\export type { laterValue, laterFunction, LaterType };
+        \\const laterValue = 1;
+        \\function laterFunction() {}
+        \\type LaterType = number;
+    ;
+    const cases = [_]struct { config: []const u8, count: usize }{
+        .{
+            .config = "[\"error\",{\"ignoreTypeReferences\":false,\"functions\":true}]",
+            .count = 3,
+        },
+        .{
+            .config = "[\"error\",{\"ignoreTypeReferences\":false,\"functions\":false}]",
+            .count = 2,
+        },
+        .{
+            .config = "[\"error\",{\"ignoreTypeReferences\":false,\"functions\":true,\"typedefs\":false}]",
+            .count = 2,
+        },
+    };
+    for (cases) |case| {
+        var config = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, case.config, .{});
+        defer config.deinit();
+
+        var options = lint.Options{};
+        try options.setByRuleConfigValue("@typescript-eslint/no-use-before-define", config.value);
+        options.parser_semantic_errors = false;
+
+        var result = try lint.lintSource(std.testing.allocator, source, "fixture.ts", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(
+            case.count,
+            helpers.countRule(result, lint.rules.typescript_eslint_no_use_before_define.id),
+        );
+    }
+}
+
 test "supports configured @typescript-eslint/no-use-before-define ignoreTypeReferences false" {
     var config = try std.json.parseFromSlice(
         std.json.Value,

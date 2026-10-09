@@ -95,6 +95,42 @@ test "does not report TypeScript member bindings or expression names as unused v
     try std.testing.expect(!helpers.hasRule(result, lint.rules.typescript_eslint_no_unused_vars.id));
 }
 
+test "ignores type signature parameters while checking runtime and type parameters" {
+    const source =
+        \\export type FunctionType<UnusedType> = (input: string) => void;
+        \\export type ConstructorType = new (options: object) => object;
+        \\export interface API {
+        \\  method(value: string): void;
+        \\  (request: string): void;
+        \\  new (seed: string): API;
+        \\  [key: string]: unknown;
+        \\}
+        \\export abstract class Base {
+        \\  abstract method(abstractInput: string): void;
+        \\}
+        \\export function overloaded(overloadInput: string): void;
+        \\export function overloaded() {}
+        \\export function runtime(unused: string) {}
+    ;
+
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.ts", .{
+        .parser_semantic_errors = false,
+    });
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(
+        @as(usize, 2),
+        helpers.countRule(result, lint.rules.typescript_eslint_no_unused_vars.id),
+    );
+    for (result.diagnostics) |diagnostic| {
+        if (!std.mem.eql(u8, diagnostic.rule_id, lint.rules.typescript_eslint_no_unused_vars.id)) continue;
+        try std.testing.expect(
+            std.mem.eql(u8, diagnostic.message, "'UnusedType' is declared but never used.") or
+                std.mem.eql(u8, diagnostic.message, "'unused' is declared but never used."),
+        );
+    }
+}
+
 test "ignores rest siblings for object destructuring" {
     const source =
         \\const data = { a: 1, b: 2 };

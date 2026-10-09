@@ -14,6 +14,26 @@ test "reports no-undef for missing references" {
     try std.testing.expect(helpers.hasRule(result, lint.rules.no_undef.id));
 }
 
+test "no-undef distinguishes runtime import aliases from erased references" {
+    const source =
+        \\import Alias = RuntimeNamespace.Member;
+        \\import type TypeAlias = TypeNamespace.Member;
+        \\export type { TypeExport };
+        \\export { type InlineTypeExport };
+    ;
+
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.ts", .{
+        .parser_semantic_errors = false,
+    });
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), helpers.countRule(result, lint.rules.no_undef.id));
+    for (result.diagnostics) |diagnostic| {
+        if (!std.mem.eql(u8, diagnostic.rule_id, lint.rules.no_undef.id)) continue;
+        try std.testing.expectEqualStrings("'RuntimeNamespace' is not defined.", diagnostic.message);
+    }
+}
+
 test "does not report no-undef for direct typeof identifier operands by default" {
     const source =
         \\typeof missing;
