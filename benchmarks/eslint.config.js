@@ -1,5 +1,5 @@
 import tseslint from "typescript-eslint";
-import { eslintRuleConfig } from "./scripts/shared-rules.mjs";
+import { eslintRuleConfig, rulesForProfile } from "./scripts/shared-rules.mjs";
 
 export default [
   {
@@ -14,6 +14,6 @@ export default [
         sourceType: "module"
       }
     },
-    rules: eslintRuleConfig("error")
+    rules: eslintRuleConfig("error", rulesForProfile())
   }
 ];

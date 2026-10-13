@@ -1,3 +1,5 @@
+import { extendedRuleAdditions } from "./extended-rules.mjs";
+
 export const sharedRules = [
   {
     name: "no-const-assign",
@@ -97,18 +99,24 @@ export const sharedRules = [
   }
 ];
 
-export function eslintRuleConfig(severity = "error") {
-  return Object.fromEntries(sharedRules.map((rule) => [rule.eslint, severity]));
+export function rulesForProfile(profile = process.env.UTOO_LINT_BENCH_RULE_SET ?? "shared") {
+  if (profile === "shared") return sharedRules;
+  if (profile === "extended") return [...sharedRules, ...extendedRuleAdditions];
+  throw new Error(`Unknown benchmark rule set: ${profile}. Expected shared or extended.`);
 }
 
-export function oxlintRuleArgs(severity = "-D") {
-  return ["-A", "all", ...sharedRules.flatMap((rule) => [severity, rule.oxlint])];
+export function eslintRuleConfig(severity = "error", rules = sharedRules) {
+  return Object.fromEntries(rules.map((rule) => [rule.eslint, severity]));
 }
 
-export function utooRuleArgs() {
-  return [`--rules=${sharedRules.map((rule) => rule.name).join(",")}`];
+export function oxlintRuleArgs(severity = "-D", rules = sharedRules) {
+  return ["-A", "all", ...rules.flatMap((rule) => [severity, rule.oxlint])];
 }
 
-export function benchmarkRuleNames() {
-  return sharedRules.map((rule) => rule.name);
+export function utooRuleArgs(rules = sharedRules) {
+  return [`--rules=${rules.map((rule) => rule.name).join(",")}`];
+}
+
+export function benchmarkRuleNames(rules = sharedRules) {
+  return rules.map((rule) => rule.name);
 }
