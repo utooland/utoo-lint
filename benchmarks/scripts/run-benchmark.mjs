@@ -1,36 +1,52 @@
-import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { cpus, release } from "node:os";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
-import { benchmarkRuleNames, oxlintRuleArgs, utooRuleArgs } from "./shared-rules.mjs";
+import { benchmarkRuleNames, oxlintRuleArgs, rulesForProfile, utooRuleArgs } from "./shared-rules.mjs";
+import { verifySharedRules } from "./verify-shared-rules.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 const runs = positiveInt(args.runs, 8, "runs");
 const warmups = nonNegativeInt(args.warmups, 2, "warmups");
 const target = args.target ?? "fixtures/src";
 const skipEslint = Boolean(args["skip-eslint"]);
+const includeBun = Boolean(args.bun || process.env.BUN_BIN) && !args["skip-bun"];
+const ruleSet = args["rule-set"] ?? "shared";
+const selectedRules = rulesForProfile(ruleSet);
+process.env.UTOO_LINT_BENCH_RULE_SET = ruleSet;
 
 const localBin = join("node_modules", ".bin");
 const utooBin = process.env.UTOO_LINT_BIN ?? join("..", "zig-out", "bin", process.platform === "win32" ? "utoo-lint.exe" : "utoo-lint");
+const bunBin = process.env.BUN_BIN ?? "bun";
 
 const benchmarks = [
   {
     name: "utoo-lint",
     command: utooBin,
-    args: [...utooRuleArgs(), target],
+    args: ["--no-config", ...utooRuleArgs(selectedRules), target],
     requiredPath: utooBin
+  },
+  {
+    name: "bun",
+    command: bunBin,
+    args: ["lint", "--flavor=eslint", "--config=eslint.config.js", "--no-ignore", "--silent", target],
+    optional: !includeBun
   },
   {
     name: "oxlint",
     command: bin("oxlint"),
-    args: [...oxlintRuleArgs(), "--no-ignore", "--silent", target],
+    args: [...oxlintRuleArgs("-D", selectedRules), "--no-ignore", "--silent", target],
     requiredPath: bin("oxlint")
   },
   {
     name: "biome",
     command: bin("biome"),
-    args: ["lint", "--config-path=biome.json", "--max-diagnostics=0", target],
+    args: ["lint", "--config-path=biome.json",
+      ...(ruleSet === "extended" ? selectedRules.map((rule) => `--only=${rule.biomeGroup}/${rule.biome}`) : []),
+      "--max-diagnostics=0", target],
     requiredPath: bin("biome")
   },
   {
@@ -43,34 +59,54 @@ const benchmarks = [
 ].filter((benchmark) => !benchmark.optional);
 
 for (const benchmark of benchmarks) {
-  if (!existsSync(benchmark.requiredPath)) {
+  if (benchmark.requiredPath && !existsSync(benchmark.requiredPath)) {
     throw new Error(
       `${benchmark.name} binary was not found at ${benchmark.requiredPath}. Run npm install, or build utoo-lint first.`
     );
   }
 }
 
-const results = [];
+if (includeBun) {
+  const probe = spawnSync(bunBin, ["lint", "--help"], { encoding: "utf8", timeout: 10000 });
+  if (probe.error || probe.status !== 0 || !/--flavor/.test(`${probe.stdout}${probe.stderr}`)) {
+    throw new Error(
+      `Bun at ${bunBin} does not expose the required built-in lint CLI. Set BUN_BIN to a supported binary, or omit --bun/BUN_BIN.\n${probe.error?.message ?? probe.stderr?.trim() ?? ""}`
+    );
+  }
+}
+
 const targetFiles = await countFiles(target);
+if (targetFiles === 0) {
+  throw new Error(`No lintable files found in ${target}`);
+}
+const validation = await verifySharedRules(benchmarks, targetFiles, selectedRules);
+console.log(`Verified ${validation.rules.length} shared rules and clean controls for ${benchmarks.length} tools.`);
 
-for (const benchmark of benchmarks) {
-  for (let i = 0; i < warmups; i += 1) {
-    runCommand(benchmark, true);
+const sourceCommit = commandOutput("git", ["rev-parse", "HEAD"]);
+const sourceDirty = Boolean(commandOutput("git", ["status", "--porcelain"]));
+const results = benchmarks.map((benchmark) => ({
+  name: benchmark.name,
+  version: benchmark.name === "utoo-lint" ? null : commandOutput(benchmark.command, ["--version"]),
+  ...(benchmark.name === "bun" ? { revision: commandOutput(benchmark.command, ["--revision"]) } : {}),
+  command: [benchmark.command, ...benchmark.args].join(" "),
+  runs,
+  warmups,
+  samplesMs: []
+}));
+// Rotate the starting tool to spread startup/order effects across the samples.
+for (let round = 0; round < warmups; round += 1) {
+  for (let offset = 0; offset < benchmarks.length; offset += 1) {
+    runCommand(benchmarks[(round + offset) % benchmarks.length], true);
   }
-
-  const samples = [];
-  for (let i = 0; i < runs; i += 1) {
-    samples.push(runCommand(benchmark, false));
+}
+for (let round = 0; round < runs; round += 1) {
+  for (let offset = 0; offset < benchmarks.length; offset += 1) {
+    const index = (round + offset) % benchmarks.length;
+    results[index].samplesMs.push(runCommand(benchmarks[index], false));
   }
-
-  results.push({
-    name: benchmark.name,
-    command: [benchmark.command, ...benchmark.args].join(" "),
-    runs,
-    warmups,
-    samplesMs: samples,
-    summary: summarize(samples)
-  });
+}
+for (const result of results) {
+  result.summary = summarize(result.samplesMs);
 }
 
 const fastest = Math.min(...results.map((result) => result.summary.medianMs));
@@ -83,7 +119,8 @@ const printable = results.map((result) => ({
   relative: `${(result.summary.medianMs / fastest).toFixed(2)}x`
 }));
 
-console.log(`Rules: ${benchmarkRuleNames().join(", ")}`);
+console.log(`Rule set: ${ruleSet}`);
+console.log(`Rules: ${benchmarkRuleNames(selectedRules).join(", ")}`);
 console.log(`Target: ${target} (${targetFiles} file(s))`);
 console.table(printable);
 
@@ -96,9 +133,19 @@ await writeFile(
       node: process.version,
       platform: process.platform,
       arch: process.arch,
+      osRelease: release(),
+      cpu: { model: cpus()[0]?.model ?? null, logicalCores: cpus().length },
+      sourceCommit,
+      sourceDirty,
+      utooBuildMode: process.env.UTOO_LINT_BUILD_MODE ?? null,
+      utooBinarySha256: createHash("sha256").update(await readFile(utooBin)).digest("hex"),
+      sampling: "round-robin with a rotated starting tool; fresh CLI processes",
+      dependencyVersions: await dependencyVersions(),
+      validation,
+      ruleSet,
       target,
       targetFiles,
-      rules: benchmarkRuleNames(),
+      rules: benchmarkRuleNames(selectedRules),
       results
     },
     null,
@@ -107,6 +154,19 @@ await writeFile(
 );
 
 console.log("Wrote results/latest.json");
+
+function commandOutput(command, commandArgs) {
+  const result = spawnSync(command, commandArgs, { encoding: "utf8", timeout: 10000 });
+  return result.status === 0 ? result.stdout.trim() || result.stderr.trim() : null;
+}
+
+async function dependencyVersions() {
+  const names = ["typescript", "typescript-eslint", "@eslint/js"];
+  return Object.fromEntries(await Promise.all(names.map(async (name) => {
+    const manifest = JSON.parse(await readFile(join("node_modules", name, "package.json"), "utf8"));
+    return [name, manifest.version];
+  })));
+}
 
 function runCommand(benchmark, isWarmup) {
   const started = performance.now();

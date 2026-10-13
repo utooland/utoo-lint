@@ -17,13 +17,13 @@ const rows = benchmark.results
 const slowest = Math.max(...rows.map((row) => row.medianMs));
 const colors = new Map([
   ["utoo-lint", "#ff7a45"],
+  ["bun", "#f9e5c3"],
   ["oxlint", "#ec4899"],
   ["biome", "#62cdf3"],
   ["eslint", "#8b5cf6"]
 ]);
 
 const width = 1200;
-const height = 520;
 const chartX = 72;
 const chartY = 76;
 const labelWidth = 150;
@@ -31,12 +31,14 @@ const barX = chartX + labelWidth;
 const barMaxWidth = 760;
 const barHeight = 48;
 const rowGap = 84;
-const scaleMax = Math.log10(slowest);
+const chartBottom = chartY + Math.max(0, rows.length - 1) * rowGap + barHeight;
+const captionY = chartBottom + 52;
+const height = Math.max(520, chartBottom + 120);
 const bars = rows
   .map((row, index) => {
     const y = chartY + index * rowGap;
     const color = colors.get(row.name) ?? "#94a3b8";
-    const barWidth = Math.max(82, Math.round((Math.log10(row.medianMs) / scaleMax) * barMaxWidth));
+    const barWidth = slowest > 0 ? Number(((row.medianMs / slowest) * barMaxWidth).toFixed(3)) : 0;
 
     return `
       <g>
@@ -83,14 +85,14 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
     .tool { fill: #d7d1c6; font-size: 25px; font-weight: 520; }
     .value { fill: #d7d1c6; font-size: 25px; font-weight: 520; }
     .caption { fill: #8d877c; font-size: 15px; font-weight: 520; }
-    .code { fill: #d7d1c6; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 15px; }
   </style>
+
+  <line x1="${barX}" y1="${chartY - 12}" x2="${barX}" y2="${chartBottom + 8}" stroke="#544f44"/>
 
   ${bars}
 
-  <text x="${barX + 20}" y="432" class="caption">Linting speed for ${escapeXml(subtitle)} · median wall-clock time · lower is better</text>
-  <text x="${barX + 376}" y="432" class="code"></text>
-  <text x="${barX + 20}" y="462" class="caption">Source: ${escapeXml(basename(input))} · generated ${escapeXml(generatedLabel)} · visual scale adjusted for readability</text>
+  <text x="${chartX}" y="${captionY}" class="caption">${escapeXml(subtitle)} · median wall-clock time · lower is better</text>
+  <text x="${chartX}" y="${captionY + 30}" class="caption">Source: ${escapeXml(basename(input))} · generated ${escapeXml(generatedLabel)} · linear zero-based scale</text>
 </svg>
 `;
 
@@ -113,6 +115,7 @@ if (raster.error || raster.status !== 0) {
 
 function displayName(name) {
   if (name === "utoo-lint") return "utoo-lint";
+  if (name === "bun") return "Bun lint";
   return name[0].toUpperCase() + name.slice(1);
 }
 
