@@ -12,8 +12,6 @@ const no_ex_assign = @import("no_ex_assign.zig");
 const no_func_assign = @import("no_func_assign.zig");
 const no_import_assign = @import("no_import_assign.zig");
 
-const ReferenceLookup = std.AutoHashMap(ast.NodeIndex, traverser.semantic.SymbolId);
-
 pub fn shouldRun(options: core.Options) bool {
     return options.no_class_assign or
         options.no_const_assign or
@@ -29,15 +27,11 @@ pub fn run(
     semantic_result: traverser.semantic.Result,
     options: core.Options,
 ) Allocator.Error!void {
-    var reference_lookup = try buildReferenceLookup(allocator, semantic_result.symbol_table);
-    defer reference_lookup.deinit();
-
     var visitor = Visitor{
         .allocator = allocator,
         .diagnostics = diagnostics,
         .scope_tree = semantic_result.scope_tree,
         .symbol_table = semantic_result.symbol_table,
-        .reference_lookup = &reference_lookup,
         .options = options,
     };
     defer visitor.namespace_import_names.deinit(allocator);
@@ -50,7 +44,6 @@ const Visitor = struct {
     diagnostics: *core.DiagnosticList,
     scope_tree: traverser.semantic.ScopeTree,
     symbol_table: traverser.semantic.SymbolTable,
-    reference_lookup: *const ReferenceLookup,
     options: core.Options,
     namespace_import_names: std.StringHashMapUnmanaged(void) = .empty,
 
@@ -95,7 +88,7 @@ const Visitor = struct {
     ) Allocator.Error!traverser.Action {
         if (!self.options.no_import_assign) return .proceed;
 
-        if (isObjectAssignCall(ctx.tree, self.reference_lookup, call.callee) and call.arguments.len > 0) {
+        if (isObjectAssignCall(ctx.tree, self.symbol_table, call.callee) and call.arguments.len > 0) {
             const first = ctx.tree.extra(call.arguments)[0];
             if (self.namespaceSymbolFromExpression(ctx.tree, first) != .none) {
                 try self.addDiagnostic(ctx.tree, index, no_import_assign.id, "Imported bindings are read-only.");
@@ -166,7 +159,8 @@ const Visitor = struct {
         }
 
         if (isIdentifierReference(tree, target)) {
-            return self.reference_lookup.get(target) orelse .none;
+            const reference_id = self.symbol_table.model.referenceOf(target) orelse return .none;
+            return self.symbol_table.referenceSymbol(reference_id);
         }
 
         const name = bindingIdentifierName(tree, target) orelse return .none;
@@ -206,7 +200,8 @@ const Visitor = struct {
         const identifier = unwrapTransparent(tree, expression);
         if (!isIdentifierReference(tree, identifier)) return .none;
 
-        const symbol_id = self.reference_lookup.get(identifier) orelse return .none;
+        const reference_id = self.symbol_table.model.referenceOf(identifier) orelse return .none;
+        const symbol_id = self.symbol_table.referenceSymbol(reference_id);
         if (symbol_id == .none) return .none;
 
         const symbol = self.symbol_table.getSymbol(symbol_id);
@@ -235,22 +230,6 @@ const Visitor = struct {
         );
     }
 };
-
-fn buildReferenceLookup(
-    allocator: Allocator,
-    symbol_table: traverser.semantic.SymbolTable,
-) Allocator.Error!ReferenceLookup {
-    var lookup = ReferenceLookup.init(allocator);
-    errdefer lookup.deinit();
-    try lookup.ensureTotalCapacity(@intCast(symbol_table.references.len));
-
-    var iter = symbol_table.iterReferences();
-    while (iter.next()) |entry| {
-        try lookup.put(entry.reference.node, symbol_table.referenceSymbol(entry.id));
-    }
-
-    return lookup;
-}
 
 fn unwrapTransparent(tree: *const ast.Tree, index: ast.NodeIndex) ast.NodeIndex {
     var current = index;
@@ -286,7 +265,7 @@ fn isIdentifierReference(tree: *const ast.Tree, index: ast.NodeIndex) bool {
 
 fn isObjectAssignCall(
     tree: *const ast.Tree,
-    reference_lookup: *const ReferenceLookup,
+    symbol_table: traverser.semantic.SymbolTable,
     callee: ast.NodeIndex,
 ) bool {
     const member = switch (tree.data(unwrapTransparent(tree, callee))) {
@@ -299,7 +278,7 @@ fn isObjectAssignCall(
 
     const object = unwrapTransparent(tree, member.object);
     const object_name = identifierReferenceName(tree, object) orelse return false;
-    return std.mem.eql(u8, object_name, "Object") and isUnresolvedReference(reference_lookup, object);
+    return std.mem.eql(u8, object_name, "Object") and symbol_table.isUnresolvedReference(object);
 }
 
 fn identifierReferenceName(tree: *const ast.Tree, index: ast.NodeIndex) ?[]const u8 {
@@ -333,11 +312,4 @@ fn templateStringValue(tree: *const ast.Tree, literal: ast.TemplateLiteral) ?[]c
         .template_element => |element| tree.string(element.cooked),
         else => null,
     };
-}
-
-fn isUnresolvedReference(
-    reference_lookup: *const ReferenceLookup,
-    node: ast.NodeIndex,
-) bool {
-    return (reference_lookup.get(node) orelse return false) == .none;
 }

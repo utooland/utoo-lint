@@ -4,6 +4,7 @@ const flat_config = @import("flat_config.zig");
 
 const max_file_size = 64 * 1024 * 1024;
 const max_config_file_size = 1024 * 1024;
+const worker_arena_retained_limit = 2 * 1024 * 1024;
 
 const Stats = struct {
     files: usize = 0,
@@ -2146,8 +2147,16 @@ fn lintFiles(
 
     const worker_count = @min(files.len, thread_count_override orelse (std.Thread.getCpuCount() catch 1));
     if (worker_count <= 1) {
+        if (files.len == 1) {
+            try lintFile(std.heap.smp_allocator, io, files[0], options, rule_severities, config, fix_mode, use_color, stats, null);
+            return;
+        }
+        var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
+        defer arena.deinit();
         for (files) |file| {
-            try lintFile(std.heap.smp_allocator, io, file, options, rule_severities, config, fix_mode, use_color, stats, null);
+            // The previous file's borrows are gone; reset only when more work follows.
+            _ = arena.reset(.{ .retain_with_limit = worker_arena_retained_limit });
+            try lintFile(arena.allocator(), io, file, options, rule_severities, config, fix_mode, use_color, stats, null);
         }
         return;
     }
@@ -2219,12 +2228,16 @@ fn lintFilesJson(
 }
 
 fn lintWorker(queue: *WorkQueue, result: *WorkerResult) void {
+    var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
+    defer arena.deinit();
     while (true) {
         const index = queue.next_index.fetchAdd(1, .monotonic);
         if (index >= queue.files.len) return;
 
+        // The previous file is finished. Exit/error paths free the arena directly.
+        _ = arena.reset(.{ .retain_with_limit = worker_arena_retained_limit });
         lintFile(
-            std.heap.smp_allocator,
+            arena.allocator(),
             queue.io,
             queue.files[index],
             queue.options,
