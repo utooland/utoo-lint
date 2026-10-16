@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1080" height="1760" viewBox="0 0 1080 1760" fill="#202b35" role="img" aria-labelledby="card-title card-description">
+  <title id="card-title">utoo-lint：1,000 个生成 TypeScript 文件、49 条共享规则，50.6 毫秒</title>
+  <desc id="card-description">团队内功能与性能介绍。utoo-lint 50.620 ms；Bun lint (canary) 61.308 ms；Oxlint 1.69.0 66.516 ms；Biome 2.4.16 161.385 ms；ESLint 10.4.1 3,064.173 ms。数据来自 2026 年 10 月 13 日 Apple M4 Pro 上的归档基准，新进程中位数，5 次预热、20 次采样。原生源码构建，不含 utoo npm 包装层与 JS 插件执行，仅本组合成语料。Bun 1.4.4-canary.1+b92e2f470。</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8f7ef"/>
+      <stop offset="1" stop-color="#f2f6f8"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#008edc"/>
+      <stop offset="1" stop-color="#00a8f7"/>
+    </linearGradient>
+    <style>
+      text { font-family: "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; }
+      .number { font-family: "Avenir Next", "Arial", sans-serif; font-variant-numeric: tabular-nums; }
+      .code { font-family: "SF Mono", "Menlo", "DejaVu Sans Mono", monospace; }
+    </style>
+  </defs>
+  <rect width="1080" height="1760" fill="url(#background)"/>
+  <circle cx="1007" cy="118" r="190" fill="#e4f3fa" opacity=".65"/>
+  <circle cx="1046" cy="81" r="124" fill="none" stroke="#cde9f8" stroke-width="2"/>
+  <image x="64" y="50" width="350" height="106" xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDQwIDMxMy4yMSIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsbGVkYnk9InRpdGxlIGRlc2MiPgogIDx0aXRsZSBpZD0idGl0bGUiPnV0b28gbGludCBsb2dvPC90aXRsZT4KICA8ZGVzYyBpZD0iZGVzYyI+VGhlIG9yaWdpbmFsIFVUT08gaG9yaXpvbnRhbCBsb2dvIGV4dGVuZGVkIHdpdGggYSBsaW50IHN1ZmZpeC48L2Rlc2M+CiAgPGRlZnM+CiAgICA8c3R5bGU+CiAgICAgIC5kYXJrIHsgZmlsbDogIzQwNDA0MDsgfQogICAgICAuYmx1ZSB7IGZpbGw6ICMwYjlkZWU7IH0KICAgICAgLndoaXRlIHsgZmlsbDogI2ZmZjsgfQogICAgICAuc3VmZml4IHsKICAgICAgICBmaWxsOiAjNDA0MDQwOwogICAgICAgIGZvbnQtZmFtaWx5OiBJbnRlciwgIkF2ZW5pciBOZXh0IiwgQXJpYWwsIHNhbnMtc2VyaWY7CiAgICAgICAgZm9udC1zaXplOiAxMjBweDsKICAgICAgICBmb250LXdlaWdodDogNzUwOwogICAgICAgIGxldHRlci1zcGFjaW5nOiAwOwogICAgICB9CiAgICA8L3N0eWxlPgogIDwvZGVmcz4KICA8Zz4KICAgIDxnPgogICAgICA8cGF0aCBjbGFzcz0id2hpdGUiIGQ9Ik0uOTIsODcuODJzLS45MiwxMC41NC0uOTIsMjguODR2MTgwLjNzLjMsMTYuMDcsMTYuMzYsMTYuMDdoMTY3Ljk5czYwLjM1LTY4LjAxLTE4LjMyLTEyMi4zMWMwLDAsMjkuNzMtMTUyLjIzLTMzLjMzLTE3Mi4wNiwwLDAtMzYuNTctMS4yMi0zNi45LDU0LjYxLDAsMC0xNy41Mi04MC42MS03My4zNy0zNC4yNCwwLDAtMjAuODcsMjQuMjYtMjEuNTIsNDguOFoiLz4KICAgICAgPHBhdGggY2xhc3M9ImJsdWUiIGQ9Ik00OC41LDE3Ny42bC0zNC45OCwxLjgzUzEuODksMTQ4Ljc3LjY4LDExMC45NGMwLDAtNC4xMy02NC42NywyMy45MS05NC44OCwwLDAsMjIuMzMtMjQuMSw1MC4yNi03LjAyLDAsMCwxMi4zMSw3LjkzLDE5LjIyLDIzLjE5LDAsMCwzLTIzLjgsMjguNTItMzEuNDIsMCwwLDI4LjUyLTYuNDEsNDUuMDQsMTYuNzgsMCwwLDE3LjQxLDE5Ljc4LDIyLjIyLDcyLjEyLDAsMCwzLjYsNjAuNTgtOC4xMSw5NC40NGwuMTEuOHMyNi4xNiwxNy4xNiwzNi42Nyw1My4xNmMwLDAsMTMuMjEsNDMuMDEtMTcuNDEsNzQuNDRsLS41Ny40OGgtNDQuMzZzMjMuMDgtNy4yNiwzMS4zNC0zMC43NWMwLDAsMTAuMDYtMjIuMTktMS45NS00Ny42NywwLDAtMTMuMjEtMjYuNDYtNDEuMjktMzkuODlsMy43NS0xNi4zMnM2LjUzLTI3LjExLDcuNzMtNDcuODZjMCwwLDEuOC01NS41Mi04LjcxLTc3LjE4LDAsMC02LjkxLTE2LjE3LTE4LjkyLTE0Ljk1LDAsMC0xNi4xMywzLjY2LTE2LjMyLDI1LjYzLDAsMCwuMDMsNDMuMDksMi41MSw2Ny4zNCwwLDAsMy44MywyNy4yMy05LjQ2LDMzLjg2LDAsMC0xNi4yMSw4LjAxLTI0LjMyLTE0LjY0LDAsMC0yLjctNS45NS0xLjU4LTIxLjUxLDAsMCwxLjEzLTQzLjctMy4xNS02NC41MiwwLDAtMy44My0yMi44OC0xOS4xNC0yMi40MiwwLDAtMTUuMDktLjY5LTIwLjA0LDI5Ljc0LDAsMC01LjE4LDM1LjQ2LDIuOTMsNjkuMzMsMCwwLDIuOCwxNS42Niw4Ljk0LDM2LjM3WiIvPgogICAgICA8cG9seWdvbiBjbGFzcz0iZGFyayIgcG9pbnRzPSI0OS42NiAyMjIuNTIgNTIuNyAyNDEuMDYgNjguNjggMjQ1LjI5IDU0LjY4IDI1NC4xNCA1Ni45NCAyNzEuMjIgOTUuODEgMjQxLjkzIDQ5LjY2IDIyMi41MiIvPgogICAgICA8cG9seWdvbiBjbGFzcz0iZGFyayIgcG9pbnRzPSIxMzMuMTMgMjI4LjEzIDEzNC45MyAyNDAuNzkgMTY0LjM1IDIzNy43NCAxNjEuMzUgMjE3Ljc2IDEzMy4xMyAyMjguMTMiLz4KICAgIDwvZz4KICAgIDxnPgogICAgICA8cGF0aCBjbGFzcz0iYmx1ZSIgZD0iTTI5MS4wOCwxOTYuODlsMzMuNiwzLjExcy03LjYyLDQ4LjU2LDQuNTIsNjkuMThjMCwwLDcuOTEsMTcuMjIsMjcuMTEsMTIuOTksMCwwLDEzLjE4LTEuOTgsMTcuNzQtMjIuMzEsMCwwLDcuMjktMzQuNzMsMC02MC4xNGwzNS4wNi0uNTZzNy4zNCwyOS4wOC0zLjM5LDY4Ljg5YzAsMC02LjIxLDMyLjMzLTQ0Ljg5LDQzLjc2LDAsMC01My42NSwxMi44NS02OS43NC00Ny44NiwwLDAtNy45MS0yNi4yNiwwLTY3LjA2WiIvPgogICAgICA8cGF0aCBjbGFzcz0iYmx1ZSIgZD0iTTQyNi41MiwxOTkuMjlsMi4wNywyOS42OSwzOC44Ny0xLjg4LTIuODIsNTEuODYtLjk0LDE2cy44NSwxNS44MywxNC43OCwxNy45OGMwLDAsMjAuMDksMy4yOCwyMS4zNi0yMi40MWwtMS4yNy02Mi42OCwzNy4xMywxLjEzLjg1LTI5LjY5aC0xMTAuMDJaIi8+CiAgICAgIDxwYXRoIGNsYXNzPSJibHVlIiBkPSJNNjIyLjYsMjc1LjMzczIuMjYsMTQuOTYsMTQuNjgsMjQuOTlsLS41NiwxLjI3cy0xNy4wOCwxNy4wOC00OC41Niw5LjMyYzAsMC0zMy44OC0xMC4wOS0zOC41NC00Mi44NSwwLDAtMy42Ny0zMC43OCwxMi44NS00Ny4wMSwwLDAsMTQuNjgtMjAuNzUsNTYuNDctMTYuMDksMCwwLDIwLjE5LDIuODIsMzEuOTEsMjMuMjksMCwwLDguNDcsMTIuMTQsMTEuNDQsMjUuMjcsMCwwLDIuNjgsMTguMjEsMTkuMDYsMjcuNTMsMCwwLDE4LjkyLDcuNDgsMjcuNTMtOC44OSwwLDAsOC42MS0xNi4wOS0xLjEzLTMxLjIsMCwwLTUuNTEtMTEuODYtMjEuNzQtMTAuODcsMCwwLTE1LjgxLjE0LTE4LjQ5LDEzLjk4LDAsMC0zLjUzLTEyLjQyLTEwLjczLTIyLjAyLDAsMC01LjM2LTYuOTItOS42LTkuNDYsMCwwLDEzLjI3LTEzLjI3LDMzLjc0LTE2LjM4LDAsMCwyNC40Mi00LjM4LDQ2LjAyLDEwLjU5LDAsMCwyMC4wNSwxMS4xNSwyMi41OSw0MC4yNCwwLDAsMi45NiwyNi4xMi0xMS40NCw0My42MiwwLDAtMTMuODQsMjAuNDItNDIuMjEsMjIuMjgsMCwwLTMwLjQ5LDIuODUtNDQuMDUtOS43MiwwLDAtMTcuNTEtMTEuNDQtMjQuMTQtMzMuMTgsMCwwLTEuODQtNS43MS0yLjU0LTE1LjYzLDAsMC0zLjk1LTE2LjEzLTE4LjIxLTE3LjQxLDAsMC0xMS4yOS0zLjExLTIwLjA1LDguMTksMCwwLTcuOTEsMTIuMjgtLjQyLDI3LjM5LDAsMCwyLjk2LDEwLjQ1LDE4LjA3LDExLjAxLDAsMCwxMi4xNC41NiwxNS44MS03LjQ4LDAsMCwxLjI3LTIuMTIsMi4yNi0uNzhaIi8+CiAgICA8L2c+CiAgPC9nPgogIDx0ZXh0IGNsYXNzPSJzdWZmaXgiIHg9Ijc5MCIgeT0iMjk0Ij5saW50PC90ZXh0Pgo8L3N2Zz4K"/>
+  <rect x="768" y="69" width="248" height="43" rx="21.5" fill="#e2eef4"/>
+  <text x="892" y="98" font-size="22" text-anchor="middle" fill="#46616f" font-weight="600">团队技术分享 · 2026.10</text>
+
+  <text x="68" y="229" font-size="48" font-weight="650" letter-spacing="1">让日常代码检查更轻快</text>
+  <text x="60" y="405" font-size="174" class="number" font-weight="750" letter-spacing="-8" fill="#008fdc">50.6</text>
+  <text x="497" y="404" font-size="65" class="number" font-weight="600" fill="#008fdc">ms</text>
+  <text x="68" y="467" font-size="32" font-weight="600">1,000 个生成 TypeScript 文件 · 49 条共享规则</text>
+  <text x="68" y="513" font-size="27" fill="#65747e">本组基准中的新进程耗时中位数</text>
+
+  <g>
+    <rect x="64" y="558" width="462" height="61" rx="17" fill="#ffffff" stroke="#e0e8eb"/>
+    <circle cx="96" cy="588" r="6" fill="#009cf3"/>
+    <text x="119" y="599" font-size="29" font-weight="600">300+ 内置规则</text>
+    <rect x="542" y="558" width="474" height="61" rx="17" fill="#ffffff" stroke="#e0e8eb"/>
+    <circle cx="574" cy="588" r="6" fill="#009cf3"/>
+    <text x="597" y="599" font-size="29" font-weight="600">ESLint 插件接入</text>
+    <rect x="64" y="635" width="952" height="61" rx="17" fill="#ffffff" stroke="#e0e8eb"/>
+    <circle cx="96" cy="665" r="6" fill="#009cf3"/>
+    <text x="119" y="676" font-size="29" font-weight="600">Zig + Yuku 原生引擎</text>
+    <text x="982" y="675" font-size="25" text-anchor="end" fill="#687782">JS / TS / React</text>
+  </g>
+
+  <rect x="64" y="726" width="952" height="454" rx="26" fill="#ffffff" stroke="#e0e8eb"/>
+  <text x="89" y="768" font-size="26" font-weight="650">同规则 · 同语料 · 同轮采样</text>
+  <text x="965" y="768" font-size="23" text-anchor="end" fill="#75818a">越低越快</text>
+  <g>
+    <rect x="88" y="789" width="904" height="58" rx="14" fill="#e9f5ff"/>
+    <rect x="88" y="802" width="5" height="32" rx="2.5" fill="#009cf3"/>
+    <text x="112" y="828" font-size="30" font-weight="750" fill="#007fc6">utoo-lint</text>
+    <text x="903" y="828" font-size="32" class="number" text-anchor="end" font-weight="750" fill="#007fc6">50.620</text>
+    <text x="963" y="828" font-size="24" text-anchor="end" fill="#63717b">ms</text>
+  </g>
+<g>
+    <rect x="88" y="855" width="904" height="58" rx="14" fill="#ffffff"/>
+
+    <text x="112" y="894" font-size="30" font-weight="500" fill="#29313a">Bun lint (canary)</text>
+    <text x="903" y="894" font-size="32" class="number" text-anchor="end" font-weight="550" fill="#29313a">61.308</text>
+    <text x="963" y="894" font-size="24" text-anchor="end" fill="#63717b">ms</text>
+  </g>
+<g>
+    <rect x="88" y="921" width="904" height="58" rx="14" fill="#f6f6f2"/>
+
+    <text x="112" y="960" font-size="30" font-weight="500" fill="#29313a">Oxlint 1.69.0</text>
+    <text x="903" y="960" font-size="32" class="number" text-anchor="end" font-weight="550" fill="#29313a">66.516</text>
+    <text x="963" y="960" font-size="24" text-anchor="end" fill="#63717b">ms</text>
+  </g>
+<g>
+    <rect x="88" y="987" width="904" height="58" rx="14" fill="#ffffff"/>
+
+    <text x="112" y="1026" font-size="30" font-weight="500" fill="#29313a">Biome 2.4.16</text>
+    <text x="903" y="1026" font-size="32" class="number" text-anchor="end" font-weight="550" fill="#29313a">161.385</text>
+    <text x="963" y="1026" font-size="24" text-anchor="end" fill="#63717b">ms</text>
+  </g>
+<g>
+    <rect x="88" y="1053" width="904" height="58" rx="14" fill="#f6f6f2"/>
+
+    <text x="112" y="1092" font-size="30" font-weight="500" fill="#29313a">ESLint 10.4.1</text>
+    <text x="903" y="1092" font-size="32" class="number" text-anchor="end" font-weight="550" fill="#29313a">3,064.173</text>
+    <text x="963" y="1092" font-size="24" text-anchor="end" fill="#63717b">ms</text>
+  </g>
+  <text x="90" y="1155" font-size="23" class="code" fill="#697984">Bun 1.4.4-canary.1+b92e2f470</text>
+
+  <text x="68" y="1232" font-size="25" fill="#566773">2026-10-13 · Apple M4 Pro · 5 次预热 / 20 次采样</text>
+  <text x="68" y="1273" font-size="25" fill="#566773">新进程中位数 · 规则与语料覆盖已校验</text>
+  <text x="68" y="1321" font-size="25" fill="#566773">原生源码构建；不含 utoo npm 包装层与 JS 插件执行；</text>
+  <text x="68" y="1362" font-size="25" fill="#566773">仅本组合成语料。实际项目结果随配置与规模变化。</text>
+  <text x="68" y="1405" font-size="22" fill="#75818a">utoo-lint 源码 b3c9f28 · 工作树含改动 · ReleaseFast</text>
+
+  <rect x="64" y="1450" width="952" height="210" rx="26" fill="#202e39"/>
+  <rect x="64" y="1450" width="7" height="210" rx="3.5" fill="url(#blue)"/>
+  <text x="98" y="1502" font-size="27" fill="#dce8f0" font-weight="600">在项目里试一试</text>
+  <text x="98" y="1560" font-size="33" class="code" fill="#ffffff" font-weight="600">npm i -D @utoo/lint</text>
+  <text x="98" y="1615" font-size="33" class="code" fill="#7cd2ff" font-weight="600">npx utoo-lint src</text>
+  <text x="68" y="1713" font-size="30" class="number" font-weight="650" fill="#0088d0">utlint.umijs.org</text>
+  <text x="1013" y="1713" font-size="23" text-anchor="end" fill="#687782">UTOO · 开源 JavaScript 工具链</text>
+</svg>
