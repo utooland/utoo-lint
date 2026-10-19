@@ -7,6 +7,7 @@ import { Legacy } from "@eslint/eslintrc";
 import eslintJs from "@eslint/js";
 
 import { Linter } from "../index.js";
+import { nativeRuleConfig } from "../lib/native-rule-options.cjs";
 
 const ESLINT_CONFIG_FILENAMES = [
   "eslint.config.js",
@@ -37,11 +38,23 @@ const MIGRATION_SOURCE = Symbol("migrationSource");
 const JAVASCRIPT_CONFIG_LOADER_SCRIPT = `
 import { writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { nativeRuleConfig } from ${JSON.stringify(new URL("../lib/native-rule-options.cjs", import.meta.url).href)};
 
 const loaded = await import(pathToFileURL(process.argv[1]).href);
+const nativeRuleIds = new Map(JSON.parse(process.argv[2]));
 const seen = new Set();
 
-function strip(value) {
+function nativeOptions(rules) {
+  if (!rules || typeof rules !== "object" || Array.isArray(rules)) {
+    return rules;
+  }
+  return Object.fromEntries(Object.entries(rules).map(([ruleId, ruleConfig]) => [
+    ruleId,
+    nativeRuleIds.has(ruleId) ? nativeRuleConfig(nativeRuleIds.get(ruleId), ruleConfig) : ruleConfig
+  ]));
+}
+
+function strip(value, configEntry = false) {
   if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
     return value;
   }
@@ -56,13 +69,19 @@ function strip(value) {
   }
   seen.add(value);
   if (Array.isArray(value)) {
-    const items = value.map(strip).filter((item) => item !== undefined);
+    const items = value.map((item) => strip(item, configEntry)).filter((item) => item !== undefined);
     seen.delete(value);
     return items;
   }
   const object = {};
   for (const [key, item] of Object.entries(value)) {
-    const stripped = strip(item);
+    // Preserve native unlimited spellings before this subprocess serializes
+    // the config. Only rules that will be migrated need native JSON options;
+    // ignored and unsupported plugin rules retain the usual report behavior.
+    const stripped = strip(
+      configEntry && key === "rules" ? nativeOptions(item) : item,
+      configEntry && key === "overrides"
+    );
     if (stripped !== undefined) {
       object[key] = stripped;
     }
@@ -71,7 +90,7 @@ function strip(value) {
   return object;
 }
 
-const json = JSON.stringify(strip(loaded.default ?? loaded));
+const json = JSON.stringify(strip(loaded.default ?? loaded, true));
 if (json === undefined) {
   throw new TypeError("config did not export a migratable value");
 }
@@ -192,8 +211,8 @@ function migrateEslintConfig(options) {
     throw new Error("utoo-lint migrate eslint: no ESLint config found; pass --from PATH");
   }
 
-  const eslintConfig = loadEslintConfig(sourcePath, options.cwd);
   const supportedRuleIds = new Set(new Linter().getRules().keys());
+  const eslintConfig = loadEslintConfig(sourcePath, options.cwd, supportedRuleIds);
   const migrationInput = migrationInputFromConfig(
     eslintConfig,
     sourcePath,
@@ -224,7 +243,7 @@ function migrateEslintConfig(options) {
           unsupportedRules.push({ ruleId, scope: migrationRuleScope(entry), source });
           continue;
         }
-        rules[migratedRuleId] = migratableRuleConfig(ruleConfig);
+        rules[migratedRuleId] = nativeRuleConfig(migratedRuleId, ruleConfig);
         supportedRules.push(migratedRuleId);
         if (migratedRuleId !== ruleId) {
           translatedRules.push({ sourceRuleId: ruleId, targetRuleId: migratedRuleId });
@@ -665,9 +684,17 @@ function findEslintConfig(cwd) {
   }
 }
 
-function loadEslintConfig(path, cwd) {
+function loadEslintConfig(path, cwd, supportedRuleIds) {
   if (JAVASCRIPT_CONFIG_EXTENSIONS.has(extname(path))) {
-    const result = spawnSync(process.execPath, ["--input-type=module", "--eval", JAVASCRIPT_CONFIG_LOADER_SCRIPT, path], {
+    const nativeRuleIds = new Map([...supportedRuleIds]
+      .filter((ruleId) => !IGNORED_RULES.has(ruleId))
+      .map((ruleId) => [ruleId, ruleId]));
+    for (const [sourceRuleId, targetRuleId] of REVIEWED_RULE_ALIASES) {
+      if (supportedRuleIds.has(targetRuleId)) {
+        nativeRuleIds.set(sourceRuleId, targetRuleId);
+      }
+    }
+    const result = spawnSync(process.execPath, ["--input-type=module", "--eval", JAVASCRIPT_CONFIG_LOADER_SCRIPT, path, JSON.stringify([...nativeRuleIds])], {
       cwd,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe", "pipe"]
@@ -759,10 +786,6 @@ function collectMigratablePatterns(value, patterns) {
 
 function isGlobalIgnoreEntry(entry) {
   return Boolean(entry.ignores) && Object.keys(entry).every((key) => key === "name" || key === "ignores");
-}
-
-function migratableRuleConfig(ruleConfig) {
-  return Array.isArray(ruleConfig) ? [...ruleConfig] : ruleConfig;
 }
 
 function isRuleDisabled(ruleConfig) {

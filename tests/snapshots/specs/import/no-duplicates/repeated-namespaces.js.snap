@@ -1,0 +1,42 @@
+---
+fixture: "tests/snapshots/specs/import/no-duplicates/repeated-namespaces.js"
+rule: "import/no-duplicates"
+---
+
+# Input
+
+```js
+import * as first from "alpha";
+import * as second from "alpha";
+```
+
+# Diagnostics
+
+count: 2
+
+## Diagnostic 1
+
+- rule: "import/no-duplicates"
+- severity: "error"
+- message: "'alpha' imported multiple times."
+- byte span: 23..30
+- start: 1:24
+- end: 1:31
+- source: "\"alpha\""
+- fixes: 0
+
+## Diagnostic 2
+
+- rule: "import/no-duplicates"
+- severity: "error"
+- message: "'alpha' imported multiple times."
+- byte span: 56..63
+- start: 2:25
+- end: 2:32
+- source: "\"alpha\""
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

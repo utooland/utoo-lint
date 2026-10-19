@@ -1,0 +1,43 @@
+---
+fixture: "tests/snapshots/specs/import/no-duplicates/interleaved-namespace.js"
+rule: "import/no-duplicates"
+---
+
+# Input
+
+```js
+import { first } from "alpha";
+import * as namespace from "alpha";
+import { second } from "alpha";
+```
+
+# Diagnostics
+
+count: 2
+
+## Diagnostic 1
+
+- rule: "import/no-duplicates"
+- severity: "error"
+- message: "'alpha' imported multiple times."
+- byte span: 22..29
+- start: 1:23
+- end: 1:30
+- source: "\"alpha\""
+- fixes: 0
+
+## Diagnostic 2
+
+- rule: "import/no-duplicates"
+- severity: "error"
+- message: "'alpha' imported multiple times."
+- byte span: 90..97
+- start: 3:24
+- end: 3:31
+- source: "\"alpha\""
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0
