@@ -1,0 +1,20 @@
+---
+fixture: "tests/snapshots/specs/import/no-duplicates/type-named-and-namespace.ts"
+rule: "import/no-duplicates"
+---
+
+# Input
+
+```ts
+import type { NamedType } from "alpha";
+import type * as Types from "alpha";
+```
+
+# Diagnostics
+
+count: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

@@ -16,6 +16,7 @@ const ImportGroup = enum {
     namespace,
     default_type,
     named_type,
+    namespace_type,
 };
 
 const SeenImport = struct {
@@ -107,11 +108,13 @@ fn importGroup(tree: *const ast.Tree, declaration: ast.ImportDeclaration) Import
     const specifiers = tree.extra(declaration.specifiers);
     if (declaration.import_kind == .type) {
         if (specifiers.len > 0 and tree.data(specifiers[0]) == .import_default_specifier) return .default_type;
+        // A type namespace import cannot be merged with a named type import.
+        if (specifiers.len > 0 and tree.data(specifiers[0]) == .import_namespace_specifier) return .namespace_type;
         return .named_type;
     }
 
-    // Match import/no-duplicates' default grouping, including mixed inline type
-    // imports. Namespace declarations cannot be merged into named imports.
+    // Keep inline type imports in the named type group, including mixed imports.
+    // Namespace declarations cannot be merged into named imports.
     for (specifiers) |specifier_index| {
         const specifier = switch (tree.data(specifier_index)) {
             .import_specifier => |specifier| specifier,

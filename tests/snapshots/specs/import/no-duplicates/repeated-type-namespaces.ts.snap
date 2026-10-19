@@ -1,0 +1,43 @@
+---
+fixture: "tests/snapshots/specs/import/no-duplicates/repeated-type-namespaces.ts"
+rule: "import/no-duplicates"
+---
+
+# Input
+
+```ts
+import type * as FirstTypes from "alpha";
+import type { NamedType } from "alpha";
+import type * as SecondTypes from "alpha";
+```
+
+# Diagnostics
+
+count: 2
+
+## Diagnostic 1
+
+- rule: "import/no-duplicates"
+- severity: "error"
+- message: "'alpha' imported multiple times."
+- byte span: 33..40
+- start: 1:34
+- end: 1:41
+- source: "\"alpha\""
+- fixes: 0
+
+## Diagnostic 2
+
+- rule: "import/no-duplicates"
+- severity: "error"
+- message: "'alpha' imported multiple times."
+- byte span: 116..123
+- start: 3:35
+- end: 3:42
+- source: "\"alpha\""
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

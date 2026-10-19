@@ -63,6 +63,13 @@ test "allows namespace imports alongside other import groups" {
         \\import type * as Types from "alpha";
         \\import * as namespace from "alpha";
         ,
+        \\import type * as Types from "alpha";
+        \\import type { NamedType } from "alpha";
+        ,
+        \\import type DefaultType from "alpha";
+        \\import type * as Types from "alpha";
+        \\import { type NamedType } from "alpha";
+        ,
         \\import { type NamedType, value } from "alpha";
         \\import { other } from "alpha";
     };
@@ -91,8 +98,8 @@ test "reports duplicates within namespace and type import groups" {
         \\import type { FirstType } from "alpha";
         \\import type { SecondType } from "alpha";
         ,
-        \\import type * as Types from "alpha";
-        \\import type { NamedType } from "alpha";
+        \\import type * as FirstTypes from "alpha";
+        \\import type * as SecondTypes from "alpha";
         ,
         \\import { type FirstType, value } from "alpha";
         \\import type { SecondType } from "alpha";
@@ -109,6 +116,30 @@ test "reports duplicates within namespace and type import groups" {
             try std.testing.expectEqualStrings(lint.rules.import_no_duplicates.id, diagnostic.rule_id);
             try std.testing.expectEqualStrings("\"alpha\"", source[diagnostic.span.start..diagnostic.span.end]);
         }
+    }
+}
+
+test "reports repeated type namespaces without reporting an interleaved named type import" {
+    const source =
+        \\import type * as FirstTypes from "alpha";
+        \\import type { NamedType } from "alpha";
+        \\import type * as SecondTypes from "alpha";
+    ;
+
+    var options = lint.Options.allDisabled();
+    options.import_no_duplicates = true;
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.ts", options);
+    defer result.deinit(std.testing.allocator);
+
+    const expected_starts = [_]usize{
+        std.mem.indexOf(u8, source, "\"alpha\"").?,
+        std.mem.indexOfPos(u8, source, std.mem.indexOf(u8, source, "import type * as SecondTypes").?, "\"alpha\"").?,
+    };
+    try std.testing.expectEqual(expected_starts.len, result.diagnostics.len);
+    for (result.diagnostics, expected_starts) |diagnostic, expected_start| {
+        try std.testing.expectEqualStrings(lint.rules.import_no_duplicates.id, diagnostic.rule_id);
+        try std.testing.expectEqual(@as(u32, @intCast(expected_start)), diagnostic.span.start);
+        try std.testing.expectEqualStrings("'alpha' imported multiple times.", diagnostic.message);
     }
 }
 
