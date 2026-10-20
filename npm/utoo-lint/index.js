@@ -3486,6 +3486,11 @@ function appendPluginRuleDiagnostics(report, options, { perFileConfig = true } =
 }
 
 function nativeFlatConfigOptions(options) {
+  // lintText stores source in a temporary file. Resolve its configuration
+  // against the logical filename before passing the materialized config to native.
+  if (options.pluginTextFilePath !== undefined) {
+    return undefined;
+  }
   if (defersLegacyIgnores(options)) {
     // A legacy config may cascade from a nested directory even with baseConfig.
     return undefined;
@@ -3653,7 +3658,7 @@ function nativeConfigRunsForFiles(paths, options) {
   let hasConfigSource = Boolean(options.baseConfig || options.overrideConfig);
   for (const filePath of paths) {
     const matchPath = paths.length === 1
-      ? options.filePath ?? options.filename ?? filePath
+      ? options.filePath ?? options.filename ?? options.pluginTextFilePath ?? filePath
       : filePath;
     const fileConfigPath = options.noConfig ? undefined : configPathForFile(options, matchPath);
     const configured = Boolean(options.baseConfig || options.overrideConfig || fileConfigPath || legacyConfigForFile(options, matchPath));
