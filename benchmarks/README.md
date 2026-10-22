@@ -160,6 +160,66 @@ Run a smaller local sample with:
 pnpm codspeed:native-flat-config -- --files=100 --time=100 --warmup-time=0
 ```
 
+## Focused before/after comparison
+
+`bench:focused` compares two explicitly supplied native binaries and npm
+wrappers. Build both revisions before running it; the runner never compiles.
+To isolate local optimizations from the Yuku upgrade, use the upgrade-only
+commit as the baseline and build both binaries with the same Zig version and
+`-Doptimize=fast`.
+
+```bash
+# Run from benchmarks/. Paths may point to separate checkouts or saved artifacts.
+pnpm bench:focused --before-binary=/path/to/baseline/utoo-lint --before-wrapper=/path/to/baseline/npm/utoo-lint/index.cjs --before-ref=7addc3f --after-binary=../zig-out/bin/utoo-lint --after-wrapper=../npm/utoo-lint/index.cjs --runs=20 --warmups=5 --output=results/focused.json
+```
+
+The baseline wrapper needs its matching `lib/`, `package.json`, and installed
+dependencies. Both wrappers use the same native binary (the candidate by
+default) to isolate JavaScript changes; `--js-binary=PATH` selects another shared
+binary. Native scenarios use each revision's own binary.
+
+The default scenarios are:
+
+- `no-shadow`: 500, 2,000, and 8,000 exported functions with distinct parameter
+  bindings, using one thread and only `no-shadow`.
+- `diagnostics`: 4,000 `debugger` lines, plus a 4,000-line control with just one
+  diagnostic on the first line. Text output exercises diagnostic position lookup.
+- `semantic`: JavaScript and TypeScript files containing 8,000 repeated updates,
+  enabling only `semantic-errors`.
+- `control`: the existing clean 1,000-file corpus under both the 12-rule and
+  49-rule profiles, using the default thread count.
+- `source-code`: separate ordinary-token, token-with-comments, and source-location
+  queries over 2,000 declarations. Parsing and `SourceCode` setup are excluded.
+- `plugin`: `Linter.verify` with a custom rule that checks each declaration's next
+  token and reports a message. This includes native lint, parsing, AST traversal,
+  rule execution, and the final report.
+
+Before timing, native results must match in every JSON field, text stdout,
+stderr, and exit code. The runner also checks expected file/diagnostic counts.
+JavaScript runs hash every returned API value or plugin message and check equal
+counts. Timed samples must reproduce those outputs. All fixtures are generated
+in an isolated temporary directory and removed afterward.
+
+Each paired round alternates which revision runs first. Every sample starts a
+fresh process: warmups prime filesystem caches, while JavaScript query timings
+still include cold-JIT behavior. JSON output contains raw operation times and
+process wall times, output hashes, source hashes, wrapper and binary hashes,
+Node/CPU/OS/Zig metadata, source refs, working-tree status, and a diff digest.
+Results are saved after each completed scenario; `complete: false` marks a
+partial run. Tiny smoke runs validate the runner, not performance:
+
+```bash
+pnpm bench:focused --before-binary=/path/to/baseline/utoo-lint --before-wrapper=/path/to/baseline/npm/utoo-lint/index.cjs --runs=1 --warmups=0 --shadow-counts=3 --diagnostic-lines=6 --semantic-references=8 --control-files=2 --control-statements=1 --js-statements=4 --output=results/focused-smoke.json
+```
+
+Use `--scenarios=no-shadow,semantic` to select groups, or `--help` for all size
+options. Optional `--memory-runs=5` performs separate native peak-RSS samples
+with `/usr/bin/time -l` on macOS or `-v` on Linux and normalizes values to bytes.
+JavaScript workers separately report Node's own peak RSS in KiB, captured before
+result hashing; that value excludes the native child and must not be presented as
+the whole workload's memory. These focused synthetic cases explain targeted changes; the normal
+corpus controls check broader throughput and small-change regressions.
+
 ## Published website chart
 
 The website uses the archived 2026-08-30 run in

@@ -8,10 +8,11 @@ on:
       - "benchmarks/**"
       - "build.zig"
       - "build.zig.zon"
-      - "npm/utoo-lint/index.*"
-      - "npm/utoo-lint/lib/config-loader.*"
+      - "npm/utoo-lint/**"
+      - "pnpm-lock.yaml"
       - "src/**"
       - "vendor/yuku/**"
+      - "vendor/yuku"
   push:
     branches:
       - main
@@ -20,10 +21,11 @@ on:
       - "benchmarks/**"
       - "build.zig"
       - "build.zig.zon"
-      - "npm/utoo-lint/index.*"
-      - "npm/utoo-lint/lib/config-loader.*"
+      - "npm/utoo-lint/**"
+      - "pnpm-lock.yaml"
       - "src/**"
       - "vendor/yuku/**"
+      - "vendor/yuku"
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true

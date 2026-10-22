@@ -1,5 +1,7 @@
 comptime {
     _ = @import("autofix.zig");
+    _ = @import("source_positions.zig");
+    _ = @import("semantic_modes.zig");
 }
 
 comptime {

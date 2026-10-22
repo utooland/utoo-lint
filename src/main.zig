@@ -2365,6 +2365,14 @@ fn printResultDiagnostics(
 ) !void {
     if (result.diagnostics.len == 0) return;
 
+    var max_offset: usize = 0;
+    for (result.diagnostics) |diagnostic| max_offset = @max(max_offset, diagnostic.span.start);
+    // Later source bytes cannot affect these positions, even in a very large file.
+    var line_index = try lint.ByteLineIndex.init(allocator, source[0..@min(source.len, max_offset)]);
+    defer line_index.deinit(allocator);
+    const positions = try allocator.alloc(lint.SourcePosition, result.diagnostics.len);
+    defer allocator.free(positions);
+
     var output: std.Io.Writer.Allocating = .init(allocator);
     defer output.deinit();
     const writer = &output.writer;
@@ -2372,14 +2380,13 @@ fn printResultDiagnostics(
     try writer.writeByte('\n');
 
     var location_width: usize = 0;
-    for (result.diagnostics) |diagnostic| {
-        const position = lint.offsetToLineColumn(source, diagnostic.span.start);
+    for (result.diagnostics, positions) |diagnostic, *position| {
+        position.* = line_index.position(diagnostic.span.start);
         location_width = @max(location_width, decimalDigits(position.line) + 1 + decimalDigits(position.column));
     }
 
-    for (result.diagnostics) |diagnostic| {
+    for (result.diagnostics, positions) |diagnostic, position| {
         const severity = effectiveDiagnosticSeverity(rule_severities, diagnostic);
-        const position = lint.offsetToLineColumn(source, diagnostic.span.start);
         const current_width = decimalDigits(position.line) + 1 + decimalDigits(position.column);
         try writer.writeAll("  ");
         try writer.splatByteAll(' ', location_width - current_width);

@@ -2,6 +2,27 @@ const std = @import("std");
 const lint = @import("utoo_lint");
 const helpers = @import("../helpers.zig");
 
+test "reports shadowing a shared export in a merged TypeScript namespace" {
+    const source =
+        \\namespace NS { export var shared: number; }
+        \\namespace NS {
+        \\  export var shared: number;
+        \\  export function nested() { const shared = 1; return shared; }
+        \\}
+    ;
+    var options = lint.Options.allDisabled();
+    options.typescript_eslint_no_shadow = true;
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.ts", options);
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+    try std.testing.expectEqualStrings(lint.rules.typescript_eslint_no_shadow.id, result.diagnostics[0].rule_id);
+    try std.testing.expectEqualStrings(
+        "'shared' is already declared in the upper scope on line 1 column 27.",
+        result.diagnostics[0].message,
+    );
+}
+
 test "reports @typescript-eslint/no-shadow for TypeScript value and type shadows" {
     const source =
         \\const value = 1;

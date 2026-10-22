@@ -17,6 +17,7 @@ import {
 import configModule from "./lib/config-module.cjs";
 import estreeParser from "./lib/estree-parser.cjs";
 import pluginRunner from "./lib/plugin-runner.cjs";
+import { tokenWindow, selectTokenItems } from "./lib/source-code-tokens.cjs";
 
 export { platformPackageName, resolveBinary } from "./lib/binary.js";
 
@@ -1703,8 +1704,14 @@ export class SourceCode {
   getLocFromIndex(index) {
     const clamped = Math.max(0, Math.min(index, this.text.length));
     let line = 0;
-    while (line + 1 < this.lineStartIndices.length && this.lineStartIndices[line + 1] <= clamped) {
-      line += 1;
+    let end = this.lineStartIndices.length - 1;
+    while (line < end) {
+      const middle = line + Math.ceil((end - line) / 2);
+      if (this.lineStartIndices[middle] <= clamped) {
+        line = middle;
+      } else {
+        end = middle - 1;
+      }
     }
     return {
       line: line + 1,
@@ -1748,64 +1755,64 @@ export class SourceCode {
   }
 
   getFirstToken(node, skipOrOptions = 0) {
-    return sourceForwardToken(this.getTokens(node, sourceTokenOptions(skipOrOptions, "skip")), skipOrOptions);
+    return sourceNodeTokenWindow(this, node, sourceTokenOptions(skipOrOptions, "skip"), false, true);
   }
 
   getFirstTokens(node, countOrOptions = 1) {
-    return sourceForwardTokens(this.getTokens(node, sourceTokenOptions(countOrOptions, "count")), countOrOptions);
+    return sourceNodeTokenWindow(this, node, sourceTokenOptions(countOrOptions, "count"), false, false);
   }
 
   getLastToken(node, skipOrOptions = 0) {
-    return sourceBackwardToken(this.getTokens(node, sourceTokenOptions(skipOrOptions, "skip")), skipOrOptions);
+    return sourceNodeTokenWindow(this, node, sourceTokenOptions(skipOrOptions, "skip"), true, true);
   }
 
   getLastTokens(node, countOrOptions = 1) {
-    return sourceBackwardTokens(this.getTokens(node, sourceTokenOptions(countOrOptions, "count")), countOrOptions);
+    return sourceNodeTokenWindow(this, node, sourceTokenOptions(countOrOptions, "count"), true, false);
   }
 
   getTokenBefore(nodeOrToken, skipOrOptions = 0) {
     const options = sourceTokenOptions(skipOrOptions, "skip");
-    return sourceBackwardToken(sourceApplyTokenFilter(sourceItemsBefore(sourceTokenItems(this, options), this.getRange(nodeOrToken)[0]), options), options);
+    return tokenWindow(this, options, null, this.getRange(nodeOrToken)[0], true, true);
   }
 
   getTokensBefore(nodeOrToken, countOrOptions = 1) {
-    const options = sourceTokenOptions(countOrOptions, "count");
-    return sourceBackwardTokens(sourceApplyTokenFilter(sourceItemsBefore(sourceTokenItems(this, options), this.getRange(nodeOrToken)[0]), options), options);
+    const options = sourceCountedTokenOptions(countOrOptions);
+    return tokenWindow(this, options, null, this.getRange(nodeOrToken)[0], true, false);
   }
 
   getTokenAfter(nodeOrToken, skipOrOptions = 0) {
     const options = sourceTokenOptions(skipOrOptions, "skip");
-    return sourceForwardToken(sourceApplyTokenFilter(sourceItemsAfter(sourceTokenItems(this, options), this.getRange(nodeOrToken)[1]), options), options);
+    return tokenWindow(this, options, this.getRange(nodeOrToken)[1], null, false, true);
   }
 
   getTokensAfter(nodeOrToken, countOrOptions = 1) {
-    const options = sourceTokenOptions(countOrOptions, "count");
-    return sourceForwardTokens(sourceApplyTokenFilter(sourceItemsAfter(sourceTokenItems(this, options), this.getRange(nodeOrToken)[1]), options), options);
+    const options = sourceCountedTokenOptions(countOrOptions);
+    return tokenWindow(this, options, this.getRange(nodeOrToken)[1], null, false, false);
   }
 
   getTokensBetween(left, right, optionsOrCount) {
-    const options = sourceTokenOptions(optionsOrCount, "count");
-    return sourceForwardTokens(sourceTokensBetween(this, left, right, options), options);
+    const options = sourceCountedTokenOptions(optionsOrCount);
+    return tokenWindow(this, options, this.getRange(left)[1], this.getRange(right)[0], false, false);
   }
 
   getFirstTokenBetween(left, right, skipOrOptions = 0) {
     const options = sourceTokenOptions(skipOrOptions, "skip");
-    return sourceForwardToken(sourceTokensBetween(this, left, right, options), options);
+    return tokenWindow(this, options, this.getRange(left)[1], this.getRange(right)[0], false, true);
   }
 
   getFirstTokensBetween(left, right, countOrOptions = 1) {
-    const options = sourceTokenOptions(countOrOptions, "count");
-    return sourceForwardTokens(sourceTokensBetween(this, left, right, options), options);
+    const options = sourceCountedTokenOptions(countOrOptions);
+    return tokenWindow(this, options, this.getRange(left)[1], this.getRange(right)[0], false, false);
   }
 
   getLastTokenBetween(left, right, skipOrOptions = 0) {
     const options = sourceTokenOptions(skipOrOptions, "skip");
-    return sourceBackwardToken(sourceTokensBetween(this, left, right, options), options);
+    return tokenWindow(this, options, this.getRange(left)[1], this.getRange(right)[0], true, true);
   }
 
   getLastTokensBetween(left, right, countOrOptions = 1) {
-    const options = sourceTokenOptions(countOrOptions, "count");
-    return sourceBackwardTokens(sourceTokensBetween(this, left, right, options), options);
+    const options = sourceCountedTokenOptions(countOrOptions);
+    return tokenWindow(this, options, this.getRange(left)[1], this.getRange(right)[0], true, false);
   }
 
   getTokenByRangeStart(index, options = {}) {
@@ -1813,11 +1820,11 @@ export class SourceCode {
   }
 
   getTokenOrCommentBefore(nodeOrToken) {
-    return sourceItemsBefore(sourceTokensAndComments(this), this.getRange(nodeOrToken)[0]).at(-1) ?? null;
+    return this.getTokenBefore(nodeOrToken, { includeComments: true });
   }
 
   getTokenOrCommentAfter(nodeOrToken) {
-    return sourceItemsAfter(sourceTokensAndComments(this), this.getRange(nodeOrToken)[1])[0] ?? null;
+    return this.getTokenAfter(nodeOrToken, { includeComments: true });
   }
 
   getCommentsBefore(nodeOrToken) {
@@ -1990,11 +1997,12 @@ function sourceTokensAndComments(sourceCode) {
   return [...sourceCode.tokens, ...sourceCode.comments].sort((left, right) => (left.range?.[0] ?? 0) - (right.range?.[0] ?? 0));
 }
 
-function sourceTokensBetween(sourceCode, left, right, options) {
-  return sourceApplyTokenFilter(
-    sourceItemsBetween(sourceTokenItems(sourceCode, options), sourceCode.getRange(left)[1], sourceCode.getRange(right)[0]),
-    options
-  );
+function sourceNodeTokenWindow(sourceCode, node, options, backwards, single) {
+  if (!node) {
+    return selectTokenItems(sourceTokenItems(sourceCode, options), options, backwards, single);
+  }
+  const range = expandSourceRange(sourceCode.getRange(node), options.beforeCount, options.afterCount, sourceCode.text.length);
+  return tokenWindow(sourceCode, options, range[0], range[1], backwards, single);
 }
 
 function sourceTokenItems(sourceCode, options) {
@@ -2027,39 +2035,20 @@ function sourceTokenOptions(optionsOrNumber, numericKey) {
   };
 }
 
+// Adjacent/between token APIs default an omitted count to one, including
+// options objects; getFirstTokens/getLastTokens keep their unbounded form.
+function sourceCountedTokenOptions(value) {
+  const options = sourceTokenOptions(value, "count");
+  options.count ??= 1;
+  return options;
+}
+
 function sourceTokenCount(value, defaultValue) {
   return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : defaultValue;
 }
 
 function sourceApplyTokenFilter(items, options) {
   return options.filter ? items.filter((item) => options.filter(item)) : items;
-}
-
-function sourceForwardToken(items, optionsOrNumber) {
-  const options = sourceTokenOptions(optionsOrNumber, "skip");
-  return items[options.skip] ?? null;
-}
-
-function sourceForwardTokens(items, optionsOrNumber) {
-  const options = sourceTokenOptions(optionsOrNumber, "count");
-  const start = options.skip;
-  const end = options.count === null ? undefined : start + options.count;
-  return items.slice(start, end);
-}
-
-function sourceBackwardToken(items, optionsOrNumber) {
-  const options = sourceTokenOptions(optionsOrNumber, "skip");
-  return items.at(-(options.skip + 1)) ?? null;
-}
-
-function sourceBackwardTokens(items, optionsOrNumber) {
-  const options = sourceTokenOptions(optionsOrNumber, "count");
-  if (options.count === 0) {
-    return [];
-  }
-  const end = options.skip === 0 ? undefined : -options.skip;
-  const available = end === undefined ? items : items.slice(0, end);
-  return options.count === null ? available : available.slice(-options.count);
 }
 
 function sourceNodeByRangeIndex(node, index, seen = new Set()) {
