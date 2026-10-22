@@ -14,7 +14,7 @@ pub const Binding = struct {
     return_type: ImportedType = .unknown,
 };
 
-pub const Map = std.AutoHashMap(parser.traverser.semantic.SymbolId, Binding);
+pub const Map = std.AutoHashMap(parser.semantic.SymbolId, Binding);
 
 /// Collect primitive annotations on named imports from neighboring source files.
 /// The returned map owns no strings and only needs `deinit` from its caller.

@@ -4,7 +4,7 @@
 //
 // The native lint engine keeps its own AST in Zig. Plugin rules are JavaScript
 // and expect the ESTree shape that ESLint hands to `create(context)`, so this
-// module parses the file a second time with yuku-parser (the same parser the
+// module parses the file a second time with yuku (the same parser the
 // engine is built on), then decorates the tree with `range`, `loc`, `parent`,
 // a token stream, comments, and a lazily computed scope manager.
 //
@@ -70,12 +70,12 @@ function loadYuku() {
     throw yukuLoadError;
   }
   try {
-    // yuku-parser is an ES module. Loading it synchronously from CommonJS
+    // yuku is an ES module. Loading it synchronously from CommonJS
     // relies on require(esm), which Node.js 20.19+ and 22.12+ support.
-    yukuModule = require("yuku-parser");
+    yukuModule = require("yuku");
   } catch (error) {
     yukuLoadError = new Error(
-      "utoo-lint: unable to load yuku-parser, which is required to run ESLint plugin rules. " +
+      "utoo-lint: unable to load yuku, which is required to run ESLint plugin rules. " +
         "Plugin rules need Node.js 20.19 or newer (or 22.12 or newer). " +
         `Underlying error: ${error?.message ?? error}`
     );
@@ -192,13 +192,14 @@ function decorateNode(node, locate) {
   node.loc = { start: locate(node.start), end: locate(node.end) };
 }
 
-function normalizeTree(program, text, locate) {
+function normalizeTree(program, text, locate, lang) {
   const stack = [[program, null]];
   while (stack.length > 0) {
     const [node, parent] = stack.pop();
-    if (node.type === "TemplateElement") {
+    if (node.type === "TemplateElement" && !isTypeScriptLanguage(lang)) {
       // ESLint's parsers include the surrounding backticks and `${`/`}`
-      // delimiters in a template element's range.
+      // delimiters in a template element's range. Yuku already includes those
+      // delimiters in TypeScript trees.
       node.start -= 1;
       node.end += node.tail ? 1 : 2;
     }
@@ -607,12 +608,14 @@ function parseForESLint(text, options = {}) {
   const ecmaFeatures = options.ecmaFeatures ?? {};
   const lang = languageForFile(filePath, ecmaFeatures);
   const sourceType = sourceTypeForFile(filePath, options.sourceType);
-  const result = parse(text, { lang, sourceType, preserveParens: false });
-  const program = result.program;
+  const file = parse(text, { lang, sourceType, preserveParens: false });
+  const program = file.program;
   const locate = createLocator(text);
 
-  normalizeTree(program, text, locate);
-  program.comments = normalizeComments(program, result.comments ?? [], text, locate);
+  normalizeTree(program, text, locate, lang);
+  program.comments = normalizeComments(program, file.comments, text, locate);
+  // SourceFile.tokens requires tokens: true and uses Yuku's TokenList API.
+  // Build the ESLint token array from the normalized tree instead.
   program.tokens = buildTokens(program, text, locate, lang);
 
   return {
@@ -620,7 +623,7 @@ function parseForESLint(text, options = {}) {
     scopeManager: createScopeManagerFactory(program, { ...options, lang, sourceType, ecmaFeatures }),
     visitorKeys: VISITOR_KEYS,
     services: {},
-    diagnostics: result.diagnostics ?? []
+    diagnostics: file.diagnostics
   };
 }
 

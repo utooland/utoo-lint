@@ -150,11 +150,11 @@ fn scanPayload(
     const T = @TypeOf(node);
     if (@typeInfo(T) != .@"struct") return;
 
-    inline for (@typeInfo(T).@"struct".fields) |field| {
-        if (field.type == ast.NodeIndex) {
-            try scanNode(allocator, tree, @field(node, field.name), members);
-        } else if (field.type == ast.IndexRange) {
-            try scanRange(allocator, tree, @field(node, field.name), members);
+    inline for (@typeInfo(T).@"struct".field_names) |field_name| {
+        if (@FieldType(T, field_name) == ast.NodeIndex) {
+            try scanNode(allocator, tree, @field(node, field_name), members);
+        } else if (@FieldType(T, field_name) == ast.IndexRange) {
+            try scanRange(allocator, tree, @field(node, field_name), members);
         }
     }
 }

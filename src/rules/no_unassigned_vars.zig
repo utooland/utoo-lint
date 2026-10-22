@@ -64,11 +64,11 @@ pub fn run(
         if (entry.reference.kind != .value) continue;
         const symbol_id = symbol_table.referenceSymbol(entry.id);
         if (symbol_id == .none) continue;
-        read_symbols[@intFromEnum(symbol_id)] = true;
+        read_symbols[@backingInt(symbol_id)] = true;
     }
 
     for (candidates.items) |candidate| {
-        const symbol_index = @intFromEnum(candidate.symbol_id);
+        const symbol_index = @backingInt(candidate.symbol_id);
         if (assigned_symbols[symbol_index]) continue;
         if (!read_symbols[symbol_index]) continue;
 
@@ -146,7 +146,7 @@ const Visitor = struct {
             .identifier_reference => {
                 const symbol_id = self.reference_lookup.get(unwrapTransparent(tree, target)) orelse return;
                 if (symbol_id == .none) return;
-                const symbol_index = @intFromEnum(symbol_id);
+                const symbol_index = @backingInt(symbol_id);
                 if (symbol_index < self.assigned_symbols.len) {
                     self.assigned_symbols[symbol_index] = true;
                 }

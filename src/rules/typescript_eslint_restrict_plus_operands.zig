@@ -43,11 +43,11 @@ const Types = struct {
     symbols: SymbolTable,
     imports: ?*const imported_types.Map = null,
 
-    fn symbolOf(self: Types, index: ast.NodeIndex) ?parser.traverser.semantic.SymbolId {
+    fn symbolOf(self: Types, index: ast.NodeIndex) ?parser.semantic.SymbolId {
         return self.symbols.symbolOf(index);
     }
 
-    fn symbolDecls(self: Types, symbol: parser.traverser.semantic.SymbolId) []const ast.NodeIndex {
+    fn symbolDecls(self: Types, symbol: parser.semantic.SymbolId) []const ast.NodeIndex {
         return self.symbols.symbolDecls(symbol);
     }
 
@@ -55,7 +55,7 @@ const Types = struct {
         return self.symbols.parentOf(index);
     }
 
-    fn isWriteReference(self: Types, reference_id: parser.traverser.semantic.ReferenceId) bool {
+    fn isWriteReference(self: Types, reference_id: parser.semantic.ReferenceId) bool {
         return self.symbols.isWriteReference(reference_id);
     }
 
@@ -91,9 +91,9 @@ pub fn runWithIo(allocator: Allocator, io: std.Io, diagnostics: *core.Diagnostic
 fn runWithTypes(allocator: Allocator, diagnostics: *core.DiagnosticList, tree: *const ast.Tree, symbols: Types, options: Options) Allocator.Error!void {
     for (tree.nodes.items(.data), 0..) |data, raw_index| {
         switch (data) {
-            .binary_expression => |expression| try checkBinaryExpressionWithTypes(allocator, diagnostics, tree, expression, @enumFromInt(raw_index), symbols, options),
+            .binary_expression => |expression| try checkBinaryExpressionWithTypes(allocator, diagnostics, tree, expression, @fromBackingInt(@intCast(raw_index)), symbols, options),
             .assignment_expression => |expression| if (expression.operator == .add_assign and !options.skip_compound_assignments) {
-                try checkOperands(allocator, diagnostics, tree, expression.left, expression.right, @enumFromInt(raw_index), symbols, options);
+                try checkOperands(allocator, diagnostics, tree, expression.left, expression.right, @fromBackingInt(@intCast(raw_index)), symbols, options);
             },
             else => {},
         }

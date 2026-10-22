@@ -215,7 +215,7 @@ fn needsPrecedingSemicolon(tree: *const ast.Tree, offset: u32) bool {
 
 fn typescriptTypeBoundaryEndsAt(tree: *const ast.Tree, end: usize) bool {
     for (0..tree.nodes.len) |raw_index| {
-        const index: ast.NodeIndex = @enumFromInt(raw_index);
+        const index: ast.NodeIndex = @fromBackingInt(@intCast(raw_index));
         if (tree.span(index).end != end) continue;
         const data = tree.data(index);
         if (data.isTypeContext()) return true;
@@ -230,7 +230,7 @@ fn typescriptTypeBoundaryEndsAt(tree: *const ast.Tree, end: usize) bool {
 
 fn moduleDeclarationEndsAt(tree: *const ast.Tree, end: usize) bool {
     for (0..tree.nodes.len) |raw_index| {
-        const index: ast.NodeIndex = @enumFromInt(raw_index);
+        const index: ast.NodeIndex = @fromBackingInt(@intCast(raw_index));
         if (tree.span(index).end != end) continue;
         switch (tree.data(index)) {
             .import_declaration, .export_named_declaration, .export_all_declaration => return true,
@@ -242,7 +242,7 @@ fn moduleDeclarationEndsAt(tree: *const ast.Tree, end: usize) bool {
 
 fn uninitializedDeclarationEndsAt(tree: *const ast.Tree, end: usize) bool {
     for (0..tree.nodes.len) |raw_index| {
-        const index: ast.NodeIndex = @enumFromInt(raw_index);
+        const index: ast.NodeIndex = @fromBackingInt(@intCast(raw_index));
         if (tree.span(index).end != end) continue;
         switch (tree.data(index)) {
             .variable_declarator => |declarator| if (declarator.init == .null) return true,
@@ -254,7 +254,7 @@ fn uninitializedDeclarationEndsAt(tree: *const ast.Tree, end: usize) bool {
 
 fn closingBraceRequiresSemicolon(tree: *const ast.Tree, end: usize) bool {
     for (0..tree.nodes.len) |raw_index| {
-        const index: ast.NodeIndex = @enumFromInt(raw_index);
+        const index: ast.NodeIndex = @fromBackingInt(@intCast(raw_index));
         if (tree.span(index).end != end) continue;
         switch (tree.data(index)) {
             .object_expression => return true,

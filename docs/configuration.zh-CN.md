@@ -243,7 +243,7 @@ API（`lintFiles`、`lintText`、`ESLint`、`Linter`、`RuleTester`）行为一�
 
 - 原生引擎先检查每个文件。插件提供的规则不会传给原生二进制，因此不需要原生实现。
 - 每个启用了插件规则的文件会在 Node.js 中用
-  [`yuku-parser`](https://www.npmjs.com/package/yuku-parser)（原生引擎所基于的解析器）
+  [`yuku`](https://www.npmjs.com/package/yuku)（原生引擎所基于的解析器）
   再解析一次，得到 ESTree / TypeScript-ESTree 语法树；规则通过 ESLint 兼容的 `context`
   和 `sourceCode` 在这棵树上运行。
 - 插件对象会在当前进程中从配置模块加载，因此插件必须从 `utlint.config.ts`（或

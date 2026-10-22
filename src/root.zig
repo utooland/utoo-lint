@@ -172,7 +172,7 @@ fn lintSourceInternal(
     const needs_semantic = hasSemanticRules(effective_options);
 
     if (needs_semantic) {
-        const semantic_model = try parser.semantic.analyze(&tree);
+        const semantic_model = try parser.semantic.analyze(&tree, .{ .check = true });
         var semantic_result = semantic_compat.Result.init(&tree, semantic_model);
         try semantic_result.symbol_table.resolveAll(semantic_result.scope_tree);
         try appendParserDiagnostics(allocator, &diagnostics, &tree, effective_options);

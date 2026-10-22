@@ -63,10 +63,12 @@ jobs:
 
       - name: Setup Zig
         uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
 
       - name: Build
         run: |
-          zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast -j1 --prefix zig-out/${{ matrix.asset }}
+          zig build -Dtarget=${{ matrix.target }} -Doptimize=fast -j1 --prefix zig-out/${{ matrix.asset }}
           mkdir -p dist/${{ matrix.asset }}
           cp zig-out/${{ matrix.asset }}/bin/${{ matrix.binary }} dist/${{ matrix.asset }}/${{ matrix.binary }}
 
@@ -126,6 +128,8 @@ jobs:
 
       - name: Setup Zig
         uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
 
       - name: Build and stage WebAssembly package
         run: pnpm package:wasm

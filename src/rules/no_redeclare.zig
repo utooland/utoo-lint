@@ -95,12 +95,12 @@ pub fn runWithOptions(
 fn isLintableSymbol(flags: traverser.semantic.Symbol.Flags, options: Options) bool {
     if (options.mode == .typescript) {
         if (flags.type_parameter or flags.type_import) return false;
-        return flags.inValueSpace() or flags.import or flags.interface or flags.type_alias or flags.namespace_module;
+        return flags.intersects(traverser.semantic.Symbol.value_space) or flags.import or flags.interface or flags.type_alias or flags.namespace_module;
     }
 
     if (flags.ambient) return false;
     if (flags.type_import or flags.interface or flags.type_alias or flags.type_parameter) return false;
-    return flags.inValueSpace() or flags.import;
+    return flags.intersects(traverser.semantic.Symbol.value_space) or flags.import;
 }
 
 fn isBuiltinGlobalRedeclaration(

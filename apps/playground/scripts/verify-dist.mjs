@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { verifyInlineParserWasm } from './verify-yuku-wasm.mjs';
 
 const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const clientDir = path.join(appDir, 'dist', 'client');
@@ -54,20 +55,19 @@ if (
 }
 
 const wasmFiles = files.filter((file) => path.extname(file) === '.wasm');
-if (wasmFiles.length !== versionManifest.versions.length + 2) {
+if (wasmFiles.length !== versionManifest.versions.length + 1) {
   throw new Error(
-    `expected ${versionManifest.versions.length + 2} WebAssembly assets, found ${wasmFiles.length}`,
+    `expected ${versionManifest.versions.length + 1} WebAssembly assets, found ${wasmFiles.length}`,
   );
 }
 
-let parserWasm;
+const parserWasm = await verifyInlineParserWasm(files);
 let bundledLintWasm;
 for (const file of wasmFiles) {
   const name = path.basename(file);
-  const isParser = name.includes('yuku-core');
   const isLintVersion = /^utoo-lint-v\d+\.\d+\.\d+\.wasm$/.test(name);
   const isBundledLint = /^utoo-lint\.[^.]+\.wasm$/.test(name);
-  if (!isParser && !isLintVersion && !isBundledLint) {
+  if (!isLintVersion && !isBundledLint) {
     throw new Error(`unexpected WebAssembly asset: ${name}`);
   }
 
@@ -78,12 +78,7 @@ for (const file of wasmFiles) {
   ) {
     throw new Error(`invalid WebAssembly asset: ${name}`);
   }
-  if (isParser) {
-    if (parserWasm) {
-      throw new Error(`duplicate parser WebAssembly asset: ${name}`);
-    }
-    parserWasm = contents;
-  } else if (isBundledLint) {
+  if (isBundledLint) {
     if (bundledLintWasm) {
       throw new Error(`duplicate bundled lint WebAssembly asset: ${name}`);
     }
@@ -91,7 +86,6 @@ for (const file of wasmFiles) {
   }
 }
 
-if (!parserWasm) throw new Error('missing parser WebAssembly asset');
 if (!bundledLintWasm) throw new Error('missing bundled lint WebAssembly asset');
 
 const lintWasmSizes = new Map();
@@ -197,7 +191,7 @@ for (const file of files) {
 }
 
 const wasmSizes = [
-  `parser ${(parserWasm.length / 1024 / 1024).toFixed(1)} MiB`,
+  `inline parser ${(parserWasm.length / 1024 / 1024).toFixed(1)} MiB`,
   ...versionManifest.versions.map(
     (version) =>
       `${version.label} ${(lintWasmSizes.get(version.id) / 1024 / 1024).toFixed(1)} MiB`,

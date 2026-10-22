@@ -14,11 +14,11 @@ separate, dated snapshots with their source data checked in.
 From the repository root:
 
 ```bash
-zig build -Doptimize=ReleaseFast
+zig build -Doptimize=fast
 cd benchmarks
 npm install
 npm run generate
-UTOO_LINT_BUILD_MODE=ReleaseFast npm run bench -- --runs=20 --warmups=5
+UTOO_LINT_BUILD_MODE=fast npm run bench -- --runs=20 --warmups=5
 ```
 
 The benchmark runner writes machine-readable output to `results/latest.json`,
@@ -38,7 +38,7 @@ it and can be installed independently:
 ```bash
 # Run from benchmarks/
 npm install --prefix .tools/bun-canary-20261012.1 --no-save --package-lock=false --no-audit --no-fund bun@1.4.3-canary.20261012.1
-BUN_BIN="$PWD/.tools/bun-canary-20261012.1/node_modules/.bin/bun" UTOO_LINT_BUILD_MODE=ReleaseFast npm run bench -- --runs=20 --warmups=5
+BUN_BIN="$PWD/.tools/bun-canary-20261012.1/node_modules/.bin/bun" UTOO_LINT_BUILD_MODE=fast npm run bench -- --runs=20 --warmups=5
 ```
 
 The package reports runtime version `1.4.4-canary.1+b92e2f470`. The isolated
@@ -59,8 +59,8 @@ Compare both profiles on the same 1,000-file corpus:
 
 ```bash
 npm run generate -- --files=1000 --statements=30 --out=fixtures/bun-comparison
-BUN_BIN="$PWD/.tools/bun-canary-20261012.1/node_modules/.bin/bun" UTOO_LINT_BUILD_MODE=ReleaseFast npm run bench -- --rule-set=shared --target=fixtures/bun-comparison --runs=20 --warmups=5
-BUN_BIN="$PWD/.tools/bun-canary-20261012.1/node_modules/.bin/bun" UTOO_LINT_BUILD_MODE=ReleaseFast npm run bench -- --rule-set=extended --target=fixtures/bun-comparison --runs=20 --warmups=5
+BUN_BIN="$PWD/.tools/bun-canary-20261012.1/node_modules/.bin/bun" UTOO_LINT_BUILD_MODE=fast npm run bench -- --rule-set=shared --target=fixtures/bun-comparison --runs=20 --warmups=5
+BUN_BIN="$PWD/.tools/bun-canary-20261012.1/node_modules/.bin/bun" UTOO_LINT_BUILD_MODE=fast npm run bench -- --rule-set=extended --target=fixtures/bun-comparison --runs=20 --warmups=5
 ```
 
 ## Recorded comparisons

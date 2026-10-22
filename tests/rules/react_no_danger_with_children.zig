@@ -93,3 +93,17 @@ test "can disable react/no-danger-with-children" {
 
     try std.testing.expect(!helpers.hasRule(result, lint.rules.react_no_danger_with_children.id));
 }
+
+test "decodes JSX entities when checking dangerous HTML children" {
+    const source =
+        \\const empty = <div dangerouslySetInnerHTML={{ __html: html }}>&#10;&#32;&#x9;</div>;
+        \\const nonbreaking = <div dangerouslySetInnerHTML={{ __html: html }}>&#10;&nbsp;</div>;
+        \\const content = <div dangerouslySetInnerHTML={{ __html: html }}>&#10;&amp;</div>;
+    ;
+    var options = lint.Options.allDisabled();
+    options.react_no_danger_with_children = true;
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.jsx", options);
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), helpers.countRule(result, lint.rules.react_no_danger_with_children.id));
+}

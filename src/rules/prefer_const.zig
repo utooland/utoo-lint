@@ -76,7 +76,7 @@ pub fn runWithOptions(
     while (symbol_iter.next()) |entry| {
         const symbol = entry.symbol;
         if (!symbol.flags.block_scoped_var or symbol.flags.const_var) continue;
-        candidate_symbols[@intFromEnum(entry.id)] = true;
+        candidate_symbols[@backingInt(entry.id)] = true;
         for (symbol_table.symbolDecls(entry.id)) |decl| {
             try decl_symbols.put(decl, entry.id);
         }
@@ -87,7 +87,7 @@ pub fn runWithOptions(
         const symbol_id = symbol_table.referenceSymbol(entry.id);
         if (symbol_id == .none) continue;
 
-        const symbol_index = @intFromEnum(symbol_id);
+        const symbol_index = @backingInt(symbol_id);
         if (symbol_index >= candidate_symbols.len or !candidate_symbols[symbol_index]) continue;
 
         try reference_lookup.put(entry.reference.node, symbol_id);

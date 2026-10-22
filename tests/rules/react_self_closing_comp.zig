@@ -140,3 +140,17 @@ fn baseOptions() lint.Options {
         .parser_semantic_errors = false,
     };
 }
+
+test "decodes JSX entities when checking empty multiline children" {
+    const source =
+        \\const empty = <Widget>&#10;&#32;&#x9;</Widget>;
+        \\const nonbreaking = <Widget>&#10;&nbsp;</Widget>;
+        \\const content = <Widget>&#10;&amp;</Widget>;
+    ;
+    var options = lint.Options.allDisabled();
+    options.react_self_closing_comp = true;
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.jsx", options);
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), helpers.countRule(result, lint.rules.react_self_closing_comp.id));
+}

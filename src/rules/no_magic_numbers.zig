@@ -346,7 +346,7 @@ fn canonicalBigInt(raw_with_suffix: []const u8, negative: bool, output: []u8) ?[
     } else 10;
     if (radix != 10) raw = raw[2..];
 
-    var digits: [core.max_no_magic_numbers_bigint_len]u8 = [_]u8{0} ** core.max_no_magic_numbers_bigint_len;
+    var digits: [core.max_no_magic_numbers_bigint_len]u8 = @splat(0);
     var digits_len: usize = 1;
     var saw_digit = false;
 

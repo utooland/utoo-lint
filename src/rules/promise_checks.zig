@@ -361,11 +361,11 @@ fn scanRejectChildren(
     const T = @TypeOf(node);
     if (@typeInfo(T) != .@"struct") return;
 
-    inline for (@typeInfo(T).@"struct".fields) |field| {
-        if (field.type == ast.NodeIndex) {
-            try scanRejectNode(allocator, diagnostics, tree, reject_name, @field(node, field.name), options);
-        } else if (field.type == ast.IndexRange) {
-            for (tree.extra(@field(node, field.name))) |child| {
+    inline for (@typeInfo(T).@"struct".field_names) |field_name| {
+        if (@FieldType(T, field_name) == ast.NodeIndex) {
+            try scanRejectNode(allocator, diagnostics, tree, reject_name, @field(node, field_name), options);
+        } else if (@FieldType(T, field_name) == ast.IndexRange) {
+            for (tree.extra(@field(node, field_name))) |child| {
                 try scanRejectNode(allocator, diagnostics, tree, reject_name, child, options);
             }
         }

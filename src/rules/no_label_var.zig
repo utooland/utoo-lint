@@ -34,7 +34,7 @@ pub fn run(
         ) orelse continue;
 
         const symbol = semantic_result.symbol_table.getSymbol(symbol_id);
-        if (!symbol.flags.inValueSpace()) continue;
+        if (!symbol.flags.intersects(traverser.semantic.Symbol.value_space)) continue;
 
         try core.addDiagnostic(
             allocator,

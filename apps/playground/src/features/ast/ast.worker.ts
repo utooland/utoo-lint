@@ -8,15 +8,12 @@ import {
 } from './protocol';
 
 const workerScope = self as unknown as DedicatedWorkerGlobalScope;
-type Parser = typeof import('yuku-parser') & { core: import('yuku-parser').Core };
+type Parser = typeof import('yuku');
 let parserPromise: Promise<Parser> | undefined;
 
 function getParser() {
   if (!parserPromise) {
-    const candidate = Promise.all([
-      import('yuku-parser'),
-      import('@yuku-core/wasm'),
-    ]).then(async ([parser, { load }]) => ({ ...parser, core: await load() }));
+    const candidate = import('yuku');
     parserPromise = candidate;
     void candidate.catch(() => {
       if (parserPromise === candidate) parserPromise = undefined;
@@ -36,23 +33,23 @@ workerScope.onmessage = async ({ data }: MessageEvent<ASTWorkerRequest>) => {
       );
     }
 
-    const { core, langFromPath, parse, sourceTypeFromPath } = await getParser();
+    const { parse } = await getParser();
     const startedAt = performance.now();
     const parsed = parse(source, {
       attachComments: false,
-      core,
-      lang: langFromPath(filePath),
+      path: filePath,
       preserveParens: true,
       semanticErrors: false,
-      sourceType: sourceTypeFromPath(filePath),
     });
+    // SourceFile decodes its AST lazily; include that work in the parse time.
+    const { diagnostics, program } = parsed;
 
     workerScope.postMessage({
       id,
       result: {
-        diagnostics: parsed.diagnostics,
+        diagnostics,
         elapsedMs: performance.now() - startedAt,
-        program: parsed.program,
+        program,
       },
     } satisfies ASTWorkerResponse);
   } catch (error) {

@@ -162,11 +162,11 @@ const Visitor = struct {
         const Payload = @TypeOf(payload);
         if (@typeInfo(Payload) != .@"struct") return false;
 
-        inline for (@typeInfo(Payload).@"struct".fields) |field| {
-            const value = @field(payload, field.name);
-            if (field.type == ast.NodeIndex) {
+        inline for (@typeInfo(Payload).@"struct".field_names) |field_name| {
+            const value = @field(payload, field_name);
+            if (@FieldType(Payload, field_name) == ast.NodeIndex) {
                 if (self.nodeReferencesCallbackScope(tree, value, callback)) return true;
-            } else if (field.type == ast.IndexRange) {
+            } else if (@FieldType(Payload, field_name) == ast.IndexRange) {
                 for (tree.extra(value)) |child| {
                     if (self.nodeReferencesCallbackScope(tree, child, callback)) return true;
                 }

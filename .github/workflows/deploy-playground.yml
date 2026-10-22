@@ -68,6 +68,8 @@ jobs:
 
       - name: Setup Zig
         uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
+        with:
+          version: 0.17.0
 
       - name: Build and audit site
         run: pnpm site:build

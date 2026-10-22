@@ -2,7 +2,7 @@ const std = @import("std");
 const parser = @import("parser");
 
 const ast = parser.ast;
-const yuku_semantic = parser.traverser.semantic;
+const yuku_semantic = parser.semantic;
 
 pub const ScopeTree = struct {
     scopes: []const yuku_semantic.Scope,
@@ -12,7 +12,7 @@ pub const ScopeTree = struct {
     }
 
     pub inline fn getScope(self: ScopeTree, id: yuku_semantic.ScopeId) yuku_semantic.Scope {
-        return self.scopes[@intFromEnum(id)];
+        return self.scopes[@backingInt(id)];
     }
 };
 
@@ -83,8 +83,8 @@ pub const SymbolTable = struct {
         return self.model.reference(id).flags.write;
     }
 
-    pub fn iterSymbols(self: SymbolTable) yuku_semantic.Semantic.SymbolIterator {
-        return self.model.iterSymbols();
+    pub fn iterSymbols(self: SymbolTable) SymbolIterator {
+        return .{ .symbols = self.symbols };
     }
 
     pub fn iterReferences(self: SymbolTable) ReferenceIterator {
@@ -133,6 +133,23 @@ pub const SymbolTable = struct {
         return self.model.uses(id).len > 0;
     }
 
+    pub const SymbolEntry = struct {
+        id: yuku_semantic.SymbolId,
+        symbol: yuku_semantic.Symbol,
+    };
+
+    pub const SymbolIterator = struct {
+        symbols: []const yuku_semantic.Symbol,
+        index: u32 = 0,
+
+        pub fn next(self: *SymbolIterator) ?SymbolEntry {
+            if (self.index >= self.symbols.len) return null;
+            const index = self.index;
+            self.index += 1;
+            return .{ .id = @fromBackingInt(index), .symbol = self.symbols[index] };
+        }
+    };
+
     pub const ReferenceEntry = struct {
         id: yuku_semantic.ReferenceId,
         reference: Reference,
@@ -147,7 +164,7 @@ pub const SymbolTable = struct {
             const index = self.index;
             self.index += 1;
             return .{
-                .id = @enumFromInt(index),
+                .id = @fromBackingInt(index),
                 .reference = Reference.fromYuku(self.references[index]),
             };
         }
@@ -164,7 +181,7 @@ pub const SymbolTable = struct {
                 const reference = self.references[index];
                 if (reference.symbol == .none) {
                     return .{
-                        .id = @enumFromInt(index),
+                        .id = @fromBackingInt(index),
                         .reference = Reference.fromYuku(reference),
                     };
                 }
@@ -180,7 +197,7 @@ pub const SymbolTable = struct {
 
         pub fn next(self: *UseIterator) ?ast.NodeIndex {
             if (self.index >= self.ids.len) return null;
-            const reference = self.references[@intFromEnum(self.ids[self.index])];
+            const reference = self.references[@backingInt(self.ids[self.index])];
             self.index += 1;
             return reference.node;
         }
@@ -212,7 +229,7 @@ pub const traverser = struct {
     pub const scoped = parser.traverser.scoped;
 
     pub const semantic = struct {
-        pub const Ctx = yuku_semantic.Ctx;
+        pub const Ctx = parser.traverser.semantic.Ctx;
         pub const Scope = yuku_semantic.Scope;
         pub const ScopeId = yuku_semantic.ScopeId;
         pub const Symbol = yuku_semantic.Symbol;
@@ -233,7 +250,7 @@ test "adapts Yuku's space-aware symbol resolution" {
     );
     defer tree.deinit();
 
-    const model = try parser.semantic.analyze(&tree);
+    const model = try parser.semantic.analyze(&tree, .{ .check = true });
     const result = Result.init(&tree, model);
     var references = result.symbol_table.iterReferences();
 
@@ -258,7 +275,7 @@ test "distinguishes runtime aliases from erased exports and value queries" {
     var tree = try parser.parse(std.testing.allocator, source, .{ .lang = .ts });
     defer tree.deinit();
 
-    const model = try parser.semantic.analyze(&tree);
+    const model = try parser.semantic.analyze(&tree, .{ .check = true });
     const result = Result.init(&tree, model);
     var references = result.symbol_table.iterReferences();
     const Expected = struct {

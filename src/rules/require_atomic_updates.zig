@@ -263,11 +263,11 @@ const Analyzer = struct {
         const Payload = @TypeOf(payload);
         if (@typeInfo(Payload) != .@"struct") return;
 
-        inline for (@typeInfo(Payload).@"struct".fields) |field| {
-            const value = @field(payload, field.name);
-            if (field.type == ast.NodeIndex) {
+        inline for (@typeInfo(Payload).@"struct".field_names) |field_name| {
+            const value = @field(payload, field_name);
+            if (@FieldType(Payload, field_name) == ast.NodeIndex) {
                 try self.scanNode(value);
-            } else if (field.type == ast.IndexRange) {
+            } else if (@FieldType(Payload, field_name) == ast.IndexRange) {
                 for (self.tree.extra(value)) |child| {
                     try self.scanNode(child);
                 }

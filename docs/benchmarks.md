@@ -42,7 +42,7 @@ contains the corpus generator, shared-rule mapping, and runner. From a checkout
 with the development prerequisites installed:
 
 ```bash
-zig build -Doptimize=ReleaseFast
+zig build -Doptimize=fast
 pnpm --dir benchmarks install
 pnpm bench:generate -- --files=100
 pnpm bench -- --runs=20 --warmups=5

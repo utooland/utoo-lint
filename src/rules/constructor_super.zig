@@ -115,11 +115,11 @@ fn scanChildrenForSuper(
 ) Allocator.Error!void {
     if (@typeInfo(T) != .@"struct") return;
 
-    inline for (@typeInfo(T).@"struct".fields) |field| {
-        if (field.type == ast.NodeIndex) {
-            try collectSuperCalls(allocator, tree, @field(node, field.name), out);
-        } else if (field.type == ast.IndexRange) {
-            for (tree.extra(@field(node, field.name))) |child| {
+    inline for (@typeInfo(T).@"struct".field_names) |field_name| {
+        if (@FieldType(T, field_name) == ast.NodeIndex) {
+            try collectSuperCalls(allocator, tree, @field(node, field_name), out);
+        } else if (@FieldType(T, field_name) == ast.IndexRange) {
+            for (tree.extra(@field(node, field_name))) |child| {
                 try collectSuperCalls(allocator, tree, child, out);
             }
         }
@@ -238,11 +238,11 @@ fn reportDuplicateSuperCallsInChildren(
     if (@typeInfo(T) != .@"struct") return incoming;
 
     var count = incoming;
-    inline for (@typeInfo(T).@"struct".fields) |field| {
-        if (field.type == ast.NodeIndex) {
-            count = try reportDuplicateSuperCallsInNode(allocator, diagnostics, tree, @field(node, field.name), count);
-        } else if (field.type == ast.IndexRange) {
-            count = try reportDuplicateSuperCallsInRange(allocator, diagnostics, tree, @field(node, field.name), count);
+    inline for (@typeInfo(T).@"struct".field_names) |field_name| {
+        if (@FieldType(T, field_name) == ast.NodeIndex) {
+            count = try reportDuplicateSuperCallsInNode(allocator, diagnostics, tree, @field(node, field_name), count);
+        } else if (@FieldType(T, field_name) == ast.IndexRange) {
+            count = try reportDuplicateSuperCallsInRange(allocator, diagnostics, tree, @field(node, field_name), count);
         }
     }
 
@@ -252,11 +252,11 @@ fn reportDuplicateSuperCallsInChildren(
 fn childrenContainSuper(tree: *const ast.Tree, comptime T: type, node: T) bool {
     if (@typeInfo(T) != .@"struct") return false;
 
-    inline for (@typeInfo(T).@"struct".fields) |field| {
-        if (field.type == ast.NodeIndex) {
-            if (containsSuperCall(tree, @field(node, field.name))) return true;
-        } else if (field.type == ast.IndexRange) {
-            for (tree.extra(@field(node, field.name))) |child| {
+    inline for (@typeInfo(T).@"struct".field_names) |field_name| {
+        if (@FieldType(T, field_name) == ast.NodeIndex) {
+            if (containsSuperCall(tree, @field(node, field_name))) return true;
+        } else if (@FieldType(T, field_name) == ast.IndexRange) {
+            for (tree.extra(@field(node, field_name))) |child| {
                 if (containsSuperCall(tree, child)) return true;
             }
         }

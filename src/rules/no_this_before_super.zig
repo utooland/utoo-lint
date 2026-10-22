@@ -178,11 +178,11 @@ fn scanChildren(
     if (@typeInfo(T) != .@"struct") return incoming;
 
     var flow = incoming;
-    inline for (@typeInfo(T).@"struct".fields) |field| {
-        if (field.type == ast.NodeIndex) {
-            flow = try scanNode(allocator, diagnostics, tree, @field(node, field.name), flow);
-        } else if (field.type == ast.IndexRange) {
-            flow = try scanExpressionRange(allocator, diagnostics, tree, @field(node, field.name), flow);
+    inline for (@typeInfo(T).@"struct".field_names) |field_name| {
+        if (@FieldType(T, field_name) == ast.NodeIndex) {
+            flow = try scanNode(allocator, diagnostics, tree, @field(node, field_name), flow);
+        } else if (@FieldType(T, field_name) == ast.IndexRange) {
+            flow = try scanExpressionRange(allocator, diagnostics, tree, @field(node, field_name), flow);
         }
     }
 

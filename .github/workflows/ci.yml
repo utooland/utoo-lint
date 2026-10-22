@@ -37,15 +37,17 @@ jobs:
 
       - name: Setup Zig
         uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
 
       - name: Check Zig formatting
         run: zig fmt --check build.zig src tests
 
       - name: Test
-        run: zig build test -Doptimize=ReleaseFast -j1
+        run: zig build test -Doptimize=fast -j1
 
       - name: Build
-        run: zig build -Doptimize=ReleaseFast -j1
+        run: zig build -Doptimize=fast -j1
 
       - name: Package npm artifacts
         run: ./scripts/package-npm.sh
@@ -93,6 +95,8 @@ jobs:
 
       - name: Setup Zig
         uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
 
       - name: Build and stage WebAssembly package
         run: pnpm package:wasm

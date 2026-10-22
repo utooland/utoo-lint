@@ -33,7 +33,7 @@ case "${PLATFORM}-${ARCH}" in
 esac
 
 cd "${ROOT_DIR}"
-zig build -Doptimize=ReleaseFast -j1
+zig build -Doptimize=fast -j1
 
 mkdir -p "${PACKAGE_DIR}/bin"
 cp "${ROOT_DIR}/zig-out/bin/${BINARY_NAME}" "${PACKAGE_DIR}/bin/${BINARY_NAME}"
