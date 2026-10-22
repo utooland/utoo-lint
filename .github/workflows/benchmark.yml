@@ -8,10 +8,11 @@ on:
       - "benchmarks/**"
       - "build.zig"
       - "build.zig.zon"
-      - "npm/utoo-lint/index.*"
-      - "npm/utoo-lint/lib/config-loader.*"
+      - "npm/utoo-lint/**"
+      - "pnpm-lock.yaml"
       - "src/**"
       - "vendor/yuku/**"
+      - "vendor/yuku"
   push:
     branches:
       - main
@@ -20,10 +21,11 @@ on:
       - "benchmarks/**"
       - "build.zig"
       - "build.zig.zon"
-      - "npm/utoo-lint/index.*"
-      - "npm/utoo-lint/lib/config-loader.*"
+      - "npm/utoo-lint/**"
+      - "pnpm-lock.yaml"
       - "src/**"
       - "vendor/yuku/**"
+      - "vendor/yuku"
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -43,6 +45,8 @@ jobs:
 
       - name: Setup Zig
         uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -58,7 +62,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build utoo-lint
-        run: zig build -Doptimize=ReleaseFast -j1
+        run: zig build -Doptimize=fast -j1
 
       - name: Generate benchmark corpus
         run: pnpm --dir benchmarks generate -- --files=1000 --statements=30 --out=fixtures/codspeed

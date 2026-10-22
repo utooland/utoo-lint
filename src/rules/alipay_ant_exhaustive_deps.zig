@@ -62,7 +62,7 @@ pub fn runWithOptions(
     var external_iter = symbol_table.iterSymbols();
     while (external_iter.next()) |entry| {
         if (entry.symbol.flags.import or entry.symbol.flags.type_import or
-            entry.symbol.scope == .root or entry.symbol.scope == .module)
+            entry.symbol.scope == .root or symbol_table.model.scopes.get(entry.symbol.scope).kind == .module)
         {
             try stable_symbols.put(entry.id, {});
         }
@@ -83,7 +83,7 @@ pub fn runWithOptions(
         changed = false;
         for (tree.nodes.items(.data), 0..) |data, raw_index| {
             const function: ast.NodeIndex, const binding: ast.NodeIndex = switch (data) {
-                .function => |value| .{ @enumFromInt(raw_index), value.id },
+                .function => |value| .{ @fromBackingInt(@intCast(raw_index)), value.id },
                 .variable_declarator => |value| .{ unwrapTransparent(tree, value.init), value.id },
                 else => continue,
             };
@@ -119,7 +119,7 @@ fn functionCapturesReactiveValues(tree: *const ast.Tree, symbols: traverser.sema
         const symbol = symbols.referenceSymbol(entry.id);
         if (symbol == .none or symbol == function_symbol or stable.contains(symbol)) continue;
         const info = symbols.getSymbol(symbol);
-        if (info.flags.import or info.flags.type_import or info.scope == .root or info.scope == .module) continue;
+        if (info.flags.import or info.flags.type_import or info.scope == .root or symbols.model.scopes.get(info.scope).kind == .module) continue;
         var local = false;
         for (symbols.symbolDecls(symbol)) |declaration| {
             const declaration_span = tree.span(declaration);

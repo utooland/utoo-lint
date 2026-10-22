@@ -231,7 +231,7 @@ fn isGlobalVariable(
 }
 
 fn isLintableSymbol(flags: traverser.semantic.Symbol.Flags, options: Options) bool {
-    return flags.inValueSpace() or
+    return flags.intersects(traverser.semantic.Symbol.value_space) or
         flags.catch_var or
         flags.import or
         flags.type_import or
@@ -291,8 +291,8 @@ fn collectParameters(
 }
 
 fn lessThanParameter(_: void, a: Parameter, b: Parameter) bool {
-    const a_scope = @intFromEnum(a.scope);
-    const b_scope = @intFromEnum(b.scope);
+    const a_scope = @backingInt(a.scope);
+    const b_scope = @backingInt(b.scope);
     if (a_scope != b_scope) return a_scope < b_scope;
     return a.start < b.start;
 }

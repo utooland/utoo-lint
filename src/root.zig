@@ -18,6 +18,7 @@ pub const Result = core.Result;
 pub const ApplyFixesResult = fixer.ApplyResult;
 pub const max_autofix_passes = 10;
 pub const SourcePosition = core.SourcePosition;
+pub const ByteLineIndex = @import("source_positions.zig").ByteLineIndex;
 pub const NoRestrictedImportEntry = core.NoRestrictedImportEntry;
 pub const NoRestrictedImportKind = core.NoRestrictedImportKind;
 pub const NoRestrictedSyntaxEntry = core.NoRestrictedSyntaxEntry;
@@ -169,10 +170,10 @@ fn lintSourceInternal(
     var tree = try parseSource(allocator, source, path);
     defer tree.deinit();
 
-    const needs_semantic = hasSemanticRules(effective_options);
+    const needs_semantic = needsSemanticModel(effective_options);
 
     if (needs_semantic) {
-        const semantic_model = try parser.semantic.analyze(&tree);
+        const semantic_model = try parser.semantic.analyze(&tree, .{ .check = true });
         var semantic_result = semantic_compat.Result.init(&tree, semantic_model);
         try semantic_result.symbol_table.resolveAll(semantic_result.scope_tree);
         try appendParserDiagnostics(allocator, &diagnostics, &tree, effective_options);
@@ -183,6 +184,7 @@ fn lintSourceInternal(
             try rules.runSemantic(allocator, &diagnostics, &tree, semantic_result, effective_options);
         }
     } else {
+        if (effective_options.parser_semantic_errors) try parser.semantic.check(&tree);
         try appendParserDiagnostics(allocator, &diagnostics, &tree, effective_options);
         try rules.runBasicWithOptionsPtr(allocator, &diagnostics, &tree, path, &effective_options);
     }
@@ -256,11 +258,10 @@ fn isDefinitionFile(path: []const u8) bool {
         std.mem.endsWith(u8, path, ".d.cts");
 }
 
-fn hasSemanticRules(options: Options) bool {
+fn needsSemanticModel(options: Options) bool {
     return options.react_prop_types or
         options.react_no_unused_prop_types or
         options.typescript_eslint_restrict_plus_operands or
-        options.parser_semantic_errors or
         options.block_scoped_var or
         options.no_array_constructor or
         options.no_alert or

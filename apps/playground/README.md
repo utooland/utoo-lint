@@ -3,8 +3,7 @@
 The Playground runs utoo-lint entirely in the browser. It uses the public
 EVJS packages, Utoopack, Monaco Editor, a Web Worker, and the workspace
 `@utoo/lint-wasm` package. Its AST inspector uses the public
-`yuku-parser` and `@yuku-core/wasm` 0.18.0 packages, matching the Yuku revision
-vendored by utoo-lint.
+`yuku` 0.22.1 package, matching the Yuku revision vendored by utoo-lint.
 
 No `@alipay/*` package, private registry, internal runtime, or server process
 is required. EVJS mounts the root `src/pages/page.tsx` as a CSR SPA at
@@ -46,8 +45,8 @@ pnpm playground:build
 ```
 
 The production build runs a deployment audit after `ev build`. It checks that
-the output is a complete static deployment, contains valid lint and parser
-WASM assets,
+the output is a complete static deployment, contains valid lint WASM assets
+and the exact parser WASM embedded by the installed Yuku package,
 requires no server, loads no remote runtime assets, and contains no known
 internal registry or release-chain markers.
 
@@ -65,7 +64,8 @@ The production Playground is deployed to
 - The worker loads the freestanding WASM module once and reuses it.
 - AST parsing runs in a separate Worker and starts only after opening the AST
   inspector.
-- Both WASM modules are bundled locally; the page makes no parser CDN request.
+- Both WASM modules are bundled locally. Yuku loads its inline WASM automatically;
+  the page makes no parser CDN request.
 - The Playground lints one in-memory JavaScript, TypeScript, JSX, or TSX file.
 - Rules that require filesystem access are reported as skipped.
 - Monaco is bundled locally; the page does not depend on a CDN.

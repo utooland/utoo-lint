@@ -1,7 +1,7 @@
 .{
     .name = .utoo_lint,
     .version = "0.1.0",
-    .minimum_zig_version = "0.17.0-dev.224+c166c49b1",
+    .minimum_zig_version = "0.17.0",
     .fingerprint = 0xd0d89fdfc19715ba,
     .paths = .{
         "build.zig",

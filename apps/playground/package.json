@@ -6,18 +6,17 @@
     "dev": "ev dev",
     "build": "ev build && node scripts/stage-static.mjs && node scripts/verify-dist.mjs",
     "inspect": "ev inspect --json",
-    "test": "node --test scripts/lint-client.test.mjs",
+    "test": "node --test scripts/*.test.mjs",
     "typecheck": "ev prepare && tsc --noEmit"
   },
   "dependencies": {
     "@evjs/ev": "0.3.21",
     "@monaco-editor/react": "4.7.0",
     "@utoo/lint-wasm": "workspace:*",
-    "@yuku-core/wasm": "0.18.0",
     "monaco-editor": "0.56.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "yuku-parser": "0.18.0"
+    "yuku": "0.22.1"
   },
   "devDependencies": {
     "@evjs/cli": "0.3.21",

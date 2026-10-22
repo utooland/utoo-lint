@@ -12,7 +12,7 @@ pub fn build(b: *std.Build) void {
 
     const codegen_options = b.addOptions();
     codegen_options.addOption(bool, "source_maps", true);
-    const parser_extension_module = b.addOptions().createModule();
+    const dialect_module = b.addOptions().createModule();
 
     const parser_module = b.createModule(.{
         .root_source_file = b.path("vendor/yuku/src/parser/root.zig"),
@@ -21,7 +21,7 @@ pub fn build(b: *std.Build) void {
     });
     parser_module.addImport("util", util_module);
     parser_module.addImport("codegen_options", codegen_options.createModule());
-    parser_module.addImport("parser_extension", parser_extension_module);
+    parser_module.addImport("dialect", dialect_module);
 
     const lint_module = b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
@@ -45,9 +45,7 @@ pub fn build(b: *std.Build) void {
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
+    run_cmd.addPassthruArgs();
 
     const run_step = b.step("run", "Run utoo-lint");
     run_step.dependOn(&run_cmd.step);
@@ -66,29 +64,29 @@ pub fn build(b: *std.Build) void {
     const wasm_util_module = b.createModule(.{
         .root_source_file = b.path("vendor/yuku/src/util/root.zig"),
         .target = wasm_target,
-        .optimize = .ReleaseSmall,
+        .optimize = .small,
     });
 
     const wasm_parser_module = b.createModule(.{
         .root_source_file = b.path("vendor/yuku/src/parser/root.zig"),
         .target = wasm_target,
-        .optimize = .ReleaseSmall,
+        .optimize = .small,
     });
     wasm_parser_module.addImport("util", wasm_util_module);
     wasm_parser_module.addImport("codegen_options", codegen_options.createModule());
-    wasm_parser_module.addImport("parser_extension", parser_extension_module);
+    wasm_parser_module.addImport("dialect", dialect_module);
 
     const wasm_lint_module = b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
         .target = wasm_target,
-        .optimize = .ReleaseSmall,
+        .optimize = .small,
     });
     wasm_lint_module.addImport("parser", wasm_parser_module);
 
     const wasm_module = b.createModule(.{
         .root_source_file = b.path("src/wasm.zig"),
         .target = wasm_target,
-        .optimize = .ReleaseSmall,
+        .optimize = .small,
         .strip = true,
     });
     wasm_module.addImport("utoo_lint", wasm_lint_module);

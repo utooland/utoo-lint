@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { access, readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { verifyInlineParserWasm } from '../apps/playground/scripts/verify-yuku-wasm.mjs';
 
 const repoDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -797,20 +798,19 @@ if (
 const wasmFiles = playgroundFiles.filter(
   (file) => path.extname(file) === '.wasm',
 );
-if (wasmFiles.length !== versionManifest.versions.length + 2) {
+if (wasmFiles.length !== versionManifest.versions.length + 1) {
   throw new Error(
-    `expected ${versionManifest.versions.length + 2} Playground WebAssembly assets, found ${wasmFiles.length}`,
+    `expected ${versionManifest.versions.length + 1} Playground WebAssembly assets, found ${wasmFiles.length}`,
   );
 }
 
-let parserWasm;
+await verifyInlineParserWasm(playgroundFiles);
 let bundledLintWasm;
 for (const file of wasmFiles) {
   const name = path.basename(file);
-  const isParser = name.includes('yuku-core');
   const isLintVersion = /^utoo-lint-v\d+\.\d+\.\d+\.wasm$/.test(name);
   const isBundledLint = /^utoo-lint\.[^.]+\.wasm$/.test(name);
-  if (!isParser && !isLintVersion && !isBundledLint) {
+  if (!isLintVersion && !isBundledLint) {
     throw new Error(`unexpected Playground WebAssembly asset: ${name}`);
   }
 
@@ -821,12 +821,7 @@ for (const file of wasmFiles) {
   ) {
     throw new Error(`invalid Playground WebAssembly asset: ${name}`);
   }
-  if (isParser) {
-    if (parserWasm) {
-      throw new Error(`duplicate parser WebAssembly asset: ${name}`);
-    }
-    parserWasm = contents;
-  } else if (isBundledLint) {
+  if (isBundledLint) {
     if (bundledLintWasm) {
       throw new Error(`duplicate bundled lint WebAssembly asset: ${name}`);
     }
@@ -856,9 +851,6 @@ for (const version of versionManifest.versions) {
   }
 }
 
-if (!parserWasm) {
-  throw new Error('missing Playground parser WebAssembly asset');
-}
 if (!bundledLintWasm) {
   throw new Error('missing bundled Playground lint WebAssembly asset');
 }

@@ -48,7 +48,7 @@ pub fn runWithOptions(
     while (iter.next()) |entry| {
         const symbol = entry.symbol;
         if (!isLintableSymbol(symbol.flags, options)) continue;
-        if (symbol.scope == .root or symbol.scope == .module) continue;
+        if (symbol.scope == .root or scope_tree.getScope(symbol.scope).kind == .module) continue;
         // Yuku binds index signature labels for type resolution, but they do
         // not introduce variables for either no-shadow rule.
         if (symbol.flags.parameter and
@@ -84,7 +84,7 @@ pub fn runWithOptions(
         // Ordinary imports and namespace names still count as value bindings
         // for the function type parameter shadow option.
         if (signature_parameter and options.ignore_function_type_parameter_name_value_shadow and
-            (shadowed_flags.inValueSpace() or shadowed_flags.import or shadowed_flags.namespace_module)) continue;
+            (shadowed_flags.intersects(traverser.semantic.Symbol.value_space) or shadowed_flags.import or shadowed_flags.namespace_module)) continue;
         if (isAllowedByHoist(tree, decls[0], shadowed_decls[0], shadowed_flags, options)) continue;
         if (options.ignore_on_initialization and isAllowedOnInitialization(tree, decls[0], shadowed_decls[0])) continue;
 
@@ -125,7 +125,7 @@ fn findShadowedSymbol(
 
 fn isLintableSymbol(flags: traverser.semantic.Symbol.Flags, options: Options) bool {
     if (options.mode == .typescript) {
-        return flags.inValueSpace() or
+        return flags.intersects(traverser.semantic.Symbol.value_space) or
             flags.import or
             flags.type_import or
             flags.interface or
@@ -136,7 +136,7 @@ fn isLintableSymbol(flags: traverser.semantic.Symbol.Flags, options: Options) bo
 
     if (flags.ambient) return false;
     if (flags.type_import or flags.interface or flags.type_alias or flags.type_parameter) return false;
-    return flags.inValueSpace() or flags.import;
+    return flags.intersects(traverser.semantic.Symbol.value_space) or flags.import;
 }
 
 fn isAllowedTypescriptShadow(
@@ -156,11 +156,11 @@ fn isTypeValueShadow(self_flags: traverser.semantic.Symbol.Flags, candidate_flag
 }
 
 fn isTypeOnlySymbol(flags: traverser.semantic.Symbol.Flags) bool {
-    return (flags.type_import or flags.inTypeSpace()) and !flags.inValueSpace();
+    return (flags.type_import or flags.intersects(traverser.semantic.Symbol.type_space)) and !flags.intersects(traverser.semantic.Symbol.value_space);
 }
 
 fn isValueOnlySymbol(flags: traverser.semantic.Symbol.Flags) bool {
-    return flags.inValueSpace() and !flags.inTypeSpace();
+    return flags.intersects(traverser.semantic.Symbol.value_space) and !flags.intersects(traverser.semantic.Symbol.type_space);
 }
 
 fn isAllowedOnInitialization(tree: *const ast.Tree, self_decl: ast.NodeIndex, shadowed_decl: ast.NodeIndex) bool {
@@ -186,7 +186,7 @@ fn initializationFunctionContaining(tree: *const ast.Tree, init: ast.NodeIndex, 
     var result: ?ast.NodeIndex = null;
 
     for (tree.nodes.items(.data), 0..) |data, raw_index| {
-        const index: ast.NodeIndex = @enumFromInt(@as(u32, @intCast(raw_index)));
+        const index: ast.NodeIndex = @fromBackingInt(@as(u32, @intCast(raw_index)));
         if (!containsNode(tree, init, index) or !containsNode(tree, index, target)) continue;
 
         switch (data) {
@@ -204,7 +204,7 @@ fn functionIsCalledDuringInitialization(tree: *const ast.Tree, init: ast.NodeInd
             .call_expression => |call| call,
             else => continue,
         };
-        const call_index: ast.NodeIndex = @enumFromInt(@as(u32, @intCast(raw_index)));
+        const call_index: ast.NodeIndex = @fromBackingInt(@as(u32, @intCast(raw_index)));
         if (!containsNode(tree, init, call_index)) continue;
 
         if (unwrapCallTarget(tree, call.callee) == function_node) return true;
@@ -275,7 +275,7 @@ fn isAllowedByHoist(
 }
 
 fn isTypeSymbol(flags: traverser.semantic.Symbol.Flags) bool {
-    return flags.inTypeSpace() or flags.type_import;
+    return flags.intersects(traverser.semantic.Symbol.type_space) or flags.type_import;
 }
 
 fn offsetToLineColumn(source: []const u8, offset: u32) core.SourcePosition {

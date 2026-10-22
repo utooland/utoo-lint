@@ -152,14 +152,14 @@ fn collectNodeArguments(
     const T = @TypeOf(node);
     if (@typeInfo(T) != .@"struct") return .none;
 
-    inline for (@typeInfo(T).@"struct".fields) |field| {
-        if (field.type == ast.NodeIndex) {
-            switch (try collectBodyArguments(allocator, tree, @field(node, field.name), references)) {
+    inline for (@typeInfo(T).@"struct".field_names) |field_name| {
+        if (@FieldType(T, field_name) == ast.NodeIndex) {
+            switch (try collectBodyArguments(allocator, tree, @field(node, field_name), references)) {
                 .declared => return .declared,
                 .none => {},
             }
-        } else if (field.type == ast.IndexRange) {
-            for (tree.extra(@field(node, field.name))) |child| {
+        } else if (@FieldType(T, field_name) == ast.IndexRange) {
+            for (tree.extra(@field(node, field_name))) |child| {
                 switch (try collectBodyArguments(allocator, tree, child, references)) {
                     .declared => return .declared,
                     .none => {},

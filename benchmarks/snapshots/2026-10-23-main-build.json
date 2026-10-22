@@ -1,0 +1,60 @@
+{
+  "createdAt": "2026-10-22T16:17:56.052028+00:00",
+  "source": "/private/tmp/utoo-lint-opt.u51Nw2/main-baseline",
+  "archives": {
+    "main": {
+      "commit": "957d528b4bc9e57eafe99d204c7751e19647bb9f",
+      "archive": "/private/tmp/utoo-lint-opt.u51Nw2/main-baseline-main.tar",
+      "sha256": "27cd71d8162d803425a773b9f8960d42b547683c00e818ebc8cab7174b7898fc"
+    },
+    "yuku": {
+      "commit": "c5d7ac358ba9b516dd1b39fafe867dea6829cd70",
+      "archive": "/private/tmp/utoo-lint-opt.u51Nw2/main-baseline-yuku.tar",
+      "sha256": "619d12f0cbca9ca5a36927445bba3bb8776ef20464563cca8c7f3609c8bea8cc"
+    }
+  },
+  "build": {
+    "command": [
+      "/private/tmp/utoo-lint-opt.u51Nw2/zig-aarch64-macos-0.17.0-dev.224+c166c49b1/zig",
+      "build",
+      "-Doptimize=ReleaseFast",
+      "-j1",
+      "--prefix",
+      "/private/tmp/utoo-lint-opt.u51Nw2/main-baseline-artifact",
+      "--cache-dir",
+      "/private/tmp/utoo-lint-opt.u51Nw2/main-baseline-cache",
+      "--global-cache-dir",
+      "/private/tmp/utoo-lint-opt.u51Nw2/main-baseline-global-cache",
+      "--summary",
+      "all"
+    ],
+    "cwd": "/private/tmp/utoo-lint-opt.u51Nw2/main-baseline",
+    "startedAt": "2026-10-22T16:19:45.444027+00:00",
+    "log": "/private/tmp/utoo-lint-opt.u51Nw2/main-baseline-build.log",
+    "sourceModified": false,
+    "status": "success",
+    "exitCode": 0,
+    "durationSeconds": 84.01040791720152,
+    "completedAt": "2026-10-22T16:21:09.453162+00:00",
+    "artifact": "/private/tmp/utoo-lint-opt.u51Nw2/main-baseline-artifact/bin/utoo-lint",
+    "artifactSha256": "fa65dc2f1b208aa405f22beb83d9ff6e6709d3f5c76c88b93388e696d29eeaa1",
+    "artifactBytes": 7236232
+  },
+  "compiler": {
+    "requestedVersion": "0.17.0-dev.224+c166c49b1",
+    "archive": "/private/tmp/utoo-lint-opt.u51Nw2/zig-aarch64-macos-0.17.0-dev.224+c166c49b1.tar.xz",
+    "archiveSha256": "d9c3bb453b637e3f49da52404f71bf0ccc0d082e480e80c6bc534e2c42637bb9",
+    "archiveBytes": 53801888,
+    "downloadUrl": "https://pkg.hexops.org/zig/zig-aarch64-macos-0.17.0-dev.224+c166c49b1.tar.xz",
+    "signatureUrl": "https://pkg.hexops.org/zig/zig-aarch64-macos-0.17.0-dev.224+c166c49b1.tar.xz.minisig",
+    "officialPublicKeySource": "https://ziglang.org/download/",
+    "officialMirrorsSource": "https://ziglang.org/download/community-mirrors.txt",
+    "minisignPublicKey": "RWSGOq2NVecA2UPNdBUZykf1CCb147pkmdtYxgb3Ti+JO/wCYvhbAb/U",
+    "minisignArchiveVerified": true,
+    "minisignTrustedCommentVerified": true,
+    "trustedComment": "timestamp:1777673383\tfile:zig-aarch64-macos-0.17.0-dev.224+c166c49b1.tar.xz\thashed",
+    "executable": "/private/tmp/utoo-lint-opt.u51Nw2/zig-aarch64-macos-0.17.0-dev.224+c166c49b1/zig",
+    "executableSha256": "599ca85d46ec2b2d909c4bb9e7bca42867bd052e6c5b9ef80466c27c91cfed2c",
+    "version": "0.17.0-dev.224+c166c49b1"
+  }
+}

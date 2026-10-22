@@ -355,8 +355,8 @@ pub const NoEmptyFunctionAllow = struct {
     overrideMethods: bool = false,
 
     pub fn contains(self: NoEmptyFunctionAllow, name: []const u8) bool {
-        inline for (@typeInfo(NoEmptyFunctionAllow).@"struct".fields) |field| {
-            if (std.mem.eql(u8, field.name, name)) return @field(self, field.name);
+        inline for (@typeInfo(NoEmptyFunctionAllow).@"struct".field_names) |field_name| {
+            if (std.mem.eql(u8, field_name, name)) return @field(self, field_name);
         }
         return false;
     }
@@ -378,9 +378,9 @@ pub const NoEmptyFunctionAllow = struct {
             self.overrideMethods = true;
             return true;
         }
-        inline for (@typeInfo(NoEmptyFunctionAllow).@"struct".fields) |field| {
-            if (std.mem.eql(u8, field.name, name)) {
-                @field(self, field.name) = true;
+        inline for (@typeInfo(NoEmptyFunctionAllow).@"struct".field_names) |field_name| {
+            if (std.mem.eql(u8, field_name, name)) {
+                @field(self, field_name) = true;
                 return true;
             }
         }
@@ -394,7 +394,7 @@ pub const NoFallthroughAllowEmptyCase = enum {
 };
 
 pub const NoInvalidRegexpAllowConstructorFlags = struct {
-    flags: [256]bool = [_]bool{false} ** 256,
+    flags: [256]bool = @splat(false),
 
     pub fn contains(self: NoInvalidRegexpAllowConstructorFlags, flag: u8) bool {
         return self.flags[flag];
@@ -3344,12 +3344,12 @@ pub const Options = struct {
 
     pub fn allDisabled() Options {
         var options = Options{};
-        inline for (@typeInfo(Options).@"struct".fields) |field| {
+        inline for (@typeInfo(Options).@"struct".field_names) |field_name| {
             // Only disable rule switches; each rule keeps its option defaults.
-            if (field.type == bool and (@hasDecl(@import("rules/root.zig"), field.name) or
-                std.mem.eql(u8, field.name, "parser_semantic_errors")))
+            if (@FieldType(Options, field_name) == bool and (@hasDecl(@import("rules/root.zig"), field_name) or
+                std.mem.eql(u8, field_name, "parser_semantic_errors")))
             {
-                @field(options, field.name) = false;
+                @field(options, field_name) = false;
             }
         }
         return options;
@@ -3369,11 +3369,11 @@ pub const Options = struct {
 
         if (std.mem.startsWith(u8, cli_name, "@typescript-eslint/")) {
             const typescript_rule_name = cli_name["@typescript-eslint/".len..];
-            inline for (@typeInfo(Options).@"struct".fields) |field| {
-                if (field.type == bool) {
-                    if (comptime fieldNameStartsWith(field.name, "typescript_eslint_")) {
-                        if (cliNameMatchesFieldName(field.name["typescript_eslint_".len..], typescript_rule_name)) {
-                            @field(self, field.name) = value;
+            inline for (@typeInfo(Options).@"struct".field_names) |field_name| {
+                if (@FieldType(Options, field_name) == bool) {
+                    if (comptime fieldNameStartsWith(field_name, "typescript_eslint_")) {
+                        if (cliNameMatchesFieldName(field_name["typescript_eslint_".len..], typescript_rule_name)) {
+                            @field(self, field_name) = value;
                             return true;
                         }
                     }
@@ -3426,9 +3426,9 @@ pub const Options = struct {
             return self.setByPrefixedRuleName("unused_imports_", cli_name["unused-imports/".len..], value);
         }
 
-        inline for (@typeInfo(Options).@"struct".fields) |field| {
-            if (field.type == bool and cliNameMatchesFieldName(field.name, cli_name)) {
-                @field(self, field.name) = value;
+        inline for (@typeInfo(Options).@"struct".field_names) |field_name| {
+            if (@FieldType(Options, field_name) == bool and cliNameMatchesFieldName(field_name, cli_name)) {
+                @field(self, field_name) = value;
                 return true;
             }
         }
@@ -8135,14 +8135,14 @@ pub const Options = struct {
         if (entries.len != 4) return error.UnsupportedRuleConfigValue;
 
         var result = SortImportsMemberSyntaxOrder{};
-        var seen = [_]bool{false} ** 4;
+        var seen: [4]bool = @splat(false);
         for (entries, 0..) |entry, index| {
             const syntax_name = switch (entry) {
                 .string => |syntax_name| syntax_name,
                 else => return error.UnsupportedRuleConfigValue,
             };
             const syntax = try sortImportsMemberSyntaxFromString(syntax_name);
-            const rank_index = @intFromEnum(syntax);
+            const rank_index = @backingInt(syntax);
             if (seen[rank_index]) return error.UnsupportedRuleConfigValue;
             seen[rank_index] = true;
             result.values[index] = syntax;
@@ -10204,11 +10204,11 @@ pub const Options = struct {
     }
 
     fn setByPrefixedRuleName(self: *Options, comptime field_prefix: []const u8, rule_name: []const u8, value: bool) bool {
-        inline for (@typeInfo(Options).@"struct".fields) |field| {
-            if (field.type == bool) {
-                if (comptime fieldNameStartsWith(field.name, field_prefix)) {
-                    if (cliNameMatchesFieldName(field.name[field_prefix.len..], rule_name)) {
-                        @field(self, field.name) = value;
+        inline for (@typeInfo(Options).@"struct".field_names) |field_name| {
+            if (@FieldType(Options, field_name) == bool) {
+                if (comptime fieldNameStartsWith(field_name, field_prefix)) {
+                    if (cliNameMatchesFieldName(field_name[field_prefix.len..], rule_name)) {
+                        @field(self, field_name) = value;
                         return true;
                     }
                 }

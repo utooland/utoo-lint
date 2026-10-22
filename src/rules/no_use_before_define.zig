@@ -225,17 +225,17 @@ fn isInInitializer(symbol_id: SymbolId, reference_span: ast.Span, init_ranges: [
 }
 
 fn lessThanInitRange(_: void, lhs: InitRange, rhs: InitRange) bool {
-    return @intFromEnum(lhs.symbol_id) < @intFromEnum(rhs.symbol_id);
+    return @backingInt(lhs.symbol_id) < @backingInt(rhs.symbol_id);
 }
 
 fn lowerBoundInitRange(init_ranges: []const InitRange, symbol_id: SymbolId) usize {
-    const needle = @intFromEnum(symbol_id);
+    const needle = @backingInt(symbol_id);
     var low: usize = 0;
     var high: usize = init_ranges.len;
 
     while (low < high) {
         const middle = low + (high - low) / 2;
-        if (@intFromEnum(init_ranges[middle].symbol_id) < needle) {
+        if (@backingInt(init_ranges[middle].symbol_id) < needle) {
             low = middle + 1;
         } else {
             high = middle;
@@ -298,7 +298,7 @@ fn isLintableReferenceSymbol(
     options: Options,
 ) bool {
     // Type-only exports can name a value that consumers use in a typeof query.
-    if (reference.space == .any and reference.type_position and !flags.inTypeSpace() and !flags.type_import) {
+    if (reference.space == .any and reference.type_position and !flags.intersects(traverser.semantic.Symbol.type_space) and !flags.type_import) {
         return isLintableValueSymbol(flags, options);
     }
     return switch (reference.kind) {
@@ -312,7 +312,7 @@ fn isLintableValueSymbol(flags: traverser.semantic.Symbol.Flags, options: Option
     if (flags.type_import or flags.interface or flags.type_alias or flags.type_parameter) return false;
     if (!options.check_functions and flags.function) return false;
     if (!options.check_classes and flags.class) return false;
-    return flags.inValueSpace() or flags.import;
+    return flags.intersects(traverser.semantic.Symbol.value_space) or flags.import;
 }
 
 fn isLintableTypeSymbol(flags: traverser.semantic.Symbol.Flags, options: Options) bool {
@@ -320,7 +320,7 @@ fn isLintableTypeSymbol(flags: traverser.semantic.Symbol.Flags, options: Options
     if (!options.check_typedefs and isTypedefSymbol(flags)) return false;
     if (!options.check_enums and isEnumSymbol(flags)) return false;
     if (!options.check_classes and flags.class) return false;
-    return flags.inTypeSpace() or flags.type_import;
+    return flags.intersects(traverser.semantic.Symbol.type_space) or flags.type_import;
 }
 
 fn isTypedefSymbol(flags: traverser.semantic.Symbol.Flags) bool {

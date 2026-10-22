@@ -358,6 +358,14 @@ async function runSmoke(page, origin) {
       await page.waitForURL((url) => !url.searchParams.has('version'));
     }
 
+    stage = 'Playground AST parser';
+    await page.getByRole('tab', { name: 'AST', exact: true }).click();
+    const astPanel = page.getByRole('tabpanel', { name: 'AST', exact: true });
+    await astPanel.locator('.ast-tree').waitFor({ timeout: 30_000 });
+    await astPanel.getByText('Program', { exact: true }).waitFor();
+    assert.equal(await astPanel.getByText('Unable to parse AST').count(), 0);
+    await page.getByRole('tab', { name: 'utlint.json', exact: true }).click();
+
     // Let late worker/resource errors reach the event handlers before leaving
     // the standalone Playground document.
     await page.waitForTimeout(250);

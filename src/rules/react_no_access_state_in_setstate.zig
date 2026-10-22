@@ -153,19 +153,19 @@ fn scanChildren(
             const T = @TypeOf(node);
             if (@typeInfo(T) != .@"struct") return;
 
-            inline for (@typeInfo(T).@"struct".fields) |field| {
-                if (field.type == ast.NodeIndex) {
+            inline for (@typeInfo(T).@"struct".field_names) |field_name| {
+                if (@FieldType(T, field_name) == ast.NodeIndex) {
                     try scanSetStateArgument(
                         allocator,
                         diagnostics,
                         tree,
-                        @field(node, field.name),
+                        @field(node, field_name),
                         scope_node,
                         state,
                         reported,
                     );
-                } else if (field.type == ast.IndexRange) {
-                    const range = @field(node, field.name);
+                } else if (@FieldType(T, field_name) == ast.IndexRange) {
+                    const range = @field(node, field_name);
                     for (tree.extra(range)) |child| {
                         try scanSetStateArgument(allocator, diagnostics, tree, child, scope_node, state, reported);
                     }
@@ -311,11 +311,11 @@ fn firstThisStateChild(tree: *const ast.Tree, data: ast.NodeData) ?ast.NodeIndex
             const T = @TypeOf(node);
             if (@typeInfo(T) != .@"struct") return null;
 
-            inline for (@typeInfo(T).@"struct".fields) |field| {
-                if (field.type == ast.NodeIndex) {
-                    if (firstThisStateNode(tree, @field(node, field.name))) |found| return found;
-                } else if (field.type == ast.IndexRange) {
-                    const range = @field(node, field.name);
+            inline for (@typeInfo(T).@"struct".field_names) |field_name| {
+                if (@FieldType(T, field_name) == ast.NodeIndex) {
+                    if (firstThisStateNode(tree, @field(node, field_name))) |found| return found;
+                } else if (@FieldType(T, field_name) == ast.IndexRange) {
+                    const range = @field(node, field_name);
                     for (tree.extra(range)) |child| {
                         if (firstThisStateNode(tree, child)) |found| return found;
                     }

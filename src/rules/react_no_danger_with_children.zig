@@ -62,7 +62,7 @@ pub fn checkJSXElement(
         else => return,
     };
 
-    const has_children = hasJSXChildren(tree, element) or findJSXProp(tree, opening, "children", bindings);
+    const has_children = try hasJSXChildren(allocator, tree, element) or findJSXProp(tree, opening, "children", bindings);
     if (!has_children) return;
     if (!findJSXProp(tree, opening, "dangerouslySetInnerHTML", bindings)) return;
 
@@ -109,10 +109,10 @@ pub fn checkCallExpression(
     );
 }
 
-fn hasJSXChildren(tree: *const ast.Tree, element: ast.JSXElement) bool {
+fn hasJSXChildren(allocator: Allocator, tree: *const ast.Tree, element: ast.JSXElement) Allocator.Error!bool {
     const children = tree.extra(element.children);
     if (children.len == 0) return false;
-    return !isLineBreak(tree, children[0]);
+    return !try isLineBreak(allocator, tree, children[0]);
 }
 
 fn findJSXProp(
@@ -218,9 +218,16 @@ fn isCreateElementMemberCall(tree: *const ast.Tree, call: ast.CallExpression) bo
     return std.mem.eql(u8, property, "createElement");
 }
 
-fn isLineBreak(tree: *const ast.Tree, index: ast.NodeIndex) bool {
+fn isLineBreak(allocator: Allocator, tree: *const ast.Tree, index: ast.NodeIndex) Allocator.Error!bool {
+    var decoded: std.ArrayList(u8) = .empty;
+    defer decoded.deinit(allocator);
     const value = switch (tree.data(index)) {
-        .jsx_text => |text| tree.string(text.value),
+        .jsx_text => |text| blk: {
+            const raw = tree.string(text.raw);
+            if (std.mem.indexOfScalar(u8, raw, '&') == null) break :blk raw;
+            try parser.lexical.decodeJSXEntities(allocator, raw, &decoded);
+            break :blk decoded.items;
+        },
         .string_literal => |literal| tree.string(literal.value),
         else => return false,
     };

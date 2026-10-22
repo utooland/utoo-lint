@@ -315,7 +315,7 @@ How it works:
 - The native engine lints every file first. Rules provided by a plugin never
   reach the native binary, so they do not need a native implementation.
 - Each file with plugin rules enabled is parsed again in Node.js with
-  [`yuku-parser`](https://www.npmjs.com/package/yuku-parser), the parser the
+  [`yuku`](https://www.npmjs.com/package/yuku), the parser the
   native engine is built on, into an ESTree / TypeScript-ESTree tree. The rules
   run against that tree with an ESLint-compatible `context` and `sourceCode`.
 - Plugin objects are loaded from the config module in-process. Plugins must

@@ -306,7 +306,7 @@ fn hasAccessibleChild(tree: *const ast.Tree, element: ast.JSXElement) bool {
     for (tree.extra(element.children)) |child_index| {
         switch (tree.data(child_index)) {
             .jsx_text => |text| {
-                if (tree.string(text.value).len != 0) return true;
+                if (tree.string(text.raw).len != 0) return true;
             },
             .jsx_element => |child| {
                 if (!isHiddenFromScreenReader(tree, child)) return true;

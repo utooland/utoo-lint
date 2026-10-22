@@ -2,7 +2,7 @@ const std = @import("std");
 const parser = @import("parser");
 
 const ast = parser.ast;
-const yuku_semantic = parser.traverser.semantic;
+const yuku_semantic = parser.semantic;
 
 pub const ScopeTree = struct {
     scopes: []const yuku_semantic.Scope,
@@ -12,7 +12,7 @@ pub const ScopeTree = struct {
     }
 
     pub inline fn getScope(self: ScopeTree, id: yuku_semantic.ScopeId) yuku_semantic.Scope {
-        return self.scopes[@intFromEnum(id)];
+        return self.scopes[@backingInt(id)];
     }
 };
 
@@ -83,8 +83,8 @@ pub const SymbolTable = struct {
         return self.model.reference(id).flags.write;
     }
 
-    pub fn iterSymbols(self: SymbolTable) yuku_semantic.Semantic.SymbolIterator {
-        return self.model.iterSymbols();
+    pub fn iterSymbols(self: SymbolTable) SymbolIterator {
+        return .{ .symbols = self.symbols };
     }
 
     pub fn iterReferences(self: SymbolTable) ReferenceIterator {
@@ -96,11 +96,10 @@ pub const SymbolTable = struct {
     }
 
     pub fn findInScope(self: SymbolTable, scope: yuku_semantic.ScopeId, name: []const u8) ?yuku_semantic.SymbolId {
-        var bindings = self.model.bindings(scope);
-        while (bindings.next()) |id| {
-            if (std.mem.eql(u8, self.tree.string(self.model.symbol(id).name), name)) return id;
-        }
-        return null;
+        std.debug.assert(scope != .none);
+        std.debug.assert(@backingInt(scope) < self.model.scope_maps.len);
+        // Match bindings(): exclude passing hoisted vars, but retain shared namespace exports.
+        return self.model.scope_maps[@backingInt(scope)].get(name);
     }
 
     pub fn resolve(
@@ -133,6 +132,23 @@ pub const SymbolTable = struct {
         return self.model.uses(id).len > 0;
     }
 
+    pub const SymbolEntry = struct {
+        id: yuku_semantic.SymbolId,
+        symbol: yuku_semantic.Symbol,
+    };
+
+    pub const SymbolIterator = struct {
+        symbols: []const yuku_semantic.Symbol,
+        index: u32 = 0,
+
+        pub fn next(self: *SymbolIterator) ?SymbolEntry {
+            if (self.index >= self.symbols.len) return null;
+            const index = self.index;
+            self.index += 1;
+            return .{ .id = @fromBackingInt(index), .symbol = self.symbols[index] };
+        }
+    };
+
     pub const ReferenceEntry = struct {
         id: yuku_semantic.ReferenceId,
         reference: Reference,
@@ -147,7 +163,7 @@ pub const SymbolTable = struct {
             const index = self.index;
             self.index += 1;
             return .{
-                .id = @enumFromInt(index),
+                .id = @fromBackingInt(index),
                 .reference = Reference.fromYuku(self.references[index]),
             };
         }
@@ -164,7 +180,7 @@ pub const SymbolTable = struct {
                 const reference = self.references[index];
                 if (reference.symbol == .none) {
                     return .{
-                        .id = @enumFromInt(index),
+                        .id = @fromBackingInt(index),
                         .reference = Reference.fromYuku(reference),
                     };
                 }
@@ -180,7 +196,7 @@ pub const SymbolTable = struct {
 
         pub fn next(self: *UseIterator) ?ast.NodeIndex {
             if (self.index >= self.ids.len) return null;
-            const reference = self.references[@intFromEnum(self.ids[self.index])];
+            const reference = self.references[@backingInt(self.ids[self.index])];
             self.index += 1;
             return reference.node;
         }
@@ -212,7 +228,7 @@ pub const traverser = struct {
     pub const scoped = parser.traverser.scoped;
 
     pub const semantic = struct {
-        pub const Ctx = yuku_semantic.Ctx;
+        pub const Ctx = parser.traverser.semantic.Ctx;
         pub const Scope = yuku_semantic.Scope;
         pub const ScopeId = yuku_semantic.ScopeId;
         pub const Symbol = yuku_semantic.Symbol;
@@ -233,7 +249,7 @@ test "adapts Yuku's space-aware symbol resolution" {
     );
     defer tree.deinit();
 
-    const model = try parser.semantic.analyze(&tree);
+    const model = try parser.semantic.analyze(&tree, .{ .check = true });
     const result = Result.init(&tree, model);
     var references = result.symbol_table.iterReferences();
 
@@ -258,7 +274,7 @@ test "distinguishes runtime aliases from erased exports and value queries" {
     var tree = try parser.parse(std.testing.allocator, source, .{ .lang = .ts });
     defer tree.deinit();
 
-    const model = try parser.semantic.analyze(&tree);
+    const model = try parser.semantic.analyze(&tree, .{ .check = true });
     const result = Result.init(&tree, model);
     var references = result.symbol_table.iterReferences();
     const Expected = struct {
@@ -280,4 +296,45 @@ test "distinguishes runtime aliases from erased exports and value queries" {
         try std.testing.expectEqual(item.type_position, entry.reference.type_position);
     }
     try std.testing.expectEqual(null, references.next());
+}
+
+test "scope lookup preserves direct bindings across namespace merging and var hoisting" {
+    const source =
+        \\namespace NS { export var shared: number; }
+        \\namespace NS {
+        \\  export var shared: number;
+        \\  export function nested() { const shared = 1; return shared; }
+        \\}
+        \\function hoist() { { var hoisted; } }
+    ;
+    var tree = try parser.parse(std.testing.allocator, source, .{ .lang = .ts });
+    defer tree.deinit();
+    const model = try parser.semantic.analyze(&tree, .{ .check = true });
+    const table = SymbolTable.init(&tree, model);
+
+    var shared_bindings: usize = 0;
+    var hoisted_only_bindings: usize = 0;
+    for (model.scopes.list, 0..) |_, index| {
+        const scope: yuku_semantic.ScopeId = @fromBackingInt(@intCast(index));
+        for (model.symbols) |symbol| {
+            const name = tree.string(symbol.name);
+            var expected: ?yuku_semantic.SymbolId = null;
+            var bindings = model.bindings(scope);
+            while (bindings.next()) |id| {
+                if (std.mem.eql(u8, tree.string(model.symbol(id).name), name)) {
+                    expected = id;
+                    break;
+                }
+            }
+            try std.testing.expectEqual(expected, table.findInScope(scope, name));
+            if (expected) |id| {
+                if (model.symbol(id).scope != scope) shared_bindings += 1;
+            } else if (model.binding(scope, name) != null) {
+                hoisted_only_bindings += 1;
+            }
+        }
+        try std.testing.expectEqual(null, table.findInScope(scope, "missing"));
+    }
+    try std.testing.expect(shared_bindings > 0);
+    try std.testing.expect(hoisted_only_bindings > 0);
 }

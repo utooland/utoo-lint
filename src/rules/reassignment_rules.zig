@@ -170,7 +170,7 @@ const Visitor = struct {
 
     fn innermostScopeContaining(self: *Visitor, tree: *const ast.Tree, node: ast.NodeIndex) traverser.semantic.ScopeId {
         const node_span = tree.span(node);
-        var best: traverser.semantic.ScopeId = if (tree.source_type == .module) .module else .root;
+        var best: traverser.semantic.ScopeId = self.symbol_table.scopeOf(tree.root);
         var best_len: u32 = std.math.maxInt(u32);
 
         for (self.scope_tree.scopes, 0..) |scope, i| {
@@ -179,7 +179,7 @@ const Visitor = struct {
 
             const len = scope_span.end - scope_span.start;
             if (len <= best_len) {
-                best = @enumFromInt(@as(u32, @intCast(i)));
+                best = @fromBackingInt(@as(u32, @intCast(i)));
                 best_len = len;
             }
         }

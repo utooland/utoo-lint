@@ -38,7 +38,7 @@ description: 查看 utoo-lint 已记录的性能测量、测试条件与适用�
 包含语料生成器、共有规则映射和运行脚本。安装项目开发依赖后，在仓库根目录执行：
 
 ```bash
-zig build -Doptimize=ReleaseFast
+zig build -Doptimize=fast
 pnpm --dir benchmarks install
 pnpm bench:generate -- --files=100
 pnpm bench -- --runs=20 --warmups=5

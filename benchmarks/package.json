@@ -6,6 +6,7 @@
   "scripts": {
     "generate": "node scripts/generate-corpus.mjs",
     "bench": "node scripts/run-benchmark.mjs",
+    "bench:focused": "node scripts/run-focused.mjs",
     "bench:config-discovery": "node scripts/run-codspeed.mjs --config-only",
     "chart": "node scripts/render-chart.mjs",
     "codspeed": "node scripts/run-all-codspeed.mjs",

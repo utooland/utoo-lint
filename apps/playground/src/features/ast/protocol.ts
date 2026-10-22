@@ -1,9 +1,9 @@
-import type { Diagnostic, Program } from 'yuku-parser';
+import type { Diagnostic, Program } from 'yuku';
 
 export const AST_SOURCE_LENGTH_MAX = 256 * 1024;
 
 export interface ASTParseResult {
-  diagnostics: Diagnostic[];
+  diagnostics: readonly Diagnostic[];
   elapsedMs: number;
   program: Program;
 }

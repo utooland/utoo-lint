@@ -50,11 +50,11 @@ fn nodeContainsYield(tree: *const ast.Tree, node: anytype) bool {
     const T = @TypeOf(node);
     if (@typeInfo(T) != .@"struct") return false;
 
-    inline for (@typeInfo(T).@"struct".fields) |field| {
-        if (field.type == ast.NodeIndex) {
-            if (containsYield(tree, @field(node, field.name))) return true;
-        } else if (field.type == ast.IndexRange) {
-            for (tree.extra(@field(node, field.name))) |child| {
+    inline for (@typeInfo(T).@"struct".field_names) |field_name| {
+        if (@FieldType(T, field_name) == ast.NodeIndex) {
+            if (containsYield(tree, @field(node, field_name))) return true;
+        } else if (@FieldType(T, field_name) == ast.IndexRange) {
+            for (tree.extra(@field(node, field_name))) |child| {
                 if (containsYield(tree, child)) return true;
             }
         }

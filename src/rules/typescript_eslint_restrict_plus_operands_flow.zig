@@ -2,7 +2,7 @@ const std = @import("std");
 const parser = @import("parser");
 const ast = parser.ast;
 const SymbolTable = @import("../semantic_compat.zig").SymbolTable;
-const SymbolId = parser.traverser.semantic.SymbolId;
+const SymbolId = parser.semantic.SymbolId;
 
 // Track one operand's binding through the enclosing function. Nested functions
 // have separate flow, and paths that return or throw do not join later paths.

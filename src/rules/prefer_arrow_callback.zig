@@ -143,11 +143,11 @@ fn containsLexicalReference(tree: *const ast.Tree, index: ast.NodeIndex) bool {
 fn childrenContainLexicalReference(tree: *const ast.Tree, comptime T: type, node: T) bool {
     if (@typeInfo(T) != .@"struct") return false;
 
-    inline for (@typeInfo(T).@"struct".fields) |field| {
-        if (field.type == ast.NodeIndex) {
-            if (containsLexicalReference(tree, @field(node, field.name))) return true;
-        } else if (field.type == ast.IndexRange) {
-            for (tree.extra(@field(node, field.name))) |child| {
+    inline for (@typeInfo(T).@"struct".field_names) |field_name| {
+        if (@FieldType(T, field_name) == ast.NodeIndex) {
+            if (containsLexicalReference(tree, @field(node, field_name))) return true;
+        } else if (@FieldType(T, field_name) == ast.IndexRange) {
+            for (tree.extra(@field(node, field_name))) |child| {
                 if (containsLexicalReference(tree, child)) return true;
             }
         }

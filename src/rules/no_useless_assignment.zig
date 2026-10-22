@@ -40,7 +40,7 @@ const Graph = struct {
     }
 
     fn add(self: *Graph, node: GraphNode) Allocator.Error!NodeId {
-        const index: NodeId = @enumFromInt(self.nodes.items.len);
+        const index: NodeId = @fromBackingInt(@intCast(self.nodes.items.len));
         try self.nodes.append(self.allocator, node);
         if (node.kind == .write) try self.candidates.append(self.allocator, index);
         return index;
@@ -215,7 +215,7 @@ const Builder = struct {
             .break_target = continuation,
             .continue_target = test_entry,
         }, suppress_writes);
-        self.graph.nodes.items[@intFromEnum(branch)].next = body;
+        self.graph.nodes.items[@backingInt(branch)].next = body;
         return test_entry;
     }
 
@@ -232,7 +232,7 @@ const Builder = struct {
             .break_target = continuation,
             .continue_target = test_entry,
         }, suppress_writes);
-        self.graph.nodes.items[@intFromEnum(branch)].next = body;
+        self.graph.nodes.items[@backingInt(branch)].next = body;
         return body;
     }
 
@@ -253,7 +253,7 @@ const Builder = struct {
             .break_target = continuation,
             .continue_target = update_entry,
         }, suppress_writes);
-        self.graph.nodes.items[@intFromEnum(branch)].next = body;
+        self.graph.nodes.items[@backingInt(branch)].next = body;
         return self.buildStatement(statement.init, test_entry, .{}, suppress_writes);
     }
 
@@ -272,7 +272,7 @@ const Builder = struct {
             .continue_target = branch,
         }, suppress_writes);
         const iteration = try self.buildLinear(left, body, suppress_writes);
-        self.graph.nodes.items[@intFromEnum(branch)].next = iteration;
+        self.graph.nodes.items[@backingInt(branch)].next = iteration;
         return self.buildExpression(right, branch, suppress_writes);
     }
 
@@ -566,7 +566,7 @@ const EventCollector = struct {
     }
 
     fn isDelayedPatternNode(self: *EventCollector, node: ast.NodeIndex) bool {
-        return node != .null and self.delayed_pattern_nodes[@intFromEnum(node)];
+        return node != .null and self.delayed_pattern_nodes[@backingInt(node)];
     }
 };
 
@@ -589,7 +589,7 @@ pub fn run(
     var symbols = symbol_table.iterSymbols();
     while (symbols.next()) |entry| {
         const symbol = entry.symbol;
-        if (!symbol.flags.inValueSpace() or symbol.flags.exported) continue;
+        if (!symbol.flags.intersects(parser.semantic.Symbol.value_space) or symbol.flags.exported) continue;
         const declarations = symbol_table.symbolDecls(entry.id);
         if (declarations.len == 0) continue;
         if (isExportedByDirective(exported_directive_names.items, tree.string(symbol.name)) or
@@ -618,8 +618,8 @@ pub fn run(
         defer allocator.free(reachable);
 
         for (builder.graph.candidates.items) |candidate| {
-            const node = builder.graph.nodes.items[@intFromEnum(candidate)];
-            if (!node.reportable or !reachable[@intFromEnum(candidate)]) continue;
+            const node = builder.graph.nodes.items[@backingInt(candidate)];
+            if (!node.reportable or !reachable[@backingInt(candidate)]) continue;
             if (try assignmentIsUsed(allocator, builder.graph.nodes.items, candidate)) continue;
             try report_nodes.append(allocator, node.report_node);
         }
@@ -650,7 +650,7 @@ fn reachableNodes(allocator: Allocator, nodes: []const GraphNode, entry: NodeId)
     try queue.append(allocator, entry);
     while (queue.pop()) |node_id| {
         if (node_id == .none) continue;
-        const index = @intFromEnum(node_id);
+        const index = @backingInt(node_id);
         if (reachable[index]) continue;
         reachable[index] = true;
         const node = nodes[index];
@@ -664,17 +664,17 @@ fn assignmentIsUsed(allocator: Allocator, nodes: []const GraphNode, assignment: 
     const visited = try allocator.alloc(bool, nodes.len);
     defer allocator.free(visited);
     @memset(visited, false);
-    visited[@intFromEnum(assignment)] = true;
+    visited[@backingInt(assignment)] = true;
 
     var queue: std.ArrayList(NodeId) = .empty;
     defer queue.deinit(allocator);
-    const start = nodes[@intFromEnum(assignment)];
+    const start = nodes[@backingInt(assignment)];
     if (start.next != .none) try queue.append(allocator, start.next);
     if (start.alternate != .none) try queue.append(allocator, start.alternate);
 
     while (queue.pop()) |node_id| {
         if (node_id == .none) continue;
-        const index = @intFromEnum(node_id);
+        const index = @backingInt(node_id);
         if (visited[index]) continue;
         visited[index] = true;
         const node = nodes[index];
@@ -792,7 +792,7 @@ const DelayedPatternMarker = struct {
         index: ast.NodeIndex,
         _: *traverser.basic.Ctx,
     ) traverser.Action {
-        self.nodes[@intFromEnum(index)] = true;
+        self.nodes[@backingInt(index)] = true;
         return .proceed;
     }
 };

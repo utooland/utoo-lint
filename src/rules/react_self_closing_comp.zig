@@ -28,7 +28,7 @@ pub fn check(
         .jsx_element => |element| element,
         else => return,
     };
-    if (!childrenAreEmpty(tree, element.children)) return;
+    if (!try childrenAreEmpty(allocator, tree, element.children)) return;
 
     try core.addDiagnostic(
         allocator,
@@ -51,15 +51,21 @@ fn isConfiguredElementName(tree: *const ast.Tree, index: ast.NodeIndex, options:
     };
 }
 
-fn childrenAreEmpty(tree: *const ast.Tree, children_range: ast.IndexRange) bool {
+fn childrenAreEmpty(allocator: Allocator, tree: *const ast.Tree, children_range: ast.IndexRange) Allocator.Error!bool {
     const children = tree.extra(children_range);
     if (children.len == 0) return true;
     if (children.len != 1) return false;
 
-    const value = switch (tree.data(children[0])) {
-        .jsx_text => |text| tree.string(text.value),
+    const raw = switch (tree.data(children[0])) {
+        .jsx_text => |text| tree.string(text.raw),
         else => return false,
     };
+    var decoded: std.ArrayList(u8) = .empty;
+    defer decoded.deinit(allocator);
+    const value = if (std.mem.indexOfScalar(u8, raw, '&') != null) blk: {
+        try parser.lexical.decodeJSXEntities(allocator, raw, &decoded);
+        break :blk decoded.items;
+    } else raw;
     if (!containsLineBreak(value)) return false;
     return isMultilineWhitespace(value);
 }

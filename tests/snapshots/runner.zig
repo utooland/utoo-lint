@@ -295,8 +295,8 @@ fn isolatedRuleOptions() lint.Options {
     @setEvalBranchQuota(100_000);
 
     var options = lint.Options{};
-    inline for (@typeInfo(lint.rules).@"struct".decls) |declaration| {
-        const candidate = @field(lint.rules, declaration.name);
+    inline for (@typeInfo(lint.rules).@"struct".decl_names) |declaration_name| {
+        const candidate = @field(lint.rules, declaration_name);
         if (@TypeOf(candidate) == type) {
             if (@hasDecl(candidate, "id")) {
                 if (!options.setByCliName(candidate.id, false)) {

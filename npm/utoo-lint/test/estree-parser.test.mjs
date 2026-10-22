@@ -42,15 +42,53 @@ test("TypeScript enum and mapped type bindings reach ESLint scope analysis", () 
   assert.equal(mappedScope.through.every(({ resolved }) => resolved?.name === "T"), true);
 });
 
-test("template tokens preserve delimiters and UTF-16 ranges", () => {
-  const text = "const 前缀 = '🐰';\nconst result = `hello ${前缀}!`;";
+for (const extension of ["js", "jsx", "ts", "tsx"]) {
+  test(`${extension} template tokens preserve delimiters and UTF-16 ranges`, () => {
+    const text = "const 前缀 = '🐰';\nconst result = `hello ${前缀}!`;\nconst empty = ``;";
+    const { ast, diagnostics } = parseForESLint(text, {
+      filePath: `input.${extension}`,
+      ecmaFeatures: { jsx: extension !== "js" }
+    });
+    const template = ast.body[1].declarations[0].init;
+    const empty = ast.body[2].declarations[0].init;
+    const tokens = ast.tokens.filter(({ type }) => type === "Template");
+
+    assert.deepEqual(diagnostics, []);
+    assert.deepEqual(tokens.map(({ value }) => value), ["`hello ${", "}!`", "``"]);
+    assert.deepEqual(template.quasis.map(({ range }) => text.slice(...range)), ["`hello ${", "}!`"]);
+    assert.equal(text.slice(...empty.quasis[0].range), "``");
+    assert.equal(template.expressions[0].range[0], text.lastIndexOf("前缀"));
+    assert.equal(template.loc.start.line, 2);
+  });
+}
+
+test("comments and hashbangs retain UTF-16 ranges and stay out of the token stream", () => {
+  const text = "#!/usr/bin/env node\n// 🐰 leading\nconst 前缀 = /* inner 🐰 */ '🐰'; // trailing\n";
   const { ast, diagnostics } = parseForESLint(text, { filePath: "input.js" });
-  const template = ast.body[1].declarations[0].init;
-  const tokens = ast.tokens.filter(({ type }) => type === "Template");
 
   assert.deepEqual(diagnostics, []);
-  assert.deepEqual(tokens.map(({ value }) => value), ["`hello ${", "}!`"]);
-  assert.deepEqual(template.quasis.map(({ range }) => text.slice(...range)), ["`hello ${", "}!`"]);
-  assert.equal(template.expressions[0].range[0], text.lastIndexOf("前缀"));
-  assert.equal(template.loc.start.line, 2);
+  assert.deepEqual(ast.comments.map(({ type, value }) => ({ type, value })), [
+    { type: "Hashbang", value: "/usr/bin/env node" },
+    { type: "Line", value: " 🐰 leading" },
+    { type: "Block", value: " inner 🐰 " },
+    { type: "Line", value: " trailing" }
+  ]);
+  assert.deepEqual(ast.comments.map(({ range }) => text.slice(...range)), [
+    "#!/usr/bin/env node", "// 🐰 leading", "/* inner 🐰 */", "// trailing"
+  ]);
+  assert.deepEqual(ast.comments[2].loc, {
+    start: { line: 3, column: 11 },
+    end: { line: 3, column: 25 }
+  });
+  assert.deepEqual(ast.tokens.map(({ value }) => value), ["const", "前缀", "=", "'🐰'", ";"]);
+  assert.equal("hashbang" in ast, false);
+});
+
+test("parse diagnostics retain source spans", () => {
+  const text = "const value = ;";
+  const { diagnostics } = parseForESLint(text, { filePath: "input.js" });
+
+  assert.ok(diagnostics.length > 0);
+  assert.equal(diagnostics[0].severity, "error");
+  assert.equal(text.slice(diagnostics[0].start, diagnostics[0].end), ";");
 });

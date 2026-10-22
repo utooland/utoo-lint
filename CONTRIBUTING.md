@@ -33,16 +33,13 @@ Report security vulnerabilities privately as described in [SECURITY.md](SECURITY
 
 ## Prerequisites
 
-Yuku currently tracks Zig nightly. Use a Zig version compatible with the
-vendored Yuku commit:
+Use Zig 0.17.0, matching the version pinned in CI:
 
 ```bash
 zig version
 ```
 
-The vendored Yuku v0.18.0 `build.zig.zon` currently asks for
-`0.16.0` or newer. The repository is currently tested with
-`0.17.0-dev.224+c166c49b1`.
+The vendored Yuku v0.22.1 requires Zig 0.17.0 or newer.
 
 Initialize submodules before building:
 
@@ -62,20 +59,20 @@ pnpm install
 Run the test suite:
 
 ```bash
-zig build test -Doptimize=ReleaseFast -j1
+zig build test -Doptimize=fast -j1
 ```
 
 Build the CLI:
 
 ```bash
-zig build -Doptimize=ReleaseFast
+zig build -Doptimize=fast
 ./zig-out/bin/utoo-lint src test
 ```
 
 Run the CLI against the fixture:
 
 ```bash
-zig build run -Doptimize=ReleaseFast -j1 -- test/fixtures/bad.ts
+zig build run -Doptimize=fast -j1 -- test/fixtures/bad.ts
 ```
 
 ## Adding a Rule
@@ -146,7 +143,7 @@ The benchmark workspace compares the local `utoo-lint` binary with Oxlint,
 Biome, and ESLint on a generated TypeScript corpus using a shared rule set.
 
 ```bash
-zig build -Doptimize=ReleaseFast
+zig build -Doptimize=fast
 pnpm --dir benchmarks generate
 pnpm --dir benchmarks bench
 ```
