@@ -13,14 +13,18 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoDir = resolve(scriptDir, "../..");
 const options = parseArgs(process.argv.slice(2));
 if (options.help) {
-  console.log(`Usage: node scripts/run-focused.mjs --before-binary=PATH --before-wrapper=PATH [options]
+  console.log(`Usage: node scripts/run-focused.mjs --before-binary=PATH [options]
   --after-binary=PATH       Default: ../zig-out/bin/utoo-lint
+  --before-wrapper=PATH     Required when source-code or plugin scenarios are selected
   --after-wrapper=PATH      Default: ../npm/utoo-lint/index.cjs
   --js-binary=PATH          Shared native binary for BOTH wrappers (default: after)
   --before-ref=REF          Baseline source provenance (for example 7addc3f)
   --after-ref=REF           Candidate source provenance (default: HEAD plus working diff)
   --zig=PATH               Compiler used for both builds (default: zig)
   --build-mode=MODE         Build provenance (default: fast)
+  --before-zig=PATH --after-zig=PATH
+  --before-build-mode=MODE --after-build-mode=MODE
+                           Per-variant overrides for compiler/build provenance
   --runs=20 --warmups=5 --memory-runs=0 --output=results/focused.json
   --scenarios=no-shadow,diagnostics,semantic,control,source-code,plugin
   --shadow-counts=500,2000,8000 --diagnostic-lines=4000
@@ -45,15 +49,20 @@ const groups = new Set((options.scenarios ?? "no-shadow,diagnostics,semantic,con
 for (const group of groups) {
   if (!["no-shadow", "diagnostics", "semantic", "control", "source-code", "plugin"].includes(group)) throw new Error(`Unknown scenario: ${group}`);
 }
-for (const required of ["before-binary", "before-wrapper"]) {
+const hasJavaScript = groups.has("source-code") || groups.has("plugin");
+for (const required of hasJavaScript ? ["before-binary", "before-wrapper"] : ["before-binary"]) {
   if (!options[required]) throw new Error(`--${required} is required`);
 }
-const variants = [
-  { name: "before", binary: resolve(options["before-binary"]), wrapper: resolve(options["before-wrapper"]), sourceRef: options["before-ref"] ?? null },
-  { name: "after", binary: resolve(options["after-binary"] ?? join(repoDir, "zig-out/bin/utoo-lint")), wrapper: resolve(options["after-wrapper"] ?? join(repoDir, "npm/utoo-lint/index.cjs")), sourceRef: options["after-ref"] ?? "HEAD" }
-];
-const jsBinary = resolve(options["js-binary"] ?? variants[1].binary);
-for (const file of [...variants.flatMap((variant) => [variant.binary, variant.wrapper]), jsBinary]) {
+const variants = ["before", "after"].map((name) => ({
+  name,
+  binary: resolve(options[`${name}-binary`] ?? join(repoDir, "zig-out/bin/utoo-lint")),
+  ...(hasJavaScript ? { wrapper: resolve(options[`${name}-wrapper`] ?? join(repoDir, "npm/utoo-lint/index.cjs")) } : {}),
+  sourceRef: options[`${name}-ref`] ?? (name === "after" ? "HEAD" : null),
+  zig: options[`${name}-zig`] ?? options.zig ?? "zig",
+  buildMode: options[`${name}-build-mode`] ?? options["build-mode"] ?? "fast"
+}));
+const jsBinary = hasJavaScript ? resolve(options["js-binary"] ?? variants[1].binary) : null;
+for (const file of [...variants.flatMap((variant) => [variant.binary, ...(hasJavaScript ? [variant.wrapper] : [])]), ...(hasJavaScript ? [jsBinary] : [])]) {
   if (!(await stat(file)).isFile()) throw new Error(`Missing benchmark input: ${file}`);
 }
 const fixtureRoot = await mkdtemp(join(tmpdir(), "utoo-lint-focused-"));
@@ -97,20 +106,28 @@ try {
     }
   }
 
+  const variantProvenance = await Promise.all(variants.map(async (variant) => ({
+    ...variant,
+    zigVersion: commandOutput(variant.zig, ["version"]),
+    resolvedSourceRef: variant.sourceRef ? commandOutput("git", ["rev-parse", variant.sourceRef]) : null,
+    binarySha256: hash(await readFile(variant.binary)),
+    ...(hasJavaScript ? {
+      wrapperFiles: await wrapperFiles(variant.wrapper),
+      yukuVersion: createRequire(variant.wrapper)("yuku/package.json").version
+    } : {})
+  })));
   const provenance = {
     generatedAt: new Date().toISOString(), node: process.version, platform: process.platform, arch: process.arch,
     osRelease: release(), cpu: { model: cpus()[0]?.model ?? null, logicalCores: cpus().length },
-    zigVersion: commandOutput(options.zig ?? "zig", ["version"]), buildMode: options["build-mode"] ?? "fast",
+    zigVersion: variantProvenance[0].zigVersion === variantProvenance[1].zigVersion ? variantProvenance[0].zigVersion : null,
+    buildMode: variants[0].buildMode === variants[1].buildMode ? variants[0].buildMode : null,
     git: { head: commandOutput("git", ["rev-parse", "HEAD"]), status: commandOutput("git", ["status", "--porcelain"]), diffSha256: hash(commandOutput("git", ["diff", "HEAD", "--binary"]) ?? ""), changedFiles: await changedSourceFiles() },
-    runnerSha256: hash(await readFile(fileURLToPath(import.meta.url))), workerSha256: hash(await readFile(join(scriptDir, "focused-js-worker.cjs"))),
-    jsBinary: { path: jsBinary, sha256: hash(await readFile(jsBinary)) },
-    variants: await Promise.all(variants.map(async (variant) => ({
-      ...variant,
-      resolvedSourceRef: variant.sourceRef ? commandOutput("git", ["rev-parse", variant.sourceRef]) : null,
-      binarySha256: hash(await readFile(variant.binary)),
-      wrapperFiles: await wrapperFiles(variant.wrapper),
-      yukuVersion: createRequire(variant.wrapper)("yuku/package.json").version
-    }))),
+    runnerSha256: hash(await readFile(fileURLToPath(import.meta.url))),
+    ...(hasJavaScript ? {
+      workerSha256: hash(await readFile(join(scriptDir, "focused-js-worker.cjs"))),
+      jsBinary: { path: jsBinary, sha256: hash(await readFile(jsBinary)) }
+    } : {}),
+    variants: variantProvenance,
     fixtures: await fixtureInventory(fixtureRoot),
     configuration: { runs, warmups, memoryRuns, shadowCounts, diagnosticLines, semanticReferences, controlFiles, controlStatements, jsStatements, groups: [...groups] },
     methodology: {
@@ -282,7 +299,7 @@ function integer(value, fallback, name, minimum) {
 }
 
 function parseArgs(argv) {
-  const allowed = new Set(["help", "before-binary", "before-wrapper", "after-binary", "after-wrapper", "js-binary", "before-ref", "after-ref", "zig", "build-mode", "runs", "warmups", "memory-runs", "output", "scenarios", "shadow-counts", "diagnostic-lines", "semantic-references", "control-files", "control-statements", "js-statements"]);
+  const allowed = new Set(["help", "before-binary", "before-wrapper", "after-binary", "after-wrapper", "js-binary", "before-ref", "after-ref", "zig", "build-mode", "before-zig", "after-zig", "before-build-mode", "after-build-mode", "runs", "warmups", "memory-runs", "output", "scenarios", "shadow-counts", "diagnostic-lines", "semantic-references", "control-files", "control-statements", "js-statements"]);
   const parsed = {};
   for (const arg of argv) {
     const match = /^--([^=]+)(?:=(.*))?$/.exec(arg);

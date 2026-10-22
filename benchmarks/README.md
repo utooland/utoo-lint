@@ -178,6 +178,12 @@ dependencies. Both wrappers use the same native binary (the candidate by
 default) to isolate JavaScript changes; `--js-binary=PATH` selects another shared
 binary. Native scenarios use each revision's own binary.
 
+For native-only groups such as `--scenarios=control`, wrapper arguments are
+optional and JavaScript dependency metadata is omitted. Compiler and build-mode
+provenance is recorded per revision: `--before-zig` / `--after-zig` and
+`--before-build-mode` / `--after-build-mode` override the shared `--zig` and
+`--build-mode` defaults when comparing revisions that require different toolchains.
+
 The default scenarios are:
 
 - `no-shadow`: 500, 2,000, and 8,000 exported functions with distinct parameter
@@ -219,6 +225,79 @@ JavaScript workers separately report Node's own peak RSS in KiB, captured before
 result hashing; that value excludes the native child and must not be presented as
 the whole workload's memory. These focused synthetic cases explain targeted changes; the normal
 corpus controls check broader throughput and small-change regressions.
+
+### Recorded results: 2026-10-23
+
+The [full raw results](snapshots/2026-10-23-yuku-hotpaths.json) compare the
+Yuku 0.22.1 upgrade alone (`7addc3f`) with the subsequent hotpath optimizations
+(`3f5b271`). The run used an Apple M4, macOS arm64, Node.js 20.19.1, and
+Zig 0.17.0 with `-Doptimize=fast`: 20 alternating before/after pairs after five
+warmup pairs, with a fresh process per sample. All 13 scenarios passed output
+parity checks, and every measured sample reproduced its validated output.
+
+The raw record was captured before the optimization commit, so its recorded
+HEAD and candidate source ref still resolve to `7addc3f`. Its working-tree file
+hashes, candidate wrapper inventory, and runner hashes were verified against `3f5b271`;
+the archived provenance is unchanged.
+
+| Scenario | Before median (ms) | After median (ms) | Time reduction |
+| --- | ---: | ---: | ---: |
+| `no-shadow`, 500 functions | 3.057 | 2.597 | 15.0% |
+| `no-shadow`, 2,000 functions | 10.912 | 3.268 | 70.1% |
+| `no-shadow`, 8,000 functions | 133.726 | 6.094 | 95.4% |
+| Text output, 4,000 diagnostics | 51.568 | 3.042 | 94.1% |
+| Text output, first-line diagnostic in 4,000 lines | 2.213 | 2.212 | 0.0% |
+| Semantic errors, JS, 8,000 references | 3.249 | 2.838 | 12.6% |
+| Semantic errors, TS, 8,000 references | 3.473 | 3.061 | 11.9% |
+| Control, 1,000 files, 12 rules | 73.213 | 72.706 | 0.7% |
+| Control, 1,000 files, 49 rules | 75.059 | 74.106 | 1.3% |
+| SourceCode tokens, 2,000 declarations | 586.015 | 200.792 | 65.7% |
+| SourceCode tokens with comments, 2,000 declarations | 3,027.193 | 489.510 | 83.8% |
+| SourceCode locations, 2,000 declarations | 4.003 | 1.105 | 72.4% |
+| Plugin verification, 2,000 declarations | 870.686 | 171.808 | 80.3% |
+
+These are targeted synthetic workloads, not general project speedups. The two
+ordinary corpus controls were effectively flat: their 0.7% and 1.3% median
+reductions were small relative to sample variation. Native timings include
+startup and text output; SourceCode timings exclude parsing, while plugin
+timings include the whole `Linter.verify` call.
+
+Five separate native RSS measurements per revision showed about 25% lower
+median peak RSS for semantic-only checks: 12.828 to 9.578 MiB for JS and 12.875
+to 9.609 MiB for TS. The diagnostic position index increased the 4,000-diagnostic
+case from 8.641 to 8.766 MiB, a 0.125 MiB tradeoff. The raw JSON also records
+JavaScript workers' Node-only peak RSS; it excludes native child processes and
+does not measure the whole plugin workload's memory.
+
+### Main-to-candidate control
+
+A separate [same-machine comparison](snapshots/2026-10-23-main-controls.json)
+measures the complete upgrade and optimization against main (`957d528`). Main
+was built from unchanged sources with its declared Zig
+`0.17.0-dev.224+c166c49b1` and `ReleaseFast`; the candidate (`3f5b271`) uses
+Zig 0.17.0 and `fast`. The [baseline build record](snapshots/2026-10-23-main-build.json)
+includes source, binary, and compiler hashes plus official signature verification.
+This comparison includes the toolchain change, so it does not isolate Yuku alone.
+
+Both profiles passed complete JSON and text output parity checks over 20
+alternating pairs after five warmup pairs on the same Apple M4:
+
+| Native control | Main median (ms) | Candidate median (ms) | Time reduction | Main / candidate peak RSS (MiB) |
+| --- | ---: | ---: | ---: | ---: |
+| 1,000 files, 12 rules | 81.438 | 74.954 | 8.0% | 63.469 / 57.359 |
+| 1,000 files, 49 rules | 83.251 | 75.675 | 9.1% | 63.797 / 57.516 |
+
+RSS values are medians of five separate measurements. Reproduce this native-only
+comparison with `--scenarios=control`, the two binaries and source refs, and
+`--before-zig`, `--after-zig`, `--before-build-mode=ReleaseFast`, and
+`--after-build-mode=fast` pointing to the corresponding toolchains.
+
+The [upgrade-only CodSpeed report](https://github.com/utooland/utoo-lint/pull/1295#issuecomment-6345348918)
+flagged slower Linux wall times, but also warns that the two runs used different
+runner types. Unchanged configuration-discovery cases were slower as well.
+The local native controls did not reproduce that regression; they do not resolve
+the Linux alert or establish performance for every workload. Keep the CI report
+separate from these controlled macOS measurements.
 
 ## Published website chart
 
