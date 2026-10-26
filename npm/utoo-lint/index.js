@@ -698,7 +698,9 @@ export class Linter {
       config: calculatedConfig({ cwd: verifyOptions.cwd, noConfig: true, overrideConfig: config }, normalizedFilePath)
     });
     const nativeRuleFilter = applyDisableDirectives(
-      (report.diagnostics ?? []).map((diagnostic) => diagnosticToESLintMessage(diagnostic, ruleSeverities)),
+      (report.diagnostics ?? [])
+        .filter((diagnostic) => !isRuleDefinitionError(diagnostic) || !customRuleMap.has(diagnostic.ruleId))
+        .map((diagnostic) => diagnosticToESLintMessage(diagnostic, ruleSeverities)),
       sourceCode
     );
     const customRuleFilter = applyDisableDirectives(customRuleMessages, sourceCode);
@@ -1285,7 +1287,7 @@ function applyDisableDirectives(messages, sourceCode) {
   const kept = [];
   const suppressed = [];
   for (const message of messages) {
-    if (!message.ruleId || message.ruleId === "parse" || message.ruleId === "io") {
+    if (!message.ruleId || message.ruleId === "parse" || message.ruleId === "io" || isRuleDefinitionError(message)) {
       kept.push(message);
       continue;
     }
@@ -4523,7 +4525,7 @@ function reportToESLintResults(report, textOptions = {}) {
       byFile.set(filePath, emptyESLintResult(filePath, textOptions.source));
     }
     const ruleSeverities = textOptions.ruleSeverityForFile?.(filePath) ?? textOptions.ruleSeverities;
-    if (diagnostic.ruleId && ruleSeverities?.get(diagnostic.ruleId) === 0) {
+    if (!isRuleDefinitionError(diagnostic) && diagnostic.ruleId && ruleSeverities?.get(diagnostic.ruleId) === 0) {
       continue;
     }
     byFile.get(filePath).messages.push(diagnosticToESLintMessage(diagnostic, ruleSeverities));
@@ -4535,7 +4537,7 @@ function reportToESLintResults(report, textOptions = {}) {
       byFile.set(filePath, emptyESLintResult(filePath, textOptions.source));
     }
     const ruleSeverities = textOptions.ruleSeverityForFile?.(filePath) ?? textOptions.ruleSeverities;
-    if (diagnostic.ruleId && ruleSeverities?.get(diagnostic.ruleId) === 0) {
+    if (!isRuleDefinitionError(diagnostic) && diagnostic.ruleId && ruleSeverities?.get(diagnostic.ruleId) === 0) {
       continue;
     }
     byFile.get(filePath).suppressedMessages.push(suppressedDiagnosticToESLintMessage(diagnostic, ruleSeverities));
@@ -4591,8 +4593,19 @@ function applyCompatibilityDisableDirectives(result, textOptions) {
   result.suppressedMessages.push(...filtered.suppressedMessages);
 }
 
+function isRuleDefinitionError(diagnostic) {
+  return typeof diagnostic?.ruleId === "string"
+    && diagnostic.message === `Definition for rule '${diagnostic.ruleId}' was not found.`;
+}
+
 function normalizeReportDiagnostics(diagnostics, options = {}) {
   return (diagnostics ?? []).flatMap((diagnostic) => {
+    if (isRuleDefinitionError(diagnostic)) {
+      // Native cannot see JS plugin definitions. A mounted rule is known even
+      // when it is disabled or emits no messages for this file.
+      const filePath = options.pluginTextFilePath ?? diagnostic.filePath;
+      return jsPluginRuleMapForFile(options, filePath).has(diagnostic.ruleId) ? [] : [diagnostic];
+    }
     if (!diagnostic?.ruleId) {
       return [diagnostic];
     }
@@ -5314,7 +5327,9 @@ function emptyESLintResult(filePath, source) {
 function diagnosticToESLintMessage(diagnostic, ruleSeverities) {
   const message = {
     ruleId: diagnostic.ruleId,
-    severity: ruleSeverities?.get(diagnostic.ruleId) ?? (diagnostic.severity === "error" ? 2 : 1),
+    severity: isRuleDefinitionError(diagnostic)
+      ? 2
+      : ruleSeverities?.get(diagnostic.ruleId) ?? (diagnostic.severity === "error" ? 2 : 1),
     message: diagnostic.message,
     line: diagnostic.line,
     column: diagnostic.column,

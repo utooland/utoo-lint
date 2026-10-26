@@ -409,3 +409,104 @@ test "a named range end does not close an all-rules range" {
 
     try std.testing.expectEqual(@as(usize, 1), helpers.countRule(result, lint.rules.no_debugger.id));
 }
+
+test "unknown ESLint disable rules report alongside existing diagnostics at the comment span" {
+    const source = "// eslint-disable-next-line unknown-rule\ndebugger;";
+    var options = lint.Options.allDisabled();
+    options.no_debugger = true;
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.js", options);
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), result.diagnostics.len);
+    try std.testing.expectEqual(@as(usize, 1), helpers.countRule(result, "no-debugger"));
+    for (result.diagnostics) |diagnostic| {
+        if (!std.mem.eql(u8, diagnostic.rule_id, "unknown-rule")) continue;
+        try std.testing.expectEqualStrings("Definition for rule 'unknown-rule' was not found.", diagnostic.message);
+        try std.testing.expectEqual(lint.Severity.@"error", diagnostic.severity);
+        try std.testing.expectEqual(@as(u32, 0), diagnostic.span.start);
+        try std.testing.expectEqual(@as(u32, 40), diagnostic.span.end);
+    }
+    try std.testing.expectEqual(@as(usize, 1), helpers.countRule(result, "unknown-rule"));
+    try std.testing.expectEqual(@as(usize, 0), result.suppressed_diagnostics.len);
+}
+
+test "unknown ESLint rules report with every directive even when all rules are disabled" {
+    const comments = [_][]const u8{
+        "/* eslint-disable unknown-rule */",
+        "/* eslint-enable unknown-rule */",
+        "// eslint-disable-next-line unknown-rule",
+        "// eslint-disable-line unknown-rule",
+    };
+    for (comments) |source| {
+        var result = try lint.lintSource(std.testing.allocator, source, "fixture.js", lint.Options.allDisabled());
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+        const diagnostic = result.diagnostics[0];
+        try std.testing.expectEqualStrings("unknown-rule", diagnostic.rule_id);
+        try std.testing.expectEqual(@as(u32, 0), diagnostic.span.start);
+        try std.testing.expectEqual(@as(u32, @intCast(source.len)), diagnostic.span.end);
+        try std.testing.expectEqual(@as(usize, 0), diagnostic.fixes.len);
+    }
+}
+
+test "unknown ESLint rules stay visible under broad suppression and do not break known targets" {
+    const source =
+        \\/* eslint-disable */
+        \\/* eslint-disable no-debugger, missing-rule, missing-rule -- explanation */
+        \\debugger;
+        \\/* eslint-enable missing-rule */
+    ;
+    var options = lint.Options.allDisabled();
+    options.no_debugger = true;
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.js", options);
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), result.diagnostics.len);
+    try std.testing.expectEqual(@as(usize, 2), helpers.countRule(result, "missing-rule"));
+    try std.testing.expectEqual(@as(usize, 1), result.suppressed_diagnostics.len);
+    try std.testing.expectEqualStrings("no-debugger", result.suppressed_diagnostics[0].rule_id);
+}
+
+test "known disabled native and plugin rule names remain valid ESLint directive targets" {
+    const source =
+        \\/* eslint-disable no-debugger, @typescript-eslint/no-unused-vars, react/jsx-no-target-blank, no-sequences, parse */
+        \\/* eslint-enable no-debugger */
+        \\// eslint-disable-next-line no-extra-semi
+        \\void 0;
+    ;
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.js", lint.Options.allDisabled());
+    defer result.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+}
+
+test "unknown ESLint directive rule IDs outlive the source buffer" {
+    const source = try std.testing.allocator.dupe(u8, "// eslint-disable-next-line unknown-rule\n");
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.js", lint.Options.allDisabled());
+    std.testing.allocator.free(source);
+    defer result.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("unknown-rule", result.diagnostics[0].rule_id);
+}
+
+test "unknown-rule validation is specific to valid ESLint directives" {
+    const source =
+        \\// utlint-ignore missing-rule: independently defined syntax
+        \\/* utlint-ignore-start missing-rule */
+        \\/* utlint-ignore-end missing-rule */
+        \\const text = "// eslint-disable-next-line missing-rule";
+        \\// eslint-disable missing-rule
+        \\// eslint-enable missing-rule
+        \\/* eslint-disable-line missing-rule
+        \\ */
+    ;
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.js", lint.Options.allDisabled());
+    defer result.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+}
+
+test "native option flags are not defined ESLint rules" {
+    const source = "/* eslint-disable no-unused-vars-ignore-rest-siblings */";
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.js", lint.Options.allDisabled());
+    defer result.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+    try std.testing.expectEqualStrings("no-unused-vars-ignore-rest-siblings", result.diagnostics[0].rule_id);
+}
