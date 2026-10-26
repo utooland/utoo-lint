@@ -116,7 +116,8 @@ const Visitor = struct {
     }
 
     fn aliasDependsOnInterface(self: *const Visitor, tree: *const ast.Tree, base: ast.Span, target: traverser.semantic.SymbolId) Allocator.Error!bool {
-        var visited: std.AutoHashMapUnmanaged(traverser.semantic.SymbolId, void) = .empty;
+        const Dependency = struct { symbol: traverser.semantic.SymbolId, value_query: bool };
+        var visited: std.AutoHashMapUnmanaged(Dependency, void) = .empty;
         defer visited.deinit(self.allocator);
         var pending: std.ArrayList(ast.Span) = .empty;
         defer pending.deinit(self.allocator);
@@ -126,12 +127,17 @@ const Visitor = struct {
             while (references.next()) |reference| {
                 const span = tree.span(reference.reference.node);
                 if (span.start < dependency.start or span.end > dependency.end) continue;
-                const symbol = self.symbols.referenceSymbol(reference.id);
+                const symbol = self.dependencySymbol(tree, reference.id);
                 if (symbol == .none) continue;
                 if (symbol == target) return true;
-                const entry = try visited.getOrPut(self.allocator, symbol);
+                const value_query = self.isTypeQueryReference(tree, reference.reference.node);
+                const entry = try visited.getOrPut(self.allocator, .{ .symbol = symbol, .value_query = value_query });
                 if (entry.found_existing) continue;
                 for (self.symbols.symbolDecls(symbol)) |declaration| {
+                    if (tree.data(declaration) == .binding_identifier) {
+                        const annotation = tree.data(declaration).binding_identifier.type_annotation;
+                        if (annotation != .null) try pending.append(self.allocator, tree.span(annotation));
+                    }
                     const parent = self.symbols.parentOf(declaration) orelse continue;
                     switch (tree.data(parent)) {
                         .ts_type_alias_declaration => |alias| {
@@ -152,12 +158,79 @@ const Visitor = struct {
                                 }
                             }
                         },
+                        .variable_declarator => |variable| {
+                            if (variable.init != .null) try pending.append(self.allocator, tree.span(variable.init));
+                        },
+                        .function => |function| {
+                            if (function.return_type != .null) try pending.append(self.allocator, tree.span(function.return_type));
+                            if (function.type_parameters != .null) try pending.append(self.allocator, tree.span(function.type_parameters));
+                            try pending.append(self.allocator, tree.span(function.params));
+                        },
+                        .class => |class| {
+                            // A class type retains an object barrier, while a
+                            // query of its static members can expose an alias cycle.
+                            if (value_query) try pending.append(self.allocator, tree.span(class.body));
+                        },
                         // Non-convertible interfaces retain the indirection
                         // that permits recursive object types.
                         else => {},
                     }
                 }
             }
+        }
+        return false;
+    }
+
+    fn dependencySymbol(self: *const Visitor, tree: *const ast.Tree, reference: traverser.semantic.ReferenceId) traverser.semantic.SymbolId {
+        var current = self.symbols.getReference(reference).node;
+        while (self.symbols.parentOf(current)) |parent| {
+            switch (tree.data(parent)) {
+                .ts_qualified_name => |qualified| if (qualified.left != current) break,
+                .member_expression => |member| if (member.object != current or member.computed) break,
+                else => break,
+            }
+            current = parent;
+        }
+        return self.entityNameSymbol(tree, current, self.symbols.symbols.len);
+    }
+
+    fn entityNameSymbol(self: *const Visitor, tree: *const ast.Tree, index: ast.NodeIndex, aliases_remaining: usize) traverser.semantic.SymbolId {
+        const parts: ?struct { owner: ast.NodeIndex, property: ast.NodeIndex } = switch (tree.data(index)) {
+            .ts_qualified_name => |qualified| .{ .owner = qualified.left, .property = qualified.right },
+            .member_expression => |member| if (!member.computed) .{ .owner = member.object, .property = member.property } else return .none,
+            else => null,
+        };
+        const symbol = if (parts) |qualified| block: {
+            const owner = self.entityNameSymbol(tree, qualified.owner, aliases_remaining);
+            if (owner == .none) return .none;
+            const name = switch (tree.data(qualified.property)) {
+                .identifier_name => |identifier| tree.string(identifier.name),
+                else => return .none,
+            };
+            // Namespace exports have their own symbols. Object properties use
+            // their owner's type-bearing metadata conservatively instead.
+            break :block self.symbols.model.member(owner, name, .any) orelse owner;
+        } else self.symbols.symbolOf(index) orelse return .none;
+        for (self.symbols.symbolDecls(symbol)) |declaration| {
+            const parent = self.symbols.parentOf(declaration) orelse continue;
+            if (tree.data(parent) != .ts_import_equals_declaration) continue;
+            const alias = tree.data(parent).ts_import_equals_declaration;
+            if (tree.data(alias.module_reference) == .ts_external_module_reference) continue;
+            if (aliases_remaining == 0) return .none;
+            return self.entityNameSymbol(tree, alias.module_reference, aliases_remaining - 1);
+        }
+        return symbol;
+    }
+
+    fn isTypeQueryReference(self: *const Visitor, tree: *const ast.Tree, node: ast.NodeIndex) bool {
+        var current = node;
+        while (self.symbols.parentOf(current)) |parent| {
+            switch (tree.data(parent)) {
+                .ts_qualified_name, .member_expression => {},
+                .ts_type_query => return true,
+                else => return false,
+            }
+            current = parent;
         }
         return false;
     }

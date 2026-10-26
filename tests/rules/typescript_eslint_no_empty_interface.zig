@@ -132,6 +132,46 @@ test "autofixes @typescript-eslint/no-empty-interface single-base declarations a
             .source = "export type A<T> = T[]; type C<T extends object = object> = T; export interface B extends A<C> {}",
             .expected = "export type A<T> = T[]; type C<T extends object = object> = T; export type B = A<C>",
         },
+        .{
+            .source = "export type A<T> = T[]; namespace NS { export type C = number; export type Other = B; } export interface B extends A<NS.C> {}",
+            .expected = "export type A<T> = T[]; namespace NS { export type C = number; export type Other = B; } export type B = A<NS.C>",
+        },
+        .{
+            .source = "namespace NS { export type Base<T> = { value: T }; } export interface B extends NS.Base<number> {}",
+            .expected = "namespace NS { export type Base<T> = { value: T }; } export type B = NS.Base<number>",
+        },
+        .{
+            .source = "export type A<T>=T[]; namespace NS { export type C=number; } import C=NS.C; export interface B extends A<C>{}",
+            .expected = "export type A<T>=T[]; namespace NS { export type C=number; } import C=NS.C; export type B = A<C>",
+        },
+        .{
+            .source = "export type A<T>=T[]; namespace NS { export type C=number; } import Alias=NS; export interface B extends A<Alias.C>{}",
+            .expected = "export type A<T>=T[]; namespace NS { export type C=number; } import Alias=NS; export type B = A<Alias.C>",
+        },
+        .{
+            .source = "export declare const value: number[]; type A=typeof value; export interface B extends A {}",
+            .expected = "export declare const value: number[]; type A=typeof value; export type B = A",
+        },
+        .{
+            .source = "export declare function value(): number[]; type A=ReturnType<typeof value>; export interface B extends A {}",
+            .expected = "export declare function value(): number[]; type A=ReturnType<typeof value>; export type B = A",
+        },
+        .{
+            .source = "export declare const value: {items: number[]}; type A=typeof value.items; export interface B extends A {}",
+            .expected = "export declare const value: {items: number[]}; type A=typeof value.items; export type B = A",
+        },
+        .{
+            .source = "export const value=[] as number[]; type A=typeof value; export interface B extends A {}",
+            .expected = "export const value=[] as number[]; type A=typeof value; export type B = A",
+        },
+        .{
+            .source = "export class Holder { static value: number[]; } type A=typeof Holder.value; export interface B extends A {}",
+            .expected = "export class Holder { static value: number[]; } type A=typeof Holder.value; export type B = A",
+        },
+        .{
+            .source = "export class A { next?: B; } export interface B extends A {}",
+            .expected = "export class A { next?: B; } export type B = A",
+        },
     };
     var options = lint.Options.allDisabled();
     options.typescript_eslint_no_empty_interface = true;
@@ -162,6 +202,23 @@ test "does not autofix @typescript-eslint/no-empty-interface when comments or de
         "export type A<T> = T[]; type C<T = B> = T; export interface B extends A<C> {}",
         "export type A<T> = T[]; type C<T extends B = B> = T; export interface B extends A<C> {}",
         "export type A<T> = T[]; type C<T = D> = T; type D = B; export interface B extends A<C> {}",
+        "export type A<T> = T[]; namespace NS { export type C = B; } export interface B extends A<NS.C> {}",
+        "export type A<T> = T[]; namespace NS { export type C = A<B>; } export interface B extends NS.C {}",
+        "export type A<T> = T[]; namespace NS { export namespace Inner { export type C = B; } } export interface B extends A<NS.Inner.C> {}",
+        "export type A<T> = T[]; namespace NS {} namespace NS { export type C = B; } export interface B extends A<NS.C> {}",
+        "export type A<T> = T[]; namespace NS { export type C<T = B> = T; } export interface B extends A<NS.C> {}",
+        "export type A<T>=T[]; namespace NS { export type C=B; } import C=NS.C; export interface B extends A<C>{}",
+        "export type A<T>=T[]; namespace NS { export type C=B; } import Alias=NS; export interface B extends A<Alias.C>{}",
+        "export type A<T>=T[]; namespace NS { export type C=B; } import Alias=NS; import C=Alias.C; export interface B extends A<C>{}",
+        "export declare const value: B[]; type A=typeof value; export interface B extends A {}",
+        "export declare function value(): B[]; type A=ReturnType<typeof value>; export interface B extends A {}",
+        "export declare const value: {items: B[]}; type A=typeof value.items; export interface B extends A {}",
+        "export const value=[] as B[]; type A=typeof value; export interface B extends A {}",
+        "export class Holder { static value: B[]; } type A=typeof Holder.value; export interface B extends A {}",
+        // Retaining a function object can be valid, but its signature may also
+        // be extracted by aliases or custom utilities. Leave this recursive
+        // metadata diagnostic-only until those contexts can be distinguished.
+        "export declare function value(): B[]; type A=typeof value; export interface B extends A {}",
         "export type A<T> = T[]; interface C extends B {} export interface B extends A<C> {}",
         "export {}; declare interface B extends A {}",
         "export {}; interface B extends A {} interface B { value: number; }",
