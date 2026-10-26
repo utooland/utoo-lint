@@ -1,0 +1,30 @@
+---
+fixture: "tests/snapshots/specs/typescript-eslint/no-namespace/declared-namespace.ts"
+rule: "@typescript-eslint/no-namespace"
+---
+
+# Input
+
+```ts
+declare namespace Foo { export const value: number; }
+```
+
+# Diagnostics
+
+count: 1
+
+## Diagnostic 1
+
+- rule: "@typescript-eslint/no-namespace"
+- severity: "error"
+- message: "TypeScript namespaces are not allowed."
+- byte span: 0..53
+- start: 1:1
+- end: 1:54
+- source: "declare namespace Foo { export const value: number; }"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

@@ -1,0 +1,19 @@
+---
+fixture: "tests/snapshots/specs/typescript-eslint/no-namespace/external-module.ts"
+rule: "@typescript-eslint/no-namespace"
+---
+
+# Input
+
+```ts
+declare module 'foo' { export const value: number; }
+```
+
+# Diagnostics
+
+count: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0
