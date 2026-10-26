@@ -1,4 +1,5 @@
 const std = @import("std");
+pub const max_autofix_passes: usize = 10;
 const parser = @import("parser");
 
 const ast = parser.ast;
@@ -1974,11 +1975,13 @@ pub const JsxA11yImgRedundantAltNames = struct {
 pub const max_typescript_eslint_ban_type_entries = 32;
 pub const max_typescript_eslint_ban_type_name_len = 128;
 pub const max_typescript_eslint_ban_type_message_len = 512;
+pub const max_typescript_eslint_ban_type_fix_len = 512;
 
 pub const TypescriptEslintBanTypesConfigError = error{
     EmptyBanTypeName,
     BanTypeNameTooLong,
     BanTypeMessageTooLong,
+    BanTypeFixTooLong,
     TooManyBanTypes,
 };
 
@@ -2015,6 +2018,19 @@ pub const TypescriptEslintBanTypeEntries = struct {
     message_lengths: [max_typescript_eslint_ban_type_entries]usize = undefined,
     names: [max_typescript_eslint_ban_type_entries][max_typescript_eslint_ban_type_name_len]u8 = undefined,
     messages: [max_typescript_eslint_ban_type_entries][max_typescript_eslint_ban_type_message_len]u8 = undefined,
+    fix_lengths: [max_typescript_eslint_ban_type_entries]?usize = @splat(null),
+    fixes: [max_typescript_eslint_ban_type_entries][max_typescript_eslint_ban_type_fix_len]u8 = undefined,
+
+    pub fn fixFor(self: *const TypescriptEslintBanTypeEntries, name: []const u8) ?[]const u8 {
+        var index = self.count;
+        while (index > 0) {
+            index -= 1;
+            if (std.mem.eql(u8, self.nameAt(index), name)) {
+                return self.fixes[index][0..(self.fix_lengths[index] orelse return null)];
+            }
+        }
+        return null;
+    }
 
     pub fn messageFor(self: *const TypescriptEslintBanTypeEntries, name: []const u8) ?[]const u8 {
         var index = self.count;
@@ -2038,15 +2054,29 @@ pub const TypescriptEslintBanTypeEntries = struct {
         name: []const u8,
         message: []const u8,
     ) TypescriptEslintBanTypesConfigError!void {
+        return self.appendWithFix(name, message, null);
+    }
+
+    pub fn appendWithFix(
+        self: *TypescriptEslintBanTypeEntries,
+        name: []const u8,
+        message: []const u8,
+        fix: ?[]const u8,
+    ) TypescriptEslintBanTypesConfigError!void {
         if (name.len == 0) return error.EmptyBanTypeName;
         if (name.len > max_typescript_eslint_ban_type_name_len) return error.BanTypeNameTooLong;
         if (message.len > max_typescript_eslint_ban_type_message_len) return error.BanTypeMessageTooLong;
+        if (fix) |replacement| {
+            if (replacement.len > max_typescript_eslint_ban_type_fix_len) return error.BanTypeFixTooLong;
+        }
         if (self.count >= max_typescript_eslint_ban_type_entries) return error.TooManyBanTypes;
 
         @memcpy(self.names[self.count][0..name.len], name);
         @memcpy(self.messages[self.count][0..message.len], message);
         self.name_lengths[self.count] = name.len;
         self.message_lengths[self.count] = message.len;
+        self.fix_lengths[self.count] = if (fix) |replacement| replacement.len else null;
+        if (fix) |replacement| @memcpy(self.fixes[self.count][0..replacement.len], replacement);
         self.count += 1;
     }
 };
@@ -6116,7 +6146,11 @@ pub const Options = struct {
                         .string => |message| message,
                         else => return error.UnsupportedRuleConfigValue,
                     } else defaultBanTypeMessage(name);
-                    try appendBanTypeConfig(&config.custom, name, message);
+                    const replacement = if (object.get("fixWith")) |fix_value| switch (fix_value) {
+                        .string => |fix| fix,
+                        else => return error.UnsupportedRuleConfigValue,
+                    } else null;
+                    config.custom.appendWithFix(name, message, replacement) catch return error.UnsupportedRuleConfigValue;
                 },
                 else => return error.UnsupportedRuleConfigValue,
             }

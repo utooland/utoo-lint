@@ -1,0 +1,31 @@
+---
+fixture: "tests/snapshots/specs/typescript-eslint/no-empty-interface/merged-interface.ts"
+rule: "@typescript-eslint/no-empty-interface"
+---
+
+# Input
+
+```ts
+export interface B extends A {}
+export interface B { value: number; }
+```
+
+# Diagnostics
+
+count: 1
+
+## Diagnostic 1
+
+- rule: "@typescript-eslint/no-empty-interface"
+- severity: "warning"
+- message: "An interface declaring no members is equivalent to its supertype."
+- byte span: 17..18
+- start: 1:18
+- end: 1:19
+- source: "B"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0

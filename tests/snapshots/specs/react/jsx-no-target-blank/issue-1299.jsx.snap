@@ -1,0 +1,64 @@
+---
+fixture: "tests/snapshots/specs/react/jsx-no-target-blank/issue-1299.jsx"
+rule: "react/jsx-no-target-blank"
+---
+
+# Input
+
+```jsx
+export const x = <a href="https://x" target="_blank" />;
+export const dynamic = <a href={url} target="_blank" rel="noopener" />;
+```
+
+# Diagnostics
+
+count: 2
+
+## Diagnostic 1
+
+- rule: "react/jsx-no-target-blank"
+- severity: "error"
+- message: "Using target=\"_blank\" without rel=\"noreferrer\" (which implies rel=\"noopener\") is a security risk in older browsers: see https://mathiasbynens.github.io/rel-noopener/#recommendations"
+- byte span: 17..55
+- start: 1:18
+- end: 1:56
+- source: "<a href=\"https://x\" target=\"_blank\" />"
+- fixes: 1
+
+### Fix 1.1
+
+- byte span: 52..52
+- start: 1:53
+- end: 1:53
+- source: ""
+- replacement: " rel=\"noreferrer\""
+
+## Diagnostic 2
+
+- rule: "react/jsx-no-target-blank"
+- severity: "error"
+- message: "Using target=\"_blank\" without rel=\"noreferrer\" (which implies rel=\"noopener\") is a security risk in older browsers: see https://mathiasbynens.github.io/rel-noopener/#recommendations"
+- byte span: 80..127
+- start: 2:24
+- end: 2:71
+- source: "<a href={url} target=\"_blank\" rel=\"noopener\" />"
+- fixes: 1
+
+### Fix 2.1
+
+- byte span: 123..123
+- start: 2:67
+- end: 2:67
+- source: ""
+- replacement: " noreferrer"
+
+# First fix pass
+
+- fixed: true
+- applied diagnostics: 2
+- remaining diagnostics: 0
+
+```jsx
+export const x = <a href="https://x" target="_blank" rel="noreferrer" />;
+export const dynamic = <a href={url} target="_blank" rel="noopener noreferrer" />;
+```

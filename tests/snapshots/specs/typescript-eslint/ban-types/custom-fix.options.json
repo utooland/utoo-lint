@@ -1,0 +1,15 @@
+{
+  "expect": "diagnostics",
+  "diagnostic_count": 1,
+  "fixes": "required",
+  "rule_options": [
+    "error",
+    {
+      "types": {
+        "Old": {
+          "fixWith": "string | number"
+        }
+      }
+    }
+  ]
+}
