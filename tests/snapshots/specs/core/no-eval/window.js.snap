@@ -1,0 +1,30 @@
+---
+fixture: "tests/snapshots/specs/core/no-eval/window.js"
+rule: "no-eval"
+---
+
+# Input
+
+```js
+window.eval("x");
+```
+
+# Diagnostics
+
+count: 1
+
+## Diagnostic 1
+
+- rule: "no-eval"
+- severity: "warning"
+- message: "eval can be harmful."
+- byte span: 0..16
+- start: 1:1
+- end: 1:17
+- source: "window.eval(\"x\")"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0
