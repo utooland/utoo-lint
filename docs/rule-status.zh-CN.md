@@ -429,7 +429,7 @@
 | [`@typescript-eslint/no-unnecessary-type-constraint`](https://typescript-eslint.io/rules/no-unnecessary-type-constraint/) | 已实现 |
 | [`@typescript-eslint/no-useless-constructor`](https://typescript-eslint.io/rules/no-useless-constructor/) | 已实现 |
 | [`@typescript-eslint/no-useless-empty-export`](https://typescript-eslint.io/rules/no-useless-empty-export/) | 已实现 |
-| [`@typescript-eslint/no-unused-expressions`](https://typescript-eslint.io/rules/no-unused-expressions/) | 支持 `allowShortCircuit`、`allowTernary` 和 `allowTaggedTemplates` 配置 |
+| [`@typescript-eslint/no-unused-expressions`](https://typescript-eslint.io/rules/no-unused-expressions/) | 支持 `allowShortCircuit`、`allowTernary` 和 `allowTaggedTemplates`；会报告 `value as string;` 这类独立类型断言，与 TypeScript ESLint 5.62.0 不同（[迁移说明](/zh-CN/eslint-migration#typescript-类型断言表达式)） |
 | [`@typescript-eslint/no-unused-vars`](https://typescript-eslint.io/rules/no-unused-vars/) | 支持 `vars`、`args`、`caughtErrors`、`ignoreRestSiblings`、`ignoreClassWithStaticInitBlock`、`ignoreUsingDeclarations`、`reportUsedIgnorePattern`，以及常见的 `argsIgnorePattern`/`caughtErrorsIgnorePattern`/`destructuredArrayIgnorePattern`/`varsIgnorePattern` 配置 |
 | [`@typescript-eslint/no-use-before-define`](https://typescript-eslint.io/rules/no-use-before-define/) | 支持 `functions`、`classes`、`variables`、`typedefs`、`enums`、`allowNamedExports` 和 `ignoreTypeReferences` 配置 |
 | [`@typescript-eslint/no-var-requires`](https://typescript-eslint.io/rules/no-var-requires/) | 已实现 |
