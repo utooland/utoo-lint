@@ -6,6 +6,16 @@ const ast = parser.ast;
 const scoped = parser.traverser.scoped;
 const Allocator = std.mem.Allocator;
 
+const delete_message = "Deleting a variable in strict mode is not allowed";
+const with_message = "'with' statements are not allowed in strict mode";
+
+// Semantic analysis already performs these checks. Reuse its diagnostics when
+// another rule requested the model, without a second AST scan or scope walk.
+pub fn isDiagnostic(diagnostic: ast.Diagnostic) bool {
+    return diagnostic.severity == .@"error" and
+        (std.mem.eql(u8, diagnostic.message, delete_message) or std.mem.eql(u8, diagnostic.message, with_message));
+}
+
 // These early errors are syntax failures even when optional semantic lint
 // checking is disabled. Reuse Yuku's lexical scope and directive tracking.
 pub fn appendDiagnostics(
@@ -48,7 +58,7 @@ const Visitor = struct {
             }
         }
         if (target != .null and ctx.tree.data(target) == .identifier_reference) {
-            try self.report(ctx.tree.span(index), "Deleting a variable in strict mode is not allowed");
+            try self.report(ctx.tree.span(index), delete_message);
         }
         return .proceed;
     }
@@ -60,7 +70,7 @@ const Visitor = struct {
         ctx: *scoped.Ctx,
     ) Allocator.Error!parser.traverser.Action {
         if (ctx.scope.get(ctx.scope.current).flags.strict) {
-            try self.report(ctx.tree.span(index), "'with' statements are not allowed in strict mode");
+            try self.report(ctx.tree.span(index), with_message);
         }
         return .proceed;
     }

@@ -83,6 +83,7 @@ test "strict syntax remains a fatal parse error when lint rules are disabled" {
         .{ .source = "const f = () => { 'use strict'; delete x; };", .path = "fixture.cjs" },
         .{ .source = "class C { method() { with (obj) {} } }", .path = "fixture.cjs" },
         .{ .source = "/* eslint-disable */\n'use strict'; delete x;", .path = "fixture.cjs" },
+        .{ .source = "// eslint-disable-next-line unknown-rule\nwith (obj) {}", .path = "fixture.js" },
     };
     for (cases) |case| {
         var options = lint.Options.allDisabled();
@@ -93,6 +94,12 @@ test "strict syntax remains a fatal parse error when lint rules are disabled" {
         try std.testing.expectEqual(lint.Severity.@"error", result.diagnostics[0].severity);
         try std.testing.expectEqual(@as(usize, 0), result.suppressed_diagnostics.len);
 
+        options.parser_semantic_errors = true;
+        var checked = try lint.lintSource(std.testing.allocator, case.source, case.path, options);
+        defer checked.deinit(std.testing.allocator);
+        try std.testing.expectEqualDeep(result.diagnostics, checked.diagnostics);
+
+        options.parser_semantic_errors = false;
         options.no_delete_var = true;
         options.no_with = true;
         options.no_array_constructor = true;

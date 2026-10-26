@@ -68,6 +68,8 @@ test("reports strict syntax as parse errors with empty rules", async () => {
     const strict = linter.lint(`'use strict'; ${source}`, { filePath: "input.cjs", rules: {} });
     assert.equal(strict.diagnostics.length, 1);
     assert.equal(strict.diagnostics[0].ruleId, "parse");
+    const unknownDirective = linter.lint(`// eslint-disable-next-line unknown-rule\n${source}`, { filePath: "input.js", rules: {} });
+    assert.deepEqual(unknownDirective.diagnostics.map(({ ruleId }) => ruleId), ["parse"]);
   }
   assert.throws(
     () => linter.lint("delete x;", { sourceType: "unknown", rules: {} }),

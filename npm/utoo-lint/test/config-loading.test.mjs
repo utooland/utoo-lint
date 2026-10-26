@@ -2720,7 +2720,7 @@ test("strict parse failures skip ESM and CJS custom rule and parser listeners", 
       rules: { "custom/report": "error" }
     };
     const engine = new Engine({ cwd, binary: testBinary(), overrideConfigFile: true, overrideConfig: config });
-    const source = "/* eslint-disable */\nwith (obj) {}";
+    const source = "/* eslint-disable custom/report */\nwith (obj) {}";
     const [textResult] = await engine.lintText(source, { filePath: "invalid.js" });
     const path = write(join(cwd, "invalid.js"), source);
     const [fileResult] = await engine.lintFiles([path]);
@@ -2730,14 +2730,31 @@ test("strict parse failures skip ESM and CJS custom rule and parser listeners", 
       assert.equal(result.messages[0].fatal, true);
     }
     const linter = new SyncLinter();
-    linter.defineRule("custom", rule);
+    linter.defineRule("custom/report", rule);
     linter.defineParser("custom", { parse() { parses += 1; throw new Error("must not parse invalid source"); } });
-    const messages = linter.verify(source, { ...config, parser: "custom", rules: { custom: "error" } }, { cwd, filename: path });
+    const messages = linter.verify(source, { ...config, parser: "custom", rules: { "custom/report": "error" } }, { cwd, filename: path });
     assert.equal(messages.length, 1);
     assert.equal(messages[0].fatal, true);
     assert.equal(linter.getSourceCode(), null);
     assert.equal(creates, 0);
     assert.equal(parses, 0);
+  }
+});
+
+test("strict parse failures precede unknown disable directive validation", async (t) => {
+  const cwd = createProject(t);
+  const source = "// eslint-disable-next-line unknown-rule\nwith (obj) {}";
+  const config = write(join(cwd, "utlint.config.json"), JSON.stringify({ rules: {} }));
+  const path = write(join(cwd, "invalid.js"), source);
+  const native = spawnSync(testBinary(), [`--config=${config}`, "--format=json", path], { cwd, encoding: "utf8" });
+  assert.equal(native.status, 1, native.stderr);
+  assert.deepEqual(JSON.parse(native.stdout).diagnostics.map(({ ruleId }) => ruleId), ["parse"]);
+  for (const Engine of [ESLint, CommonJSESLint]) {
+    const engine = new Engine({ cwd, binary: testBinary(), overrideConfigFile: true, overrideConfig: { rules: {} } });
+    const [result] = await engine.lintText(source, { filePath: "invalid.js" });
+    assert.equal(result.fatalErrorCount, 1);
+    assert.deepEqual(result.messages.map(({ ruleId }) => ruleId), ["parse"]);
+    assert.deepEqual(result.suppressedMessages, []);
   }
 });
 

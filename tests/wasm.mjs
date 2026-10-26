@@ -157,6 +157,8 @@ test("strict syntax stays fatal independently of rules and respects script mode"
     const strict = linter.lint(`/* eslint-disable */\n'use strict'; ${source}`, { filePath: "input.cjs", rules: {} });
     assert.equal(strict.diagnostics.length, 1);
     assert.equal(strict.diagnostics[0].ruleId, "parse");
+    const unknownDirective = linter.lint(`// eslint-disable-next-line unknown-rule\n${source}`, { filePath: "input.js", rules: {} });
+    assert.deepEqual(unknownDirective.diagnostics.map(({ ruleId }) => ruleId), ["parse"]);
     assert.deepEqual(strict.suppressedDiagnostics, []);
   }
 });
