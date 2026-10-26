@@ -170,3 +170,20 @@ test "does not report no-invalid-regexp for unique or mutually exclusive capture
     defer result.deinit(std.testing.allocator);
     try std.testing.expect(!helpers.hasRule(result, lint.rules.no_invalid_regexp.id));
 }
+
+test "reports no-invalid-regexp for malformed capture names without corrupting group nesting" {
+    const source =
+        \\RegExp("(?<a(b)>x)");
+        \\RegExp("(?<a)(b>x)");
+        \\RegExp("(?<a[]b>x)");
+        \\RegExp("(?<a|b>x)");
+        \\RegExp("(?<1a>x)");
+        \\RegExp("(?<>x)");
+        \\RegExp("(?<\\u0028>x)");
+    ;
+    var options = lint.Options.allDisabled();
+    options.no_invalid_regexp = true;
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.js", options);
+    defer result.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 7), helpers.countRule(result, lint.rules.no_invalid_regexp.id));
+}

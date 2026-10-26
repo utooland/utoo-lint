@@ -215,6 +215,7 @@ fn validateCaptureNames(allocator: Allocator, pattern: []const u8, unicode_sets:
                     const name_start = index + 3;
                     const name_end = std.mem.indexOfScalarPos(u8, pattern, name_start, '>') orelse return "invalid capture group name";
                     const name = (try decodeCaptureName(scratch, pattern[name_start..name_end])) orelse return "invalid capture group name";
+                    if (!parser.lexical.isIdentifierName(name)) return "invalid capture group name";
                     const entry = try names.getOrPut(scratch, name);
                     const previous = if (entry.found_existing) entry.value_ptr.* else null;
                     var earlier = previous;
@@ -230,7 +231,7 @@ fn validateCaptureNames(allocator: Allocator, pattern: []const u8, unicode_sets:
                 try paths.append(scratch, .{ .parent = current, .depth = paths.items[current].depth + 1, .disjunction = child, .alternative = 0 });
                 current = child;
             },
-            ')' => current = paths.items[current].parent.?,
+            ')' => current = paths.items[current].parent orelse return "unmatched ')'",
             '|' => {
                 var next = paths.items[current];
                 next.alternative += 1;
