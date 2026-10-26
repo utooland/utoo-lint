@@ -63,6 +63,7 @@ function createApi(instance) {
     const optionsBytes = encoder.encode(JSON.stringify({
       version: ABI_VERSION,
       filePath: options.filePath ?? options.filename ?? "input.js",
+      ...(options.sourceType === undefined ? {} : { sourceType: options.sourceType }),
       fix: fix ? "apply" : "none",
       ...(options.rules === undefined ? {} : { rules: options.rules }),
       ...(options.settings === undefined ? {} : { settings: options.settings })

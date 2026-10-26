@@ -146,6 +146,23 @@ test("returns parser failures as diagnostics", () => {
   assert.ok(result.diagnostics.some((item) => item.ruleId === "parse"));
 });
 
+test("strict syntax stays fatal independently of rules and respects script mode", () => {
+  for (const source of ["let x = 1; delete x;", "with (obj) {}"]) {
+    const result = linter.lint(source, { filePath: "input.js", rules: {} });
+    assert.equal(result.diagnostics.length, 1);
+    assert.equal(result.diagnostics[0].ruleId, "parse");
+    assert.equal(result.diagnostics[0].severity, "error");
+    const sloppy = linter.lint(source, { filePath: "input.js", sourceType: "script", rules: {} });
+    assert.deepEqual(sloppy.diagnostics, []);
+    const strict = linter.lint(`/* eslint-disable */\n'use strict'; ${source}`, { filePath: "input.cjs", rules: {} });
+    assert.equal(strict.diagnostics.length, 1);
+    assert.equal(strict.diagnostics[0].ruleId, "parse");
+    const unknownDirective = linter.lint(`// eslint-disable-next-line unknown-rule\n${source}`, { filePath: "input.js", rules: {} });
+    assert.deepEqual(unknownDirective.diagnostics.map(({ ruleId }) => ruleId), ["parse"]);
+    assert.deepEqual(strict.suppressedDiagnostics, []);
+  }
+});
+
 test("applies configured severity and UTF-16 ranges", () => {
   const source = `const emoji = "😀中";\nconsole.log(emoji);`;
   const result = linter.lint(source, {
@@ -479,6 +496,9 @@ test("returns structured configuration errors", () => {
 
 test("returns structured raw ABI request errors", () => {
   assert.equal(callRaw("value;", "{").error.code, "INVALID_OPTIONS_JSON");
+  for (const sourceType of ["unknown", null, 1]) {
+    assert.equal(callRaw("delete x;", JSON.stringify({ version: 1, sourceType, rules: {} })).error.code, "INVALID_OPTIONS");
+  }
   assert.equal(
     callRaw("value;", JSON.stringify({ version: 2 })).error.code,
     "UNSUPPORTED_VERSION",

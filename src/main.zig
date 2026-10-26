@@ -187,7 +187,9 @@ pub fn main(init: std.process.Init) !void {
         } else if (std.mem.startsWith(u8, arg, "--rules=")) {
             const jest_global_aliases = options.jest_global_aliases;
             const jest_version = options.jest_version;
+            const source_type = options.source_type;
             options = lint.Options.allDisabled();
+            options.source_type = source_type;
             options.jest_global_aliases = jest_global_aliases;
             options.jest_version = jest_version;
             clearRuleSeverities(allocator, &rule_severities);
@@ -1377,10 +1379,11 @@ pub fn main(init: std.process.Init) !void {
     }
 
     const resolve_flat_rules = !hasRuleOverrideArg(args[1..]);
-    const flat_config_for_lint: ?*const flat_config.FlatConfig = if (resolve_flat_rules)
-        if (loaded_flat_config) |*loaded| loaded else null
-    else
-        null;
+    const flat_config_for_lint: ?*const flat_config.FlatConfig = if (loaded_flat_config) |*loaded| blk: {
+        loaded.rules_overridden = !resolve_flat_rules;
+        // Rule selection does not override the language mode of matching files.
+        break :blk if (resolve_flat_rules or loaded.hasSourceType()) loaded else null;
+    } else null;
     if (output_format == .json) {
         try lintFilesJson(allocator, io, files.items, options, &rule_severities, flat_config_for_lint, fix_mode, &stats, &json_diagnostics, &json_suppressed_diagnostics, &json_outputs);
         try writeJsonReport(io, stats, files.items, json_diagnostics.items, json_suppressed_diagnostics.items, json_outputs.items);
@@ -1613,6 +1616,24 @@ fn loadConfigObject(
                         "utoo-lint: invalid config {s} setting settings.jest.globalAliases: {s}\n",
                         .{ path, @errorName(err) },
                     );
+                    std.process.exit(2);
+                };
+            }
+        }
+    }
+    // Legacy parser options apply first; flat language options take precedence.
+    for ([_][]const u8{ "parserOptions", "languageOptions" }) |field| {
+        if (root.get(field)) |value| {
+            const object = switch (value) {
+                .object => |object| object,
+                else => {
+                    std.debug.print("utoo-lint: config {s} field \"{s}\" must be an object\n", .{ path, field });
+                    std.process.exit(2);
+                },
+            };
+            if (object.get("sourceType")) |source_type| {
+                options.setSourceTypeFromConfig(source_type) catch |err| {
+                    std.debug.print("utoo-lint: invalid config {s} field {s}.sourceType: {s}\n", .{ path, field, @errorName(err) });
                     std.process.exit(2);
                 };
             }
@@ -2269,8 +2290,21 @@ fn lintFileJson(
 ) !void {
     var resolved_config = if (config) |loaded| try loaded.resolveForFile(allocator, path) else null;
     defer if (resolved_config) |*resolved| resolved.deinit(allocator);
+    if (resolved_config) |*resolved| {
+        if (config.?.rules_overridden) {
+            // This payload belongs to the current file. Preserve its language
+            // mode while applying the explicitly selected CLI rules.
+            const source_type = resolved.options.source_type;
+            resolved.options = options;
+            resolved.options.source_type = source_type;
+        }
+    }
+    // Keep this value immutable so calls can borrow the existing large buffers.
     const effective_options = if (resolved_config) |*resolved| resolved.options else options;
-    const effective_rule_severities = if (resolved_config) |*resolved| &resolved.rule_severities else rule_severities;
+    const effective_rule_severities = if (resolved_config) |*resolved|
+        if (config.?.rules_overridden) rule_severities else &resolved.rule_severities
+    else
+        rule_severities;
 
     const source = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(max_file_size)) catch |err| {
         const message = try std.fmt.allocPrint(allocator, "unable to read file: {s}", .{@errorName(err)});
@@ -2320,8 +2354,21 @@ fn lintFile(
 ) !void {
     var resolved_config = if (config) |loaded| try loaded.resolveForFile(allocator, path) else null;
     defer if (resolved_config) |*resolved| resolved.deinit(allocator);
+    if (resolved_config) |*resolved| {
+        if (config.?.rules_overridden) {
+            // This payload belongs to the current file. Preserve its language
+            // mode while applying the explicitly selected CLI rules.
+            const source_type = resolved.options.source_type;
+            resolved.options = options;
+            resolved.options.source_type = source_type;
+        }
+    }
+    // Keep this value immutable so calls can borrow the existing large buffers.
     const effective_options = if (resolved_config) |*resolved| resolved.options else options;
-    const effective_rule_severities = if (resolved_config) |*resolved| &resolved.rule_severities else rule_severities;
+    const effective_rule_severities = if (resolved_config) |*resolved|
+        if (config.?.rules_overridden) rule_severities else &resolved.rule_severities
+    else
+        rule_severities;
 
     const source = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(max_file_size)) catch |err| {
         printLocked(io, print_mutex, "{s}: unable to read file: {s}\n", .{ path, @errorName(err) });

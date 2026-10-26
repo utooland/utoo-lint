@@ -3361,6 +3361,7 @@ pub const Options = struct {
     promise_no_callback_in_promise_timeouts_err: bool = false,
     promise_no_nesting: bool = true,
     promise_no_new_statics: bool = true,
+    source_type: ?ast.SourceType = null,
     parser_semantic_errors: bool = true,
     valid_typeof: bool = true,
     valid_typeof_require_string_literals: bool = false,
@@ -3371,6 +3372,14 @@ pub const Options = struct {
     yoda_style: YodaStyle = .never,
     yoda_only_equality: bool = false,
     yoda_except_range: bool = false,
+
+    pub fn setSourceTypeFromConfig(self: *Options, value: std.json.Value) error{InvalidSourceType}!void {
+        const name = switch (value) {
+            .string => |name| name,
+            else => return error.InvalidSourceType,
+        };
+        self.source_type = std.meta.stringToEnum(ast.SourceType, name) orelse return error.InvalidSourceType;
+    }
 
     pub fn allDisabled() Options {
         var options = Options{};

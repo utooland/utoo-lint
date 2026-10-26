@@ -58,7 +58,7 @@ test "does not autofix repeated property access or identifiers inside with" {
         \\}
     ;
 
-    var result = try lint.lintSourceAndFix(std.testing.allocator, source, "fixture.js", .{
+    var result = try lint.lintSourceAndFix(std.testing.allocator, source, "fixture.cjs", .{
         .eol_last = false,
         .no_undef = false,
         .parser_semantic_errors = false,
@@ -232,7 +232,7 @@ test "if autofix allows single properties but rejects nested access and with" {
         \\}
     ;
 
-    var result = try lint.lintSourceAndFix(std.testing.allocator, source, "fixture.js", .{
+    var result = try lint.lintSourceAndFix(std.testing.allocator, source, "fixture.cjs", .{
         .curly = false,
         .eol_last = false,
         .logical_assignment_operators_enforce_for_if_statements = .yes,

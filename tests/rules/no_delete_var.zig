@@ -8,7 +8,7 @@ test "reports no-delete-var for deleting identifiers" {
         \\delete undefined;
     ;
 
-    var result = try lint.lintSource(std.testing.allocator, source, "fixture.js", .{
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.cjs", .{
         .no_console = false,
         .no_unused_vars = false,
         .no_undef = false,
@@ -25,7 +25,7 @@ test "does not report no-delete-var for property deletion" {
         \\delete object["value"];
     ;
 
-    var result = try lint.lintSource(std.testing.allocator, source, "fixture.js", .{
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.cjs", .{
         .no_console = false,
         .no_unused_vars = false,
         .no_undef = false,
@@ -41,7 +41,7 @@ test "can disable no-delete-var" {
         \\delete value;
     ;
 
-    var result = try lint.lintSource(std.testing.allocator, source, "fixture.js", .{
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.cjs", .{
         .no_delete_var = false,
         .no_unused_vars = false,
         .no_undef = false,

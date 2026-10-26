@@ -4,6 +4,7 @@ const core = @import("core.zig");
 const fixer = @import("fixer.zig");
 const semantic_compat = @import("semantic_compat.zig");
 const suppressions = @import("suppressions.zig");
+const strict_syntax = @import("strict_syntax.zig");
 
 const ast = parser.ast;
 const Allocator = std.mem.Allocator;
@@ -167,29 +168,42 @@ fn lintSourceInternal(
         }
     }
 
-    var tree = try parseSource(allocator, source, path);
+    var tree = try parseSource(allocator, source, path, effective_options.source_type);
     defer tree.deinit();
 
     const needs_semantic = needsSemanticModel(effective_options);
+    // Semantic diagnostics also use the parse rule ID. Preserve their existing
+    // lint/suppression behavior; only actual syntax failures stop directives.
+    const syntax_fatal = hasParserSyntaxError(&tree, effective_options);
 
+    var strict_fatal = false;
     if (needs_semantic) {
         const semantic_model = try parser.semantic.analyze(&tree, .{ .check = true });
         var semantic_result = semantic_compat.Result.init(&tree, semantic_model);
         try semantic_result.symbol_table.resolveAll(semantic_result.scope_tree);
-        try appendParserDiagnostics(allocator, &diagnostics, &tree, effective_options);
-        try rules.runBasicWithOptionsPtr(allocator, &diagnostics, &tree, path, &effective_options);
-        if (with_io) {
-            try rules.runSemanticWithIo(allocator, &diagnostics, &tree, io, path, semantic_result, effective_options);
-        } else {
-            try rules.runSemantic(allocator, &diagnostics, &tree, semantic_result, effective_options);
+        strict_fatal = try appendParserDiagnostics(allocator, &diagnostics, &tree, &effective_options);
+        if (!strict_fatal) {
+            try rules.runBasicWithOptionsPtr(allocator, &diagnostics, &tree, path, &effective_options);
+            if (with_io) {
+                try rules.runSemanticWithIo(allocator, &diagnostics, &tree, io, path, semantic_result, effective_options);
+            } else {
+                try rules.runSemantic(allocator, &diagnostics, &tree, semantic_result, effective_options);
+            }
         }
     } else {
-        if (effective_options.parser_semantic_errors) try parser.semantic.check(&tree);
-        try appendParserDiagnostics(allocator, &diagnostics, &tree, effective_options);
-        try rules.runBasicWithOptionsPtr(allocator, &diagnostics, &tree, path, &effective_options);
+        if (effective_options.parser_semantic_errors) {
+            try parser.semantic.check(&tree);
+        } else {
+            strict_fatal = try strict_syntax.appendDiagnostics(allocator, &diagnostics, &tree);
+        }
+        strict_fatal = (try appendParserDiagnostics(allocator, &diagnostics, &tree, &effective_options)) or strict_fatal;
+        if (!strict_fatal) try rules.runBasicWithOptionsPtr(allocator, &diagnostics, &tree, path, &effective_options);
     }
 
-    try suppressions.apply(allocator, &diagnostics, &suppressed_diagnostics, &tree);
+    // Fatal syntax prevents lint comment validation as well as suppression.
+    if (!syntax_fatal and !strict_fatal) {
+        try suppressions.apply(allocator, &diagnostics, &suppressed_diagnostics, &tree);
+    }
 
     const owned_diagnostics = try diagnostics.toOwnedSlice(allocator);
     errdefer core.freeDiagnosticSlice(allocator, owned_diagnostics);
@@ -201,9 +215,10 @@ fn lintSourceInternal(
     };
 }
 
-fn parseSource(allocator: Allocator, source: []const u8, path: []const u8) Allocator.Error!ast.Tree {
+fn parseSource(allocator: Allocator, source: []const u8, path: []const u8, configured_source_type: ?ast.SourceType) Allocator.Error!ast.Tree {
+    const source_type = configured_source_type orelse ast.SourceType.fromPath(path);
     var tree = try parser.parse(allocator, source, .{
-        .source_type = ast.SourceType.fromPath(path),
+        .source_type = source_type,
         .lang = ast.Lang.fromPath(path),
     });
 
@@ -211,7 +226,7 @@ fn parseSource(allocator: Allocator, source: []const u8, path: []const u8) Alloc
     if (!tree.hasErrors()) return tree;
 
     var fallback_tree = try parser.parse(allocator, source, .{
-        .source_type = ast.SourceType.fromPath(path),
+        .source_type = source_type,
         .lang = fallback_lang,
     });
     if (fallback_tree.hasErrors()) {
@@ -451,10 +466,12 @@ fn appendParserDiagnostics(
     allocator: Allocator,
     diagnostics: *core.DiagnosticList,
     tree: *const ast.Tree,
-    options: Options,
-) Allocator.Error!void {
+    options: *const Options,
+) Allocator.Error!bool {
+    var strict_fatal = false;
     for (tree.diagnostics.items) |diagnostic| {
-        if (reactNoUnescapedEntitiesCoversParserDiagnostic(tree, diagnostic, options)) continue;
+        if (reactNoUnescapedEntitiesCoversParserDiagnostic(tree, diagnostic, options.*)) continue;
+        strict_fatal = strict_fatal or strict_syntax.isDiagnostic(diagnostic);
 
         try core.addDiagnostic(
             allocator,
@@ -465,6 +482,14 @@ fn appendParserDiagnostics(
             diagnostic.span,
         );
     }
+    return strict_fatal;
+}
+
+fn hasParserSyntaxError(tree: *const ast.Tree, options: Options) bool {
+    for (tree.diagnostics.items) |diagnostic| {
+        if (diagnostic.severity == .@"error" and !reactNoUnescapedEntitiesCoversParserDiagnostic(tree, diagnostic, options)) return true;
+    }
+    return false;
 }
 
 fn reactNoUnescapedEntitiesCoversParserDiagnostic(

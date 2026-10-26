@@ -2602,6 +2602,216 @@ test("raw native binary keeps parse errors fatal with an empty rules config", (t
   assert.ok(report.diagnostics.some((diagnostic) => diagnostic.ruleId === "parse" && diagnostic.severity === "error"));
 });
 
+test("strict syntax is fatal with empty rules and configured source types", (t) => {
+  const project = createProject(t);
+  for (const shape of ["object", "flat"]) {
+    for (const sourceType of ["module", "script", "commonjs"]) {
+      const entry = { languageOptions: { sourceType }, rules: {} };
+      const configPath = write(join(project, "utlint.config.json"), JSON.stringify(shape === "flat" ? [entry] : entry));
+      for (const code of ["let x = 1; delete x;", "with (obj) {}", "'use strict'; delete x;", "'use strict'; with (obj) {}"]) {
+        const sourcePath = write(join(project, "case.js"), code);
+        const result = spawnSync(testBinary(), [`--config=${configPath}`, "--format=json", sourcePath], { cwd: project, encoding: "utf8" });
+        const report = JSON.parse(result.stdout);
+        const invalid = sourceType === "module" || code.startsWith("'use strict'");
+        assert.equal(result.status, invalid ? 1 : 0, `${shape}/${sourceType}/${code}: ${result.stderr}`);
+        assert.equal(report.diagnostics.length, invalid ? 1 : 0);
+        assert.ok(report.diagnostics.every(({ ruleId, severity }) => ruleId === "parse" && severity === "error"));
+        const selected = spawnSync(testBinary(), [`--config=${configPath}`, "--rules=no-debugger", "--format=json", sourcePath], { cwd: project, encoding: "utf8" });
+        assert.equal(selected.status, invalid ? 1 : 0, selected.stderr);
+        assert.equal(JSON.parse(selected.stdout).diagnostics.length, invalid ? 1 : 0);
+      }
+    }
+  }
+});
+
+test("raw native CLI rule selection preserves each flat config source type", (t) => {
+  const cwd = createProject(t);
+  const script = write(join(cwd, "sloppy.js"), "delete x; with (obj) {}");
+  const module = write(join(cwd, "strict.cjs"), "delete x;");
+  const config = write(join(cwd, "utlint.config.json"), JSON.stringify([
+    { files: ["**/*.js"], languageOptions: { sourceType: "script" }, rules: {} },
+    { files: ["**/*.cjs"], languageOptions: { sourceType: "module" }, rules: {} }
+  ]));
+  for (const format of ["json", "text"]) {
+    const result = spawnSync(testBinary(), [`--config=${config}`, "--rules=no-debugger", `--format=${format}`, script, module], { cwd, encoding: "utf8" });
+    assert.equal(result.status, 1, result.stderr);
+    if (format === "json") {
+      const report = JSON.parse(result.stdout);
+      assert.deepEqual(report.diagnostics.map(({ filePath, ruleId }) => [filePath, ruleId]), [[module, "parse"]]);
+    } else {
+      assert.match(result.stderr, /strict\.cjs/);
+      assert.doesNotMatch(result.stderr, /sloppy\.js/);
+    }
+  }
+});
+
+test("ESM and CJS keep per-file strict source types separate", async (t) => {
+  const cwd = createProject(t);
+  const script = write(join(cwd, "sloppy.js"), "delete x; with (obj) {}");
+  const module = write(join(cwd, "strict.cjs"), "delete x;");
+  const overrideConfig = [
+    { files: ["**/*.js"], languageOptions: { sourceType: "script" }, rules: {} },
+    { files: ["**/*.cjs"], languageOptions: { sourceType: "module" }, rules: {} }
+  ];
+  for (const Engine of [ESLint, CommonJSESLint]) {
+    const engine = new Engine({ cwd, binary: testBinary(), overrideConfigFile: true, overrideConfig });
+    const results = await engine.lintFiles([script, module]);
+    assert.deepEqual(results.find(({ filePath }) => filePath === script).messages, []);
+    const strict = results.find(({ filePath }) => filePath === module);
+    assert.equal(strict.fatalErrorCount, 1);
+    assert.equal(strict.messages[0].ruleId, "parse");
+  }
+});
+
+test("ESM and CJS compatibility APIs count strict parse failures as fatal", async (t) => {
+  const cwd = createProject(t);
+  const previousBinary = process.env.UTOO_LINT_BIN;
+  process.env.UTOO_LINT_BIN = testBinary();
+  t.after(() => {
+    if (previousBinary === undefined) delete process.env.UTOO_LINT_BIN;
+    else process.env.UTOO_LINT_BIN = previousBinary;
+  });
+  for (const [Engine, SyncLinter, LegacyEngine] of [[ESLint, Linter, CLIEngine], [CommonJSESLint, CommonJSLinter, CommonJSCLIEngine]]) {
+    const config = { languageOptions: { sourceType: "module" }, rules: { "no-delete-var": "error", "no-with": "error" } };
+    const engine = new Engine({ cwd, binary: testBinary(), overrideConfigFile: true, overrideConfig: config });
+    for (const source of ["/* eslint-disable */\nlet x = 1; delete x;", "with (obj) {}"]) {
+      const [result] = await engine.lintText(source, { filePath: "invalid.cjs" });
+      assert.equal(result.errorCount, 1);
+      assert.equal(result.fatalErrorCount, 1);
+      assert.equal(result.suppressedMessages.length, 0);
+      assert.equal(result.messages.length, 1);
+      assert.equal(result.messages[0].ruleId, "parse");
+      assert.equal(result.messages[0].fatal, true);
+
+      const linter = new SyncLinter();
+      const messages = linter.verify(source, config, { cwd, filename: "invalid.cjs" });
+      assert.equal(messages.length, 1);
+      assert.equal(messages[0].ruleId, "parse");
+      assert.equal(messages[0].fatal, true);
+      assert.deepEqual(linter.getSuppressedMessages(), []);
+
+      const legacy = new LegacyEngine({ cwd, binary: testBinary(), useEslintrc: false, baseConfig: config });
+      const report = legacy.executeOnText(source, "invalid.cjs");
+      assert.equal(report.fatalErrorCount, 1);
+      assert.equal(report.results[0].fatalErrorCount, 1);
+    }
+    const script = new Engine({ cwd, binary: testBinary(), overrideConfigFile: true, overrideConfig: { parserOptions: { sourceType: "script" }, rules: {} } });
+    const [sloppy] = await script.lintText("delete x; with (obj) {}", { filePath: "sloppy.js" });
+    assert.deepEqual(sloppy.messages, []);
+    assert.equal(sloppy.fatalErrorCount, 0);
+  }
+});
+
+test("strict parse failures skip ESM and CJS custom rule and parser listeners", async (t) => {
+  const cwd = createProject(t);
+  const previousBinary = process.env.UTOO_LINT_BIN;
+  process.env.UTOO_LINT_BIN = testBinary();
+  t.after(() => {
+    if (previousBinary === undefined) delete process.env.UTOO_LINT_BIN;
+    else process.env.UTOO_LINT_BIN = previousBinary;
+  });
+  for (const [Engine, SyncLinter] of [[ESLint, Linter], [CommonJSESLint, CommonJSLinter]]) {
+    let creates = 0;
+    let parses = 0;
+    const rule = { create() { creates += 1; return {}; } };
+    const config = {
+      languageOptions: { sourceType: "module" },
+      plugins: { custom: { rules: { report: rule } } },
+      rules: { "custom/report": "error" }
+    };
+    const engine = new Engine({ cwd, binary: testBinary(), overrideConfigFile: true, overrideConfig: config });
+    const source = "/* eslint-disable custom/report */\nwith (obj) {}";
+    const [textResult] = await engine.lintText(source, { filePath: "invalid.js" });
+    const path = write(join(cwd, "invalid.js"), source);
+    const [fileResult] = await engine.lintFiles([path]);
+    for (const result of [textResult, fileResult]) {
+      assert.equal(result.fatalErrorCount, 1);
+      assert.equal(result.messages[0].ruleId, "parse");
+      assert.equal(result.messages[0].fatal, true);
+    }
+    const linter = new SyncLinter();
+    linter.defineRule("custom/report", rule);
+    linter.defineParser("custom", { parse() { parses += 1; throw new Error("must not parse invalid source"); } });
+    const messages = linter.verify(source, { ...config, parser: "custom", rules: { "custom/report": "error" } }, { cwd, filename: path });
+    assert.equal(messages.length, 1);
+    assert.equal(messages[0].fatal, true);
+    assert.equal(linter.getSourceCode(), null);
+    assert.equal(creates, 0);
+    assert.equal(parses, 0);
+  }
+});
+
+test("ESM and CJS preserve native suppression metadata with fatal semantic errors", async (t) => {
+  const cwd = createProject(t);
+  const previousBinary = process.env.UTOO_LINT_BIN;
+  process.env.UTOO_LINT_BIN = testBinary();
+  t.after(() => {
+    if (previousBinary === undefined) delete process.env.UTOO_LINT_BIN;
+    else process.env.UTOO_LINT_BIN = previousBinary;
+  });
+  const source = "/* eslint-disable no-debugger -- intentional debug */\nlet value; let value; debugger;";
+  const config = { rules: { "no-debugger": "error", "no-array-constructor": "error" } };
+  const native = lintText(source, { cwd, binary: testBinary(), noConfig: true, overrideConfig: config, filePath: "invalid.js" });
+  assert.deepEqual(native.diagnostics.map(({ ruleId }) => ruleId), ["parse"]);
+  assert.deepEqual(native.suppressedDiagnostics.map(({ ruleId }) => ruleId), ["no-debugger"]);
+  for (const [SyncLinter, Engine] of [[Linter, ESLint], [CommonJSLinter, CommonJSESLint]]) {
+    const engine = new Engine({ cwd, binary: testBinary(), overrideConfigFile: true, overrideConfig: config });
+    const [result] = await engine.lintText(source, { filePath: "invalid.js" });
+    assert.equal(result.fatalErrorCount, 1);
+    assert.deepEqual(result.suppressedMessages.map(({ ruleId }) => ruleId), ["no-debugger"]);
+    const linter = new SyncLinter();
+    const messages = linter.verify(source, config, { cwd, filename: "invalid.js" });
+    assert.deepEqual(messages.map(({ ruleId }) => ruleId), ["parse"]);
+    assert.equal(messages[0].fatal, true);
+    assert.deepEqual(linter.getSuppressedMessages(), result.suppressedMessages);
+    assert.equal(linter.getSuppressedMessages()[0].suppressions[0].justification, "intentional debug");
+  }
+});
+
+test("registered custom definitions are filtered before fatal semantic parse results", (t) => {
+  const cwd = createProject(t);
+  const previousBinary = process.env.UTOO_LINT_BIN;
+  process.env.UTOO_LINT_BIN = testBinary();
+  t.after(() => {
+    if (previousBinary === undefined) delete process.env.UTOO_LINT_BIN;
+    else process.env.UTOO_LINT_BIN = previousBinary;
+  });
+  for (const SyncLinter of [Linter, CommonJSLinter]) {
+    let creates = 0;
+    const linter = new SyncLinter();
+    linter.defineRule("custom", { create() { creates += 1; return {}; } });
+    const messages = linter.verify(
+      "/* eslint-disable custom */\nlet value; let value;",
+      { rules: { custom: "error", "no-array-constructor": "error" } },
+      { cwd, filename: "invalid.js" }
+    );
+    assert.deepEqual(messages.map(({ ruleId }) => ruleId), ["parse"]);
+    assert.equal(messages[0].fatal, true);
+    assert.equal(creates, 0);
+  }
+});
+
+test("strict parse failures precede unknown disable directive validation", async (t) => {
+  const cwd = createProject(t);
+  const source = "// eslint-disable-next-line unknown-rule\nwith (obj) {}";
+  const config = write(join(cwd, "utlint.config.json"), JSON.stringify({ rules: {} }));
+  const path = write(join(cwd, "invalid.js"), source);
+  const native = spawnSync(testBinary(), [`--config=${config}`, "--format=json", path], { cwd, encoding: "utf8" });
+  assert.equal(native.status, 1, native.stderr);
+  assert.deepEqual(JSON.parse(native.stdout).diagnostics.map(({ ruleId }) => ruleId), ["parse"]);
+  const malformed = write(join(cwd, "malformed.js"), "// eslint-disable-next-line unknown-rule\nconst = ;");
+  const syntax = spawnSync(testBinary(), [`--config=${config}`, "--format=json", malformed], { cwd, encoding: "utf8" });
+  assert.equal(syntax.status, 1, syntax.stderr);
+  assert.ok(JSON.parse(syntax.stdout).diagnostics.every(({ ruleId }) => ruleId === "parse"));
+  for (const Engine of [ESLint, CommonJSESLint]) {
+    const engine = new Engine({ cwd, binary: testBinary(), overrideConfigFile: true, overrideConfig: { rules: {} } });
+    const [result] = await engine.lintText(source, { filePath: "invalid.js" });
+    assert.equal(result.fatalErrorCount, 1);
+    assert.deepEqual(result.messages.map(({ ruleId }) => ruleId), ["parse"]);
+    assert.deepEqual(result.suppressedMessages, []);
+  }
+});
+
 test("raw native binary enables no rules for an empty config", (t) => {
   const project = createProject(t);
   write(join(project, "utlint.config.json"));

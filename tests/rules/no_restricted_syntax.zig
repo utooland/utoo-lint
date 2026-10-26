@@ -15,7 +15,7 @@ test "reports restricted syntax selectors" {
     const options = try optionsWithConfig(
         "[\"error\",\"WithStatement\",{\"selector\":\"labeled_statement\",\"message\":\"Labels are not allowed.\"}]",
     );
-    var result = try lint.lintSource(std.testing.allocator, source, "fixture.js", options);
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.cjs", options);
     defer result.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(@as(usize, 2), helpers.countRule(result, lint.rules.no_restricted_syntax.id));
@@ -83,7 +83,7 @@ test "can disable no-restricted-syntax" {
     var options = try optionsWithConfig("[\"error\",\"WithStatement\"]");
     options.no_restricted_syntax = false;
 
-    var result = try lint.lintSource(std.testing.allocator, source, "fixture.js", options);
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.cjs", options);
     defer result.deinit(std.testing.allocator);
 
     try std.testing.expect(!helpers.hasRule(result, lint.rules.no_restricted_syntax.id));

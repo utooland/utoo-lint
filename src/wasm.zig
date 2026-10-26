@@ -304,6 +304,15 @@ fn parseConfig(
         }
     }
 
+    if (root) |object| {
+        if (object.get("sourceType")) |source_type| {
+            config.options.setSourceTypeFromConfig(source_type) catch {
+                failure.* = .{ .code = "INVALID_OPTIONS", .message = "sourceType must be module, script, or commonjs" };
+                return error.InvalidOptions;
+            };
+        }
+    }
+
     const settings_value = if (root) |object| object.get("settings") else null;
     if (settings_value) |value| {
         const settings = switch (value) {

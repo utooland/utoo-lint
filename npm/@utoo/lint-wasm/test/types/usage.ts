@@ -11,6 +11,7 @@ import {
 const linter = await createUtooLint();
 const direct: LintResult = linter.lint("debugger;", {
   filePath: "input.js",
+  sourceType: "script",
   rules: { "no-debugger": "error" },
 });
 const diagnostic: LintDiagnostic | undefined = direct.diagnostics[0];
