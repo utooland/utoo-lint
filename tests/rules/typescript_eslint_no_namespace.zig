@@ -27,7 +27,7 @@ test "reports @typescript-eslint/no-namespace for non-declare namespaces and mod
     }
 }
 
-test "allows declare namespaces and modules" {
+test "allows declare namespaces and modules when allowDeclarations is true" {
     const source =
         \\declare namespace Internal {
         \\  export const value: number;
@@ -40,11 +40,53 @@ test "allows declare namespaces and modules" {
     var result = try lint.lintSource(std.testing.allocator, source, "fixture.ts", .{
         .no_unused_vars = false,
         .typescript_eslint_prefer_namespace_keyword = false,
+        .typescript_eslint_no_namespace_allow_declarations = true,
         .parser_semantic_errors = false,
     });
     defer result.deinit(std.testing.allocator);
 
     try std.testing.expect(!helpers.hasRule(result, lint.rules.typescript_eslint_no_namespace.id));
+}
+
+test "reports declared namespaces and identifier modules by default" {
+    const source =
+        \\declare namespace API { const value: number; }
+        \\declare module Legacy { const value: number; }
+        \\declare module 'external' { export const value: number; }
+    ;
+    var options = lint.Options.allDisabled();
+    options.typescript_eslint_no_namespace = true;
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.ts", options);
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), helpers.countRule(result, lint.rules.typescript_eslint_no_namespace.id));
+}
+
+test "no-namespace severity-only configurations reset allowDeclarations to false" {
+    for ([_][]const u8{
+        "2",
+        "true",
+        "\"error\"",
+        "[2]",
+        "[\"error\", {}]",
+        "[\"error\", {\"allowDefinitionFiles\": true}]",
+    }) |json| {
+        var config = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, json, .{});
+        defer config.deinit();
+        var options = lint.Options.allDisabled();
+        options.typescript_eslint_no_namespace_allow_declarations = true;
+        try options.setByRuleConfigValue("@typescript-eslint/no-namespace", config.value);
+
+        try std.testing.expect(!options.typescript_eslint_no_namespace_allow_declarations);
+        try std.testing.expect(options.typescript_eslint_no_namespace_allow_definition_files);
+        const source = "declare namespace API { const value: number; }";
+        var result = try lint.lintSource(std.testing.allocator, source, "fixture.ts", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(@as(usize, 1), helpers.countRule(result, lint.rules.typescript_eslint_no_namespace.id));
+        var definition = try lint.lintSource(std.testing.allocator, source, "fixture.d.ts", options);
+        defer definition.deinit(std.testing.allocator);
+        try std.testing.expect(!helpers.hasRule(definition, lint.rules.typescript_eslint_no_namespace.id));
+    }
 }
 
 test "reports declared namespaces but allows external modules when allowDeclarations is false" {

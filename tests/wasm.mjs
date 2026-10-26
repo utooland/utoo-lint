@@ -62,6 +62,27 @@ test("uses defaults only when rules is absent", () => {
   assert.ok(!empty.diagnostics.some((item) => item.ruleId === "no-debugger"));
 });
 
+test("no-namespace defaults reject declarations while preserving explicit and external-module allowances", () => {
+  const rule = "@typescript-eslint/no-namespace";
+  const source = "declare namespace API { const value: number; }";
+  for (const [setting, count, definitionCount] of [
+    ["error", 1, 0],
+    [2, 1, 0],
+    [[2, {}], 1, 0],
+    [[2, { allowDefinitionFiles: false }], 1, 1],
+    [[2, { allowDeclarations: true, allowDefinitionFiles: false }], 0, 0],
+  ]) {
+    for (const [filePath, expected] of [["case.ts", count], ["case.d.ts", definitionCount]]) {
+      const options = { filePath, rules: { [rule]: setting } };
+      const result = linter.lint(source, options);
+      assert.equal(result.diagnostics.length, expected, `${JSON.stringify(setting)}: ${filePath}`);
+      assert.ok(result.diagnostics.every((item) => item.ruleId === rule && item.severity === "error"));
+      const external = linter.lint("export {}; declare module 'foo' { export const value: number; }", options);
+      assert.deepEqual(external.diagnostics, []);
+    }
+  }
+});
+
 test("returns every overlapping ESLint suppression", () => {
   const source = [
     "/* eslint-disable no-extra-semi -- generated */",
