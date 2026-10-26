@@ -675,11 +675,6 @@ export class Linter {
     const customRuleMap = customRuleMapForConfig(config, this.rules, normalizedFilePath, verifyOptions.cwd);
     const customRuleFilterMap = customRuleMapForConfig(config, this.rules);
     const customRules = customRuleEntriesForConfig(config, customRuleMap, normalizedFilePath, verifyOptions.cwd);
-    const sourceCode = createLinterSourceCode(
-      code,
-      parserForConfig(config, this.parsers, normalizedFilePath, verifyOptions.cwd),
-      { ...parserOptionsForConfig(config, normalizedFilePath, verifyOptions.cwd), requireParser: customRules.length > 0 }
-    );
     const nativeConfig = configWithoutCustomRules(config, customRuleFilterMap);
     const lintOptions = {
       cwd: verifyOptions.cwd,
@@ -691,6 +686,21 @@ export class Linter {
     };
     const report = lintText(code, lintOptions);
     const ruleSeverities = ruleSeverityMapForOptions(lintOptions, normalizedFilePath);
+    const nativeMessages = (report.diagnostics ?? [])
+      .filter((diagnostic) => !isRuleDefinitionError(diagnostic) || !customRuleMap.has(diagnostic.ruleId))
+      .map((diagnostic) => diagnosticToESLintMessage(diagnostic, ruleSeverities));
+    if (nativeMessages.some((message) => message.fatal)) {
+      this.sourceCode = null;
+      this.suppressedMessages = [];
+      this.times = { passes: [] };
+      this.fixPassCount = 0;
+      return sortLintMessages(nativeMessages);
+    }
+    const sourceCode = createLinterSourceCode(
+      code,
+      parserForConfig(config, this.parsers, normalizedFilePath, verifyOptions.cwd),
+      { ...parserOptionsForConfig(config, normalizedFilePath, verifyOptions.cwd), requireParser: customRules.length > 0 }
+    );
     this.sourceCode = sourceCode;
     const customRuleMessages = runCustomLinterRules(customRules, sourceCode, {
       cwd: verifyOptions.cwd,
@@ -698,9 +708,7 @@ export class Linter {
       config: calculatedConfig({ cwd: verifyOptions.cwd, noConfig: true, overrideConfig: config }, normalizedFilePath)
     });
     const nativeRuleFilter = applyDisableDirectives(
-      (report.diagnostics ?? [])
-        .filter((diagnostic) => !isRuleDefinitionError(diagnostic) || !customRuleMap.has(diagnostic.ruleId))
-        .map((diagnostic) => diagnosticToESLintMessage(diagnostic, ruleSeverities)),
+      nativeMessages,
       sourceCode
     );
     const customRuleFilter = applyDisableDirectives(customRuleMessages, sourceCode);
@@ -1082,6 +1090,9 @@ function appendCustomLintTextMessages(results, code, filePath, config, rules, op
     return results;
   }
   let result = results.find((item) => item.filePath === filePath);
+  if (result?.fatalErrorCount > 0) {
+    return results;
+  }
   const effectiveCode = typeof result?.output === "string" ? result.output : code;
   const sourceCode = createLinterSourceCode(effectiveCode, null, { ...parserOptionsForConfig(config, filePath, options.cwd), requireParser: true });
   const messages = runCustomLinterRules(customRules, sourceCode, {
@@ -1168,6 +1179,9 @@ function relintAfterCustomFixes(result, code, filePath, customRules, config, rul
 
 function appendCustomLintFileMessages(results, config, options) {
   for (const result of results) {
+    if (result.fatalErrorCount > 0) {
+      continue;
+    }
     const filePath = result.filePath;
     const rules = customRuleMapForConfig(config, new Map(), filePath, options.cwd);
     const customRules = customRuleEntriesForConfig(config, rules, filePath, options.cwd);
@@ -3351,6 +3365,9 @@ function appendPluginRuleDiagnostics(report, options, { perFileConfig = true } =
   let appended = false;
 
   for (const filePath of filePaths) {
+    if ((report.diagnostics ?? []).some((diagnostic) => diagnostic.filePath === filePath && diagnostic.ruleId === "parse" && diagnostic.severity === "error")) {
+      continue;
+    }
     const matchPath = singleMatchPath ?? filePath;
     const ruleMap = jsPluginRuleMapForFile(options, matchPath, perFileConfig);
     if (ruleMap.size === 0) {
@@ -3538,6 +3555,10 @@ function nativeConfigGlobals(config) {
   return Object.keys(globals).length > 0 ? globals : undefined;
 }
 
+function nativeConfigSourceType(config) {
+  return config?.languageOptions?.sourceType ?? config?.parserOptions?.sourceType;
+}
+
 function isGlobalsObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -3546,7 +3567,7 @@ function configCanUseNativeRulesFastPath(config) {
   const entries = Array.isArray(config) ? config : [config];
   let hasEnabledRule = false;
   for (const entry of entries) {
-    if (!entry || typeof entry !== "object" || Object.keys(entry.settings ?? {}).length > 0 || nativeConfigGlobals(entry)) {
+    if (!entry || typeof entry !== "object" || Object.keys(entry.settings ?? {}).length > 0 || nativeConfigGlobals(entry) || nativeConfigSourceType(entry) !== undefined) {
       return false;
     }
     for (const ruleConfig of Object.values(entry.rules ?? {})) {
@@ -3575,8 +3596,12 @@ function nativeSerializableConfig(config) {
       .map((key) => [key, config[key]])
   );
   const globals = nativeConfigGlobals(config);
-  if (globals) {
-    serialized.languageOptions = { globals };
+  const sourceType = nativeConfigSourceType(config);
+  if (globals || sourceType !== undefined) {
+    serialized.languageOptions = {
+      ...(globals ? { globals } : {}),
+      ...(sourceType === undefined ? {} : { sourceType })
+    };
   }
   return serialized;
 }
@@ -3658,15 +3683,16 @@ function nativeConfigRunsForFiles(paths, options) {
     let rules = calculated.rules;
     const settings = calculated.settings;
     const globals = configured ? nativeConfigGlobals(calculated) : undefined;
+    const sourceType = configured ? nativeConfigSourceType(calculated) : undefined;
     if (configured && options.rules) {
       rules = selectedRulesWithConfigOptions(rules, options.rules);
     }
     if (configured) {
       rules = withoutJsPluginRules(rules, jsPluginRuleIdsForOptions(options, matchPath));
     }
-    const signature = configured ? stableConfigSignature({ rules, settings, globals }) : "<native-defaults>";
+    const signature = configured ? stableConfigSignature({ rules, settings, globals, sourceType }) : "<native-defaults>";
     if (!groups.has(signature)) {
-      groups.set(signature, { paths: [], rules, settings, globals, configured });
+      groups.set(signature, { paths: [], rules, settings, globals, sourceType, configured });
     }
     groups.get(signature).paths.push(filePath);
   }
@@ -3689,7 +3715,7 @@ function nativeConfigRunsForFiles(paths, options) {
       };
     }
 
-    const selectedRules = severityOnlyNativeRuleNames(group.rules, group.settings, group.globals);
+    const selectedRules = severityOnlyNativeRuleNames(group.rules, group.settings, group.globals, group.sourceType);
     if (selectedRules) {
       return {
         paths: group.paths,
@@ -3715,7 +3741,10 @@ function nativeConfigRunsForFiles(paths, options) {
         overrideConfig: {
           rules: allDisabledNativeRules(group.rules),
           ...(group.settings ? { settings: group.settings } : {}),
-          ...(group.globals ? { languageOptions: { globals: group.globals } } : {})
+          ...((group.globals || group.sourceType !== undefined) ? { languageOptions: {
+            ...(group.globals ? { globals: group.globals } : {}),
+            ...(group.sourceType === undefined ? {} : { sourceType: group.sourceType })
+          } } : {})
         },
         forceMaterializedConfig: true
       }
@@ -3723,8 +3752,8 @@ function nativeConfigRunsForFiles(paths, options) {
   });
 }
 
-function severityOnlyNativeRuleNames(rules, settings, globals) {
-  if (globals || Object.keys(settings ?? {}).length > 0) {
+function severityOnlyNativeRuleNames(rules, settings, globals, sourceType) {
+  if (globals || sourceType !== undefined || Object.keys(settings ?? {}).length > 0) {
     return undefined;
   }
 
@@ -4388,7 +4417,11 @@ function withTemporaryConfig(options, callback) {
     {}
   );
   const hasGlobals = Object.keys(globals).length > 0;
-  if (Object.keys(rules).length === 0 && !hasSettings && !hasGlobals) {
+  const sourceType = configs.reduce(
+    (current, config) => nativeConfigSourceType(configDataFromConfig(config, options.filePath ?? options.filename, options.cwd)) ?? current,
+    undefined
+  );
+  if (Object.keys(rules).length === 0 && !hasSettings && !hasGlobals && sourceType === undefined) {
     if (shouldMaterializeFileConfig) {
       return callback({
         ...options,
@@ -4400,7 +4433,7 @@ function withTemporaryConfig(options, callback) {
   }
   const enabledRules = enabledRuleNamesFromConfigs(...configs).filter((rule) => !jsPluginRuleIds.has(rule));
   const hasExplicitOffRules = Object.values(rules).some((value) => ruleConfigSeverity(value) === 0);
-  if (!shouldMaterializeFileConfig && !hasSettings && !hasGlobals && !hasRuleOptions(rules) && !hasExplicitOffRules && !options.forceMaterializedConfig) {
+  if (!shouldMaterializeFileConfig && !hasSettings && !hasGlobals && sourceType === undefined && !hasRuleOptions(rules) && !hasExplicitOffRules && !options.forceMaterializedConfig) {
     return callback({
       ...options,
       config: shouldMaterializeFileConfig ? undefined : options.config,
@@ -4415,7 +4448,10 @@ function withTemporaryConfig(options, callback) {
     writeFileSync(configPath, JSON.stringify({
       rules: nativeRules(rules),
       ...(hasSettings ? { settings } : {}),
-      ...(hasGlobals ? { languageOptions: { globals } } : {})
+      ...((hasGlobals || sourceType !== undefined) ? { languageOptions: {
+        ...(hasGlobals ? { globals } : {}),
+        ...(sourceType === undefined ? {} : { sourceType })
+      } } : {})
     }));
     return callback({
       ...options,
@@ -5335,6 +5371,10 @@ function diagnosticToESLintMessage(diagnostic, ruleSeverities) {
     column: diagnostic.column,
     nodeType: null
   };
+  if (diagnostic.ruleId === "parse" && diagnostic.severity === "error") {
+    message.fatal = true;
+    message.severity = 2;
+  }
   if (typeof diagnostic.endLine === "number") {
     message.endLine = diagnostic.endLine;
   }
@@ -5385,11 +5425,13 @@ function suppressedDiagnosticToESLintMessage(diagnostic, ruleSeverities) {
 }
 
 function finalizeESLintResult(result) {
+  result.fatalErrorCount = 0;
   result.errorCount = 0;
   result.warningCount = 0;
   result.fixableErrorCount = 0;
   result.fixableWarningCount = 0;
   for (const message of result.messages) {
+    if (message.fatal) result.fatalErrorCount += 1;
     if (message.severity === 2) {
       result.errorCount += 1;
       if (ruleFixItems(message.fix).length > 0) {

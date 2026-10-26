@@ -4,6 +4,7 @@ const core = @import("core.zig");
 const fixer = @import("fixer.zig");
 const semantic_compat = @import("semantic_compat.zig");
 const suppressions = @import("suppressions.zig");
+const strict_syntax = @import("strict_syntax.zig");
 
 const ast = parser.ast;
 const Allocator = std.mem.Allocator;
@@ -167,12 +168,14 @@ fn lintSourceInternal(
         }
     }
 
-    var tree = try parseSource(allocator, source, path);
+    var tree = try parseSource(allocator, source, path, effective_options.source_type);
     defer tree.deinit();
 
     const needs_semantic = needsSemanticModel(effective_options);
 
-    if (needs_semantic) {
+    if (try strict_syntax.appendDiagnostics(allocator, &diagnostics, &tree)) {
+        try appendParserDiagnostics(allocator, &diagnostics, &tree, effective_options);
+    } else if (needs_semantic) {
         const semantic_model = try parser.semantic.analyze(&tree, .{ .check = true });
         var semantic_result = semantic_compat.Result.init(&tree, semantic_model);
         try semantic_result.symbol_table.resolveAll(semantic_result.scope_tree);
@@ -201,9 +204,10 @@ fn lintSourceInternal(
     };
 }
 
-fn parseSource(allocator: Allocator, source: []const u8, path: []const u8) Allocator.Error!ast.Tree {
+fn parseSource(allocator: Allocator, source: []const u8, path: []const u8, configured_source_type: ?ast.SourceType) Allocator.Error!ast.Tree {
+    const source_type = configured_source_type orelse ast.SourceType.fromPath(path);
     var tree = try parser.parse(allocator, source, .{
-        .source_type = ast.SourceType.fromPath(path),
+        .source_type = source_type,
         .lang = ast.Lang.fromPath(path),
     });
 
@@ -211,7 +215,7 @@ fn parseSource(allocator: Allocator, source: []const u8, path: []const u8) Alloc
     if (!tree.hasErrors()) return tree;
 
     var fallback_tree = try parser.parse(allocator, source, .{
-        .source_type = ast.SourceType.fromPath(path),
+        .source_type = source_type,
         .lang = fallback_lang,
     });
     if (fallback_tree.hasErrors()) {

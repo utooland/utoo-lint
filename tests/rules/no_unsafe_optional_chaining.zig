@@ -48,7 +48,7 @@ test "reports no-unsafe-optional-chaining for object binary with and extends usa
         \\
     ;
 
-    var result = try lint.lintSource(std.testing.allocator, source, "fixture.js", baseOptions());
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.cjs", baseOptions());
     defer result.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(@as(usize, 4), helpers.countRule(result, lint.rules.no_unsafe_optional_chaining.id));

@@ -57,6 +57,24 @@ test("provides a lazy convenience API", async () => {
   assert.ok(result.diagnostics.some((item) => item.ruleId === "no-extra-semi"));
 });
 
+test("reports strict syntax as parse errors with empty rules", async () => {
+  const linter = await createUtooLint();
+  for (const source of ["delete x;", "with (obj) {}"]) {
+    const result = linter.lint(source, { filePath: "input.js", rules: {} });
+    assert.equal(result.diagnostics.length, 1);
+    assert.equal(result.diagnostics[0].ruleId, "parse");
+    assert.equal(result.diagnostics[0].severity, "error");
+    assert.deepEqual(linter.lint(source, { filePath: "input.js", sourceType: "script", rules: {} }).diagnostics, []);
+    const strict = linter.lint(`'use strict'; ${source}`, { filePath: "input.cjs", rules: {} });
+    assert.equal(strict.diagnostics.length, 1);
+    assert.equal(strict.diagnostics[0].ruleId, "parse");
+  }
+  assert.throws(
+    () => linter.lint("delete x;", { sourceType: "unknown", rules: {} }),
+    (error) => error instanceof UtooLintWasmError && error.code === "INVALID_OPTIONS"
+  );
+});
+
 test("exposes jest/valid-title diagnostics and autofixes", async () => {
   const linter = await createUtooLint();
   const checked = linter.lint("test(' forbidden ', () => {});", {

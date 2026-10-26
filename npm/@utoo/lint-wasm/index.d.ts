@@ -46,6 +46,7 @@ export interface LintDiagnostic {
 export interface LintOptions {
   filePath?: string;
   filename?: string;
+  sourceType?: "module" | "script" | "commonjs";
   rules?: Record<string, RuleConfig>;
   settings?: SharedSettings;
 }

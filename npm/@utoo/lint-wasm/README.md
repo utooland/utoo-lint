@@ -47,6 +47,11 @@ Omit `rules` to use utoo-lint's default rule set. Pass `rules: {}` when the
 playground should start with every rule disabled and then enable individual
 rules from its UI.
 
+Set `sourceType: "script"` or `"commonjs"` to parse sloppy scripts. The default
+follows `filePath`: `.cjs` and `.cts` use CommonJS, and other extensions use
+modules. Modules and explicit `"use strict"` contexts report invalid strict
+syntax as parse errors even with `rules: {}`.
+
 `createUtooLint()` also accepts a URL, `Response`, bytes, compiled
 `WebAssembly.Module`, or `WebAssembly.Instance` through its `wasm` option for
 custom hosting and testing:

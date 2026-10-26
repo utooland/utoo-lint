@@ -18,6 +18,18 @@ pub const FlatConfig = struct {
     io: std.Io,
     directory: []u8,
     cwd: []u8,
+    rules_overridden: bool = false,
+
+    pub fn hasSourceType(self: *const FlatConfig) bool {
+        for (self.parsed.value.array.items) |entry| {
+            for ([_][]const u8{ "parserOptions", "languageOptions" }) |field| {
+                if (entry.object.get(field)) |value| {
+                    if (value == .object and value.object.contains("sourceType")) return true;
+                }
+            }
+        }
+        return false;
+    }
 
     pub fn deinit(self: *FlatConfig, allocator: std.mem.Allocator) void {
         self.parsed.deinit();
@@ -140,6 +152,14 @@ pub fn applyConfigObject(
         }
     }
 
+    if (root.get("parserOptions")) |parser_options_value| {
+        const parser_options = switch (parser_options_value) {
+            .object => |object| object,
+            else => return error.InvalidParserOptions,
+        };
+        if (parser_options.get("sourceType")) |source_type| try options.setSourceTypeFromConfig(source_type);
+    }
+
     if (root.get("languageOptions")) |language_options_value| {
         const language_options = switch (language_options_value) {
             .object => |object| object,
@@ -148,6 +168,7 @@ pub fn applyConfigObject(
         if (language_options.get("globals")) |globals| {
             try options.setConfiguredGlobalsFromConfig(globals);
         }
+        if (language_options.get("sourceType")) |source_type| try options.setSourceTypeFromConfig(source_type);
     }
 
     const rules_value = root.get("rules") orelse return;
@@ -507,4 +528,27 @@ test "glob matching covers flat config selectors" {
     try std.testing.expect(globMatches("**/*.{js,ts}", "packages/app/src/index.ts"));
     try std.testing.expect(globMatches("test/?oo.[jt]s", "test/foo.js"));
     try std.testing.expect(!globMatches("src/**/*.ts", "test/index.ts"));
+}
+
+test "strict source type config precedence and validation" {
+    const allocator = std.testing.allocator;
+    var parsed = try std.json.parseFromSlice(std.json.Value, allocator,
+        \\{"parserOptions":{"sourceType":"script"},"languageOptions":{"sourceType":"module"},"rules":{}}
+    , .{});
+    defer parsed.deinit();
+    var options = lint.Options.allDisabled();
+    var severities = RuleSeverityMap.init(allocator);
+    defer severities.deinit();
+    try applyConfigObject(allocator, parsed.value.object, &options, &severities);
+    try std.testing.expect(options.source_type == .module);
+
+    var legacy = try std.json.parseFromSlice(std.json.Value, allocator,
+        \\{"parserOptions":{"sourceType":"script"}}
+    , .{});
+    defer legacy.deinit();
+    try applyConfigObject(allocator, legacy.value.object, &options, &severities);
+    try std.testing.expect(options.source_type == .script);
+
+    try std.testing.expectError(error.InvalidSourceType, options.setSourceTypeFromConfig(.{ .string = "unknown" }));
+    try std.testing.expectError(error.InvalidSourceType, options.setSourceTypeFromConfig(.{ .bool = true }));
 }
