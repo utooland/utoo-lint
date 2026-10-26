@@ -180,3 +180,120 @@ test "can disable react/jsx-no-target-blank" {
 
     try std.testing.expect(!helpers.hasRule(result, lint.rules.react_jsx_no_target_blank.id));
 }
+
+test "react/jsx-no-target-blank fixes missing and literal rel without losing tokens" {
+    const cases = [_]struct { source: []const u8, output: []const u8 }{
+        .{
+            .source = "export const x = <a href=\"https://x\" target=\"_blank\" />;",
+            .output = "export const x = <a href=\"https://x\" target=\"_blank\" rel=\"noreferrer\" />;",
+        },
+        .{
+            .source = "const x = <a href={url} target=\"_blank\">link</a>;",
+            .output = "const x = <a href={url} target=\"_blank\" rel=\"noreferrer\">link</a>;",
+        },
+        .{
+            .source = "const x = <a rel='nofollow noopener' href='//x' target='_blank' />;",
+            .output = "const x = <a rel='nofollow noopener noreferrer' href='//x' target='_blank' />;",
+        },
+        .{
+            .source = "const x = <a href='https://x' target='_blank' rel=\"\" />;",
+            .output = "const x = <a href='https://x' target='_blank' rel=\"noreferrer\" />;",
+        },
+        .{
+            .source = "const x = <a href={url} target={'_blank'} rel={/* keep */ 'noopener'} />;",
+            .output = "const x = <a href={url} target={'_blank'} rel={/* keep */ 'noopener noreferrer'} />;",
+        },
+        .{
+            .source = "const x = <a href={url} target={`_blank`} rel={`nofollow`} />;",
+            .output = "const x = <a href={url} target={`_blank`} rel={`nofollow noreferrer`} />;",
+        },
+        .{
+            .source = "const x = <a\n href='https://x'\n target='_blank'\n />; // keep",
+            .output = "const x = <a\n href='https://x'\n target='_blank' rel=\"noreferrer\"\n />; // keep",
+        },
+    };
+    var options = lint.Options.allDisabled();
+    options.react_jsx_no_target_blank = true;
+    for (cases) |case| try expectFix(case.source, case.output, options);
+}
+
+test "react/jsx-no-target-blank autofix respects configured applicability" {
+    var options = lint.Options.allDisabled();
+    options.react_jsx_no_target_blank = true;
+    options.react_jsx_no_target_blank_allow_referrer = true;
+    try expectFix(
+        "const x = <a href='https://x' target='_blank' />;",
+        "const x = <a href='https://x' target='_blank' rel=\"noopener\" />;",
+        options,
+    );
+    try expectFix(
+        "const x = <a href='https://x' target='_blank' rel='nofollow' />;",
+        "const x = <a href='https://x' target='_blank' rel='nofollow noopener' />;",
+        options,
+    );
+    options.react_jsx_no_target_blank_allow_referrer = false;
+    options.react_jsx_no_target_blank_links = false;
+    options.react_jsx_no_target_blank_forms = true;
+    try expectFix(
+        "const x = <form action={url} target='_blank' />;",
+        "const x = <form action={url} target='_blank' rel=\"noreferrer\" />;",
+        options,
+    );
+    try expectUnchanged("const x = <a href='https://x' target='_blank' />;", options, 0);
+    options.react_jsx_no_target_blank_links = true;
+    options.react_jsx_no_target_blank_enforce_dynamic_links = false;
+    try expectUnchanged("const x = <a href={url} target='_blank' />;", options, 0);
+}
+
+test "react/jsx-no-target-blank leaves ambiguous attributes diagnostic only" {
+    const cases = [_][]const u8{
+        "const x = <a href='https://x' target='_blank' {...props} />;",
+        "const x = <a {...props} href='https://x' target='_blank' />;",
+        "const x = <a href='https://x' target='_blank' rel={value} />;",
+        "const x = <a href='https://x' target='_blank' rel />;",
+        "const x = <a href='https://x' target='_blank' rel='nofollow' rel='noopener' />;",
+        "const x = <a href='https://x' target={open ? '_blank' : '_self'} />;",
+        "const x = <a href='https://x' target='_blank' rel={`nofollow ${value}`} />;",
+    };
+    var options = lint.Options.allDisabled();
+    options.react_jsx_no_target_blank = true;
+    for (cases) |source| try expectUnchanged(source, options, 1);
+    options.react_jsx_no_target_blank_warn_on_spread_attributes = true;
+    try expectUnchanged("const x = <a {...props} />;", options, 1);
+}
+
+test "react/jsx-no-target-blank autofix preserves secure rel and suppression" {
+    var options = lint.Options.allDisabled();
+    options.react_jsx_no_target_blank = true;
+    const cases = [_][]const u8{
+        "const x = <a href='https://x' target='_blank' rel='noopener noreferrer' />;",
+        "const x = <a href='/docs' target='_blank' />;",
+        "/* eslint-disable react/jsx-no-target-blank */ const x = <a href='https://x' target='_blank' />;",
+    };
+    for (cases) |source| try expectUnchanged(source, options, 0);
+}
+
+fn expectFix(source: []const u8, expected: []const u8, options: lint.Options) !void {
+    var result = try lint.lintSourceAndFix(std.testing.allocator, source, "fixture.tsx", options);
+    defer result.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings(expected, result.output);
+    try std.testing.expect(result.fixed);
+    try std.testing.expect(!helpers.hasRule(result.result, lint.rules.react_jsx_no_target_blank.id));
+    var second = try lint.lintSourceAndFix(std.testing.allocator, result.output, "fixture.tsx", options);
+    defer second.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings(expected, second.output);
+    try std.testing.expect(!second.fixed);
+}
+
+fn expectUnchanged(source: []const u8, options: lint.Options, count: usize) !void {
+    var result = try lint.lintSourceAndFix(std.testing.allocator, source, "fixture.tsx", options);
+    defer result.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings(source, result.output);
+    try std.testing.expect(!result.fixed);
+    try std.testing.expectEqual(count, helpers.countRule(result.result, lint.rules.react_jsx_no_target_blank.id));
+    for (result.result.diagnostics) |diagnostic| {
+        if (std.mem.eql(u8, diagnostic.rule_id, lint.rules.react_jsx_no_target_blank.id)) {
+            try std.testing.expectEqual(@as(usize, 0), diagnostic.fixes.len);
+        }
+    }
+}

@@ -35,7 +35,7 @@ pub fn check(
     };
 
     if (options.warn_on_spread_attributes and hasUnsafeSpreadAttribute(tree, opening, options.allow_referrer, url_attribute)) {
-        try addDiagnostic(allocator, diagnostics, tree, index);
+        try addDiagnostic(allocator, diagnostics, tree, index, null);
         return;
     }
 
@@ -44,7 +44,7 @@ pub fn check(
     if (!hasDangerousUrl(tree, opening, url_attribute, options.enforce_dynamic_links)) return;
     if (hasSecureRel(tree, opening, target.attribute.value, options.allow_referrer)) return;
 
-    try addDiagnostic(allocator, diagnostics, tree, index);
+    try addDiagnostic(allocator, diagnostics, tree, index, safeRelFix(tree, opening, target.attribute, options.allow_referrer));
 }
 
 fn addDiagnostic(
@@ -52,15 +52,75 @@ fn addDiagnostic(
     diagnostics: *core.DiagnosticList,
     tree: *const ast.Tree,
     index: ast.NodeIndex,
+    fix: ?core.Fix,
 ) Allocator.Error!void {
-    try core.addDiagnostic(
+    try core.addDiagnosticWithFixes(
         allocator,
         diagnostics,
         .@"error",
         id,
         "Using target=\"_blank\" without rel=\"noreferrer\" (which implies rel=\"noopener\") is a security risk in older browsers: see https://mathiasbynens.github.io/rel-noopener/#recommendations",
         tree.span(index),
+        if (fix) |value| &.{value} else &.{},
     );
+}
+
+fn safeRelFix(tree: *const ast.Tree, opening: ast.JSXOpeningElement, target: ast.JSXAttribute, allow_referrer: bool) ?core.Fix {
+    _ = literalAttributeValueIndex(tree, target.value) orelse return null;
+    const target_value = stringValue(tree, target.value) orelse return null;
+    if (!std.ascii.eqlIgnoreCase(target_value, "_blank")) return null;
+
+    const attributes = tree.extra(opening.attributes);
+    var rel_attribute: ?ast.JSXAttribute = null;
+    for (attributes) |attribute_index| {
+        const attribute = switch (tree.data(attribute_index)) {
+            // A spread may supply or override rel with a value we cannot preserve.
+            .jsx_spread_attribute => return null,
+            .jsx_attribute => |value| value,
+            else => continue,
+        };
+        const name = attributeName(tree, attribute.name) orelse continue;
+        if (!std.mem.eql(u8, name, "rel")) continue;
+        if (rel_attribute != null) return null;
+        rel_attribute = attribute;
+    }
+
+    if (rel_attribute) |attribute| {
+        const literal_index = literalAttributeValueIndex(tree, attribute.value) orelse return null;
+        const span = tree.span(literal_index);
+        if (span.end < span.start + 2 or span.end > tree.source.len) return null;
+        const quote = tree.source[span.start];
+        if (quote != '"' and quote != '\'' and quote != '`') return null;
+        if (tree.source[span.end - 1] != quote) return null;
+        const end = span.end - 1;
+        const empty = span.end == span.start + 2;
+        return .{
+            .span = .{ .start = end, .end = end },
+            .replacement = if (allow_referrer)
+                (if (empty) "noopener" else " noopener")
+            else
+                (if (empty) "noreferrer" else " noreferrer"),
+        };
+    }
+
+    const end = tree.span(attributes[attributes.len - 1]).end;
+    return .{
+        .span = .{ .start = end, .end = end },
+        .replacement = if (allow_referrer) " rel=\"noopener\"" else " rel=\"noreferrer\"",
+    };
+}
+
+fn literalAttributeValueIndex(tree: *const ast.Tree, value: ast.NodeIndex) ?ast.NodeIndex {
+    if (value == .null) return null;
+    return switch (tree.data(value)) {
+        .string_literal => value,
+        .jsx_expression_container => |container| switch (tree.data(container.expression)) {
+            .string_literal => container.expression,
+            .template_literal => |literal| if (literal.expressions.len == 0) container.expression else null,
+            else => null,
+        },
+        else => null,
+    };
 }
 
 const AttributeMatch = struct {

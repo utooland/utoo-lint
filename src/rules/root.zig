@@ -1257,6 +1257,12 @@ fn runSemanticAfterIo(
         try typescript_eslint_no_unsafe_declaration_merging.run(allocator, diagnostics, tree, semantic_result.symbol_table);
     }
 
+    if (options.typescript_eslint_no_empty_interface and !options.typescript_eslint_no_empty_object_type and tree.isTs()) {
+        try typescript_eslint_no_empty_interface.runWithOptions(allocator, diagnostics, tree, semantic_result.symbol_table, .{
+            .allow_single_extends = options.typescript_eslint_no_empty_interface_allow_single_extends,
+        });
+    }
+
     const use_typescript_no_shadow = options.typescript_eslint_no_shadow and tree.isTs();
 
     if (options.no_shadow and !use_typescript_no_shadow) {
@@ -2553,10 +2559,6 @@ const BasicVisitor = struct {
                 .allow_interfaces = self.options.typescript_eslint_no_empty_object_type_allow_interfaces,
                 .allow_object_types = self.options.typescript_eslint_no_empty_object_type_allow_object_types,
                 .allow_with_name = self.options.typescript_eslint_no_empty_object_type_allow_with_name,
-            });
-        } else if (self.options.typescript_eslint_no_empty_interface) {
-            try typescript_eslint_no_empty_interface.check(self.allocator, self.diagnostics, ctx.tree, interface_declaration, .{
-                .allow_single_extends = self.options.typescript_eslint_no_empty_interface_allow_single_extends,
             });
         }
         if (self.options.typescript_eslint_no_misused_new) {

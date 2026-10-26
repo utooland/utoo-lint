@@ -16,7 +16,7 @@ pub const Fix = core.Fix;
 pub const Suggestion = core.Suggestion;
 pub const Result = core.Result;
 pub const ApplyFixesResult = fixer.ApplyResult;
-pub const max_autofix_passes = 10;
+pub const max_autofix_passes = core.max_autofix_passes;
 pub const SourcePosition = core.SourcePosition;
 pub const ByteLineIndex = @import("source_positions.zig").ByteLineIndex;
 pub const NoRestrictedImportEntry = core.NoRestrictedImportEntry;
@@ -352,6 +352,7 @@ fn needsSemanticModel(options: Options) bool {
         options.require_atomic_updates or
         options.require_unicode_regexp or
         options.symbol_description or
+        options.typescript_eslint_no_empty_interface or
         options.typescript_eslint_no_redeclare or
         options.typescript_eslint_no_require_imports or
         options.typescript_eslint_no_loop_func or

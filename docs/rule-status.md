@@ -330,7 +330,7 @@ instead of being rewritten.
 | [`react/jsx-no-undef`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-no-undef.md) | Implemented |
 | [`react/jsx-uses-react`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-uses-react.md) | Implemented |
 | [`react/jsx-uses-vars`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-uses-vars.md) | Accepted for legacy config compatibility; JSX tags are always semantic variable references, matching ESLint 10 |
-| [`react/jsx-no-target-blank`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-no-target-blank.md) | Supports `allowReferrer`, `enforceDynamicLinks`, `warnOnSpreadAttributes`, `links`, and `forms` configuration |
+| [`react/jsx-no-target-blank`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-no-target-blank.md) | Supports `allowReferrer`, `enforceDynamicLinks`, `warnOnSpreadAttributes`, `links`, and `forms` configuration; autofixes literal `_blank` targets by inserting `rel` or appending the required token to a literal `rel`, preserving existing text. Spreads, duplicate/dynamic `rel`, and nonliteral targets remain diagnostic-only |
 | [`react/jsx-pascal-case`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-pascal-case.md) | Supports `allowAllCaps`, `allowLeadingUnderscore`, `allowNamespace`, and `ignore` configuration |
 | [`react/no-access-state-in-setstate`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/no-access-state-in-setstate.md) | Implemented |
 | [`react/no-array-index-key`](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/no-array-index-key.md) | Implemented |
@@ -395,7 +395,7 @@ unsupported. See [configuration](configuration.md#react-compiler-related-checks)
 | [`@typescript-eslint/array-type`](https://typescript-eslint.io/rules/array-type/) | Implemented for `default: array`, `array-simple`, and `generic` configurations |
 | [`@typescript-eslint/ban-ts-comment`](https://typescript-eslint.io/rules/ban-ts-comment/) | Implemented for directive modes and `minimumDescriptionLength` |
 | [`@typescript-eslint/ban-tslint-comment`](https://typescript-eslint.io/rules/ban-tslint-comment/) | Implemented |
-| [`@typescript-eslint/ban-types`](https://typescript-eslint.io/rules/ban-types/) | Supports `types` and `extendDefaults` configuration |
+| [`@typescript-eslint/ban-types`](https://typescript-eslint.io/rules/ban-types/) | Supports `types` and `extendDefaults` configuration; autofixes boxed primitives and configured `fixWith` replacements for bare type references, `object`, and comment-free empty type literals. Compound replacements preserve precedence; invalid, recursive/cyclic or over-budget replacement chains, commented ranges, and references with type arguments remain diagnostic-only |
 | [`@typescript-eslint/class-literal-property-style`](https://typescript-eslint.io/rules/class-literal-property-style/) | Implemented for `fields` and `getters` configurations |
 | [`@typescript-eslint/consistent-type-assertions`](https://typescript-eslint.io/rules/consistent-type-assertions/) | Supports `assertionStyle` plus object/array literal assertion modes |
 | [`@typescript-eslint/consistent-type-definitions`](https://typescript-eslint.io/rules/consistent-type-definitions/) | Implemented for `interface` and `type` configurations |
@@ -407,7 +407,7 @@ unsupported. See [configuration](configuration.md#react-compiler-related-checks)
 | [`@typescript-eslint/no-confusing-non-null-assertion`](https://typescript-eslint.io/rules/no-confusing-non-null-assertion/) | Implemented |
 | [`@typescript-eslint/no-dupe-class-members`](https://typescript-eslint.io/rules/no-dupe-class-members/) | Implemented |
 | [`@typescript-eslint/no-empty-function`](https://typescript-eslint.io/rules/no-empty-function/) | Supports base `allow` kinds plus `private-constructors`, `protected-constructors`, `decoratedFunctions`, and `overrideMethods` configuration |
-| [`@typescript-eslint/no-empty-interface`](https://typescript-eslint.io/rules/no-empty-interface/) | Supports `allowSingleExtends` configuration |
+| [`@typescript-eslint/no-empty-interface`](https://typescript-eslint.io/rules/no-empty-interface/) | Supports `allowSingleExtends` configuration; autofixes single-base interfaces to type aliases while preserving exports and generic parameters. Comments within the declaration, declaration merging, ambient/global scripts, and recursive heritage remain diagnostic-only |
 | [`@typescript-eslint/no-empty-object-type`](https://typescript-eslint.io/rules/no-empty-object-type/) | Supports `allowInterfaces`, `allowObjectTypes`, and common anchored `allowWithName` patterns; excludes empty object constituents in intersection types |
 | [`@typescript-eslint/no-duplicate-enum-values`](https://typescript-eslint.io/rules/no-duplicate-enum-values/) | Implemented |
 | [`@typescript-eslint/no-extra-semi`](https://typescript-eslint.io/rules/no-extra-semi/) | Implemented with autofix |

@@ -1,0 +1,43 @@
+---
+fixture: "tests/snapshots/specs/typescript-eslint/ban-types/boxed-primitive.ts"
+rule: "@typescript-eslint/ban-types"
+---
+
+# Input
+
+```ts
+export type A = String;
+```
+
+# Diagnostics
+
+count: 1
+
+## Diagnostic 1
+
+- rule: "@typescript-eslint/ban-types"
+- severity: "error"
+- message: "Don't use `String` as a type. Use string instead"
+- byte span: 16..22
+- start: 1:17
+- end: 1:23
+- source: "String"
+- fixes: 1
+
+### Fix 1.1
+
+- byte span: 16..22
+- start: 1:17
+- end: 1:23
+- source: "String"
+- replacement: "string"
+
+# First fix pass
+
+- fixed: true
+- applied diagnostics: 1
+- remaining diagnostics: 0
+
+```ts
+export type A = string;
+```
