@@ -2741,6 +2741,29 @@ test("strict parse failures skip ESM and CJS custom rule and parser listeners", 
   }
 });
 
+test("registered custom definitions are filtered before fatal semantic parse results", (t) => {
+  const cwd = createProject(t);
+  const previousBinary = process.env.UTOO_LINT_BIN;
+  process.env.UTOO_LINT_BIN = testBinary();
+  t.after(() => {
+    if (previousBinary === undefined) delete process.env.UTOO_LINT_BIN;
+    else process.env.UTOO_LINT_BIN = previousBinary;
+  });
+  for (const SyncLinter of [Linter, CommonJSLinter]) {
+    let creates = 0;
+    const linter = new SyncLinter();
+    linter.defineRule("custom", { create() { creates += 1; return {}; } });
+    const messages = linter.verify(
+      "/* eslint-disable custom */\nlet value; let value;",
+      { rules: { custom: "error", "no-array-constructor": "error" } },
+      { cwd, filename: "invalid.js" }
+    );
+    assert.deepEqual(messages.map(({ ruleId }) => ruleId), ["parse"]);
+    assert.equal(messages[0].fatal, true);
+    assert.equal(creates, 0);
+  }
+});
+
 test("strict parse failures precede unknown disable directive validation", async (t) => {
   const cwd = createProject(t);
   const source = "// eslint-disable-next-line unknown-rule\nwith (obj) {}";
