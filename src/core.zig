@@ -3282,7 +3282,7 @@ pub const Options = struct {
     typescript_eslint_no_misused_new: bool = true,
     typescript_eslint_no_non_null_asserted_optional_chain: bool = true,
     typescript_eslint_no_namespace: bool = true,
-    typescript_eslint_no_namespace_allow_declarations: bool = true,
+    typescript_eslint_no_namespace_allow_declarations: bool = false,
     typescript_eslint_no_namespace_allow_definition_files: bool = true,
     typescript_eslint_no_redeclare: bool = true,
     typescript_eslint_no_redeclare_builtin_globals: bool = false,
@@ -4194,7 +4194,7 @@ pub const Options = struct {
             self.typescript_eslint_method_signature_style_style = try typescriptEslintMethodSignatureStyleFromConfig(value);
         }
         if (std.mem.eql(u8, cli_name, "@typescript-eslint/no-namespace")) {
-            self.typescript_eslint_no_namespace_allow_declarations = try typescriptEslintNoNamespaceBoolOptionFromConfig(value, "allowDeclarations", true);
+            self.typescript_eslint_no_namespace_allow_declarations = try typescriptEslintNoNamespaceBoolOptionFromConfig(value, "allowDeclarations", false);
             self.typescript_eslint_no_namespace_allow_definition_files = try typescriptEslintNoNamespaceBoolOptionFromConfig(value, "allowDefinitionFiles", true);
         }
         if (std.mem.eql(u8, cli_name, "@typescript-eslint/no-redeclare")) {

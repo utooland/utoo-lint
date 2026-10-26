@@ -414,7 +414,7 @@
 | [`@typescript-eslint/no-loop-func`](https://typescript-eslint.io/rules/no-loop-func/) | 已实现 TypeScript 循环捕获检查；禁用时回退到核心 `no-loop-func` |
 | [`@typescript-eslint/no-loss-of-precision`](https://typescript-eslint.io/rules/no-loss-of-precision/) | 已实现 |
 | [`@typescript-eslint/no-misused-new`](https://typescript-eslint.io/rules/no-misused-new/) | 已实现 |
-| [`@typescript-eslint/no-namespace`](https://typescript-eslint.io/rules/no-namespace/) | 已实现 `allowDeclarations` 和 `allowDefinitionFiles` 配置 |
+| [`@typescript-eslint/no-namespace`](https://typescript-eslint.io/rules/no-namespace/) | 默认 `allowDeclarations: false`、`allowDefinitionFiles: true`；支持显式放行，豁免字符串命名的外部模块 |
 | [`@typescript-eslint/no-non-null-asserted-optional-chain`](https://typescript-eslint.io/rules/no-non-null-asserted-optional-chain/) | 已实现 |
 | [`@typescript-eslint/no-redeclare`](https://typescript-eslint.io/rules/no-redeclare/) | 支持 `builtinGlobals` 和 `ignoreDeclarationMerge` 配置 |
 | [`@typescript-eslint/no-require-imports`](https://typescript-eslint.io/rules/no-require-imports/) | 支持 `allow` 和 `allowAsImport` 配置 |

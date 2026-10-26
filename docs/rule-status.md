@@ -418,7 +418,7 @@ unsupported. See [configuration](configuration.md#react-compiler-related-checks)
 | [`@typescript-eslint/no-loop-func`](https://typescript-eslint.io/rules/no-loop-func/) | Implemented for TypeScript loop captures with core `no-loop-func` fallback when disabled |
 | [`@typescript-eslint/no-loss-of-precision`](https://typescript-eslint.io/rules/no-loss-of-precision/) | Implemented |
 | [`@typescript-eslint/no-misused-new`](https://typescript-eslint.io/rules/no-misused-new/) | Implemented |
-| [`@typescript-eslint/no-namespace`](https://typescript-eslint.io/rules/no-namespace/) | Implemented for `allowDeclarations` and `allowDefinitionFiles` configurations |
+| [`@typescript-eslint/no-namespace`](https://typescript-eslint.io/rules/no-namespace/) | Implemented with `allowDeclarations: false` and `allowDefinitionFiles: true` defaults; supports explicit allowances and exempts string-named external modules |
 | [`@typescript-eslint/no-non-null-asserted-optional-chain`](https://typescript-eslint.io/rules/no-non-null-asserted-optional-chain/) | Implemented |
 | [`@typescript-eslint/no-redeclare`](https://typescript-eslint.io/rules/no-redeclare/) | Supports `builtinGlobals` and `ignoreDeclarationMerge` configuration |
 | [`@typescript-eslint/no-require-imports`](https://typescript-eslint.io/rules/no-require-imports/) | Supports `allow` and `allowAsImport` configuration |
