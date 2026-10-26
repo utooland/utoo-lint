@@ -181,7 +181,7 @@ fn lintSourceInternal(
         const semantic_model = try parser.semantic.analyze(&tree, .{ .check = true });
         var semantic_result = semantic_compat.Result.init(&tree, semantic_model);
         try semantic_result.symbol_table.resolveAll(semantic_result.scope_tree);
-        strict_fatal = try appendParserDiagnostics(allocator, &diagnostics, &tree, effective_options);
+        strict_fatal = try appendParserDiagnostics(allocator, &diagnostics, &tree, &effective_options);
         if (!strict_fatal) {
             try rules.runBasicWithOptionsPtr(allocator, &diagnostics, &tree, path, &effective_options);
             if (with_io) {
@@ -196,7 +196,7 @@ fn lintSourceInternal(
         } else {
             strict_fatal = try strict_syntax.appendDiagnostics(allocator, &diagnostics, &tree);
         }
-        strict_fatal = (try appendParserDiagnostics(allocator, &diagnostics, &tree, effective_options)) or strict_fatal;
+        strict_fatal = (try appendParserDiagnostics(allocator, &diagnostics, &tree, &effective_options)) or strict_fatal;
         if (!strict_fatal) try rules.runBasicWithOptionsPtr(allocator, &diagnostics, &tree, path, &effective_options);
     }
 
@@ -466,11 +466,11 @@ fn appendParserDiagnostics(
     allocator: Allocator,
     diagnostics: *core.DiagnosticList,
     tree: *const ast.Tree,
-    options: Options,
+    options: *const Options,
 ) Allocator.Error!bool {
     var strict_fatal = false;
     for (tree.diagnostics.items) |diagnostic| {
-        if (reactNoUnescapedEntitiesCoversParserDiagnostic(tree, diagnostic, options)) continue;
+        if (reactNoUnescapedEntitiesCoversParserDiagnostic(tree, diagnostic, options.*)) continue;
         strict_fatal = strict_fatal or strict_syntax.isDiagnostic(diagnostic);
 
         try core.addDiagnostic(
