@@ -14,6 +14,8 @@ pub fn check(
     index: ast.NodeIndex,
     allow_declarations: bool,
 ) Allocator.Error!void {
+    // String-named declarations describe external modules, not namespaces.
+    if (tree.data(declaration.id) == .string_literal) return;
     if (allow_declarations and declaration.declare) return;
 
     try core.addDiagnostic(

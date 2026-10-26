@@ -1,0 +1,11 @@
+{
+  "expect": "diagnostics",
+  "diagnostic_count": 1,
+  "fixes": "forbidden",
+  "rule_options": [
+    "error",
+    {
+      "allowDeclarations": false
+    }
+  ]
+}
