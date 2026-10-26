@@ -433,7 +433,7 @@ unsupported. See [configuration](configuration.md#react-compiler-related-checks)
 | [`@typescript-eslint/no-unnecessary-type-constraint`](https://typescript-eslint.io/rules/no-unnecessary-type-constraint/) | Implemented |
 | [`@typescript-eslint/no-useless-constructor`](https://typescript-eslint.io/rules/no-useless-constructor/) | Implemented |
 | [`@typescript-eslint/no-useless-empty-export`](https://typescript-eslint.io/rules/no-useless-empty-export/) | Implemented |
-| [`@typescript-eslint/no-unused-expressions`](https://typescript-eslint.io/rules/no-unused-expressions/) | Supports `allowShortCircuit`, `allowTernary`, and `allowTaggedTemplates` configuration |
+| [`@typescript-eslint/no-unused-expressions`](https://typescript-eslint.io/rules/no-unused-expressions/) | Supports `allowShortCircuit`, `allowTernary`, and `allowTaggedTemplates`; reports standalone type assertions such as `value as string;`, unlike TypeScript ESLint 5.62.0 ([migration note](eslint-migration.md#typescript-assertion-expressions)) |
 | [`@typescript-eslint/no-unused-vars`](https://typescript-eslint.io/rules/no-unused-vars/) | Supports `vars`, `args`, `caughtErrors`, `ignoreRestSiblings`, `ignoreClassWithStaticInitBlock`, `ignoreUsingDeclarations`, `reportUsedIgnorePattern`, and common `argsIgnorePattern`/`caughtErrorsIgnorePattern`/`destructuredArrayIgnorePattern`/`varsIgnorePattern` configuration |
 | [`@typescript-eslint/no-use-before-define`](https://typescript-eslint.io/rules/no-use-before-define/) | Supports `functions`, `classes`, `variables`, `typedefs`, `enums`, `allowNamedExports`, and `ignoreTypeReferences` configuration |
 | [`@typescript-eslint/no-var-requires`](https://typescript-eslint.io/rules/no-var-requires/) | Implemented |

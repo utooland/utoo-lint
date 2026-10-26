@@ -319,6 +319,36 @@ Expect some differences during the first pass:
 Once diagnostics match expectations, replace the ESLint job for that rule set or
 keep both jobs while expanding rule coverage.
 
+### TypeScript assertion expressions
+
+When migrating `@typescript-eslint/no-unused-expressions` from TypeScript ESLint
+5.62.0, review standalone type assertions:
+
+```ts
+export function f(value: unknown) {
+  value as string;
+}
+```
+
+With only this rule enabled, TypeScript ESLint 5.62.0 accepts the assertion,
+while `utoo-lint` reports it as an unused expression. Both report the plain
+`value;` control and accept a function call such as `consume(value);`.
+`utoo-lint` intentionally keeps the stricter check: a type assertion does not
+perform a runtime action or validate a value.
+
+This specific behavior agrees with the
+[TypeScript ESLint 8.0.0 implementation](https://github.com/typescript-eslint/typescript-eslint/blob/v8.0.0/packages/eslint-plugin/src/rules/no-unused-expressions.ts),
+which checks the expression inside an assertion. The
+[5.62.0 implementation](https://github.com/typescript-eslint/typescript-eslint/blob/v5.62.0/packages/eslint-plugin/src/rules/no-unused-expressions.ts)
+delegates the assertion node to the base rule without unwrapping it.
+
+Remove an assertion statement that has no runtime purpose. If runtime validation
+was intended, replace it with the appropriate check or assertion function. To
+retain a deliberate type-only statement temporarily, suppress this rule on that
+line and document why. There is no option to restore the 5.62.0 assertion
+exemption; the `allowShortCircuit`, `allowTernary`, and `allowTaggedTemplates`
+options do not control type assertions.
+
 ## Replace Package Scripts
 
 Typical script migration:

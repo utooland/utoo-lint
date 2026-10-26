@@ -230,6 +230,22 @@ npx utoo-lint --config=utlint.config.json --format=json src test > utoo-report.j
 
 诊断结果符合预期后，可以为这组规则替换 ESLint 任务；也可以继续保留两个任务，同时逐步扩大规则覆盖范围。
 
+### TypeScript 类型断言表达式
+
+从 TypeScript ESLint 5.62.0 迁移 `@typescript-eslint/no-unused-expressions` 时，需要检查独立的类型断言语句：
+
+```ts
+export function f(value: unknown) {
+  value as string;
+}
+```
+
+仅启用该规则时，TypeScript ESLint 5.62.0 会接受这个断言，而 `utoo-lint` 会将它报告为未使用的表达式。两者都会报告作为对照的 `value;`，也都会接受 `consume(value);` 这样的函数调用。`utoo-lint` 有意保留更严格的检查：类型断言不会执行运行时操作，也不会验证值。
+
+这个具体行为与 [TypeScript ESLint 8.0.0 的实现](https://github.com/typescript-eslint/typescript-eslint/blob/v8.0.0/packages/eslint-plugin/src/rules/no-unused-expressions.ts)一致，后者会检查断言内部的表达式。[5.62.0 的实现](https://github.com/typescript-eslint/typescript-eslint/blob/v5.62.0/packages/eslint-plugin/src/rules/no-unused-expressions.ts)则将断言节点直接交给基础规则，不会展开断言。
+
+没有运行时用途的断言语句可以删除。如果原意是执行运行时验证，应改用相应的检查或断言函数。如果需要暂时保留有意编写的纯类型语句，可以只在该行抑制此规则，并说明原因。目前没有恢复 5.62.0 断言豁免行为的选项；`allowShortCircuit`、`allowTernary` 和 `allowTaggedTemplates` 都不控制类型断言。
+
 ## 替换包脚本
 
 常见的脚本迁移方式：
