@@ -124,6 +124,14 @@ test "autofixes @typescript-eslint/no-empty-interface single-base declarations a
             .source = "type A = { next: A }; export interface B extends A {}",
             .expected = "type A = { next: A }; export type B = A",
         },
+        .{
+            .source = "export type A<T> = T[]; type C<T = number> = T; export interface B extends A<C> {}",
+            .expected = "export type A<T> = T[]; type C<T = number> = T; export type B = A<C>",
+        },
+        .{
+            .source = "export type A<T> = T[]; type C<T extends object = object> = T; export interface B extends A<C> {}",
+            .expected = "export type A<T> = T[]; type C<T extends object = object> = T; export type B = A<C>",
+        },
     };
     var options = lint.Options.allDisabled();
     options.typescript_eslint_no_empty_interface = true;
@@ -151,6 +159,9 @@ test "does not autofix @typescript-eslint/no-empty-interface when comments or de
         "export type A<T> = T[]; export interface B extends A<B> {}",
         "export type A<T> = T[]; type C = B; export interface B extends A<C> {}",
         "export type A<T> = T[]; type C = D; type D = B; export interface B extends A<C> {}",
+        "export type A<T> = T[]; type C<T = B> = T; export interface B extends A<C> {}",
+        "export type A<T> = T[]; type C<T extends B = B> = T; export interface B extends A<C> {}",
+        "export type A<T> = T[]; type C<T = D> = T; type D = B; export interface B extends A<C> {}",
         "export type A<T> = T[]; interface C extends B {} export interface B extends A<C> {}",
         "export {}; declare interface B extends A {}",
         "export {}; interface B extends A {} interface B { value: number; }",
@@ -181,6 +192,21 @@ test "does not autofix @typescript-eslint/no-empty-interface when comments or de
     var fixed = try lint.applyFixes(std.testing.allocator, declaration_file, result.diagnostics);
     defer fixed.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings(declaration_file, fixed.output);
+}
+
+test "no-empty-interface preserves recursive defaults when other interfaces are converted" {
+    const source = "export type A<T> = T[]; interface C<T = B> extends D<T> {} interface D<T> { value: T; } export interface B extends A<C> {}";
+    const expected = "export type A<T> = T[]; type C<T = B> = D<T>; interface D<T> { value: T; } export interface B extends A<C> {}";
+    var options = lint.Options.allDisabled();
+    options.typescript_eslint_no_empty_interface = true;
+    var result = try lint.lintSourceAndFix(std.testing.allocator, source, "fixture.ts", options);
+    defer result.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings(expected, result.output);
+    try std.testing.expectEqual(@as(usize, 1), helpers.countRule(result.result, lint.rules.typescript_eslint_no_empty_interface.id));
+    var second = try lint.lintSourceAndFix(std.testing.allocator, result.output, "fixture.ts", options);
+    defer second.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings(expected, second.output);
+    try std.testing.expect(!second.fixed);
 }
 
 test "does not autofix @typescript-eslint/no-empty-interface when single-base declarations are allowed" {

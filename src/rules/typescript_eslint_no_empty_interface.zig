@@ -134,12 +134,22 @@ const Visitor = struct {
                 for (self.symbols.symbolDecls(symbol)) |declaration| {
                     const parent = self.symbols.parentOf(declaration) orelse continue;
                     switch (tree.data(parent)) {
-                        .ts_type_alias_declaration => |alias| try pending.append(self.allocator, tree.span(alias.type_annotation)),
+                        .ts_type_alias_declaration => |alias| {
+                            try pending.append(self.allocator, tree.span(alias.type_annotation));
+                            // Defaults and constraints can hide a reference
+                            // that becomes circular after interface conversion.
+                            if (alias.type_parameters != .null) {
+                                try pending.append(self.allocator, tree.span(alias.type_parameters));
+                            }
+                        },
                         .ts_interface_declaration => |other| {
                             // Another empty interface can be converted in the
                             // same fix pass, removing its recursion barrier.
                             if (self.eligibleConversion(tree, other, parent) != null) {
                                 try pending.append(self.allocator, tree.span(tree.extra(other.extends)[0]));
+                                if (other.type_parameters != .null) {
+                                    try pending.append(self.allocator, tree.span(other.type_parameters));
+                                }
                             }
                         },
                         // Non-convertible interfaces retain the indirection
