@@ -132,7 +132,8 @@ fn report(
     defer if (replacement) |text| allocator.free(text);
     if (can_fix and !hasComments(tree, span)) {
         var checked = CheckedFixTypes{};
-        if (banned.fix) |text| replacement = try safeReplacement(allocator, text, config, &.{banned.name}, &checked);
+        var depth: usize = 0;
+        if (banned.fix) |text| replacement = try safeReplacement(allocator, text, config, &.{banned.name}, &checked, &depth);
     }
     const fixes: []const core.Fix = if (replacement) |text| &.{.{ .span = span, .replacement = text }} else &.{};
     try core.addDiagnosticWithFixes(allocator, diagnostics, .@"error", id, message, span, fixes);
@@ -146,6 +147,7 @@ fn safeReplacement(
     config: *const core.TypescriptEslintBanTypesConfig,
     path: []const []const u8,
     checked_types: *CheckedFixTypes,
+    remaining_depth: *usize,
 ) Allocator.Error!?[]u8 {
     // Longer configured chains exceed lintSourceAndFix's pass budget and
     // would leave another fix for the next invocation instead of stabilizing.
@@ -165,6 +167,7 @@ fn safeReplacement(
     if (annotation.start != prefix.len or annotation.end != prefix.len + text.len) return null;
     // Reject self-expanding replacements and cycles between configured types.
     // Otherwise successive fix passes can keep growing or toggling the source.
+    var depth: usize = 1;
     for (parsed.nodes.items(.data)) |data| {
         const name = switch (data) {
             .ts_type_reference => |reference| typeName(&parsed, reference.type_name) orelse continue,
@@ -177,19 +180,27 @@ fn safeReplacement(
         for (path) |ancestor| {
             if (std.mem.eql(u8, ancestor, name)) return null;
         }
-        if (checked_types.contains(name)) continue;
-        var next_path: [core.max_typescript_eslint_ban_type_entries + 8][]const u8 = undefined;
-        if (path.len >= next_path.len) return null;
-        @memcpy(next_path[0..path.len], path);
-        next_path[path.len] = name;
-        const checked = (try safeReplacement(allocator, next, config, next_path[0 .. path.len + 1], checked_types)) orelse return null;
-        allocator.free(checked);
-        checked_types.append(name);
+        const child_depth = checked_types.depthFor(name) orelse child: {
+            var next_path: [core.max_typescript_eslint_ban_type_entries + 8][]const u8 = undefined;
+            if (path.len >= next_path.len) return null;
+            @memcpy(next_path[0..path.len], path);
+            next_path[path.len] = name;
+            var validated_depth: usize = 0;
+            const checked = (try safeReplacement(allocator, next, config, next_path[0 .. path.len + 1], checked_types, &validated_depth)) orelse return null;
+            allocator.free(checked);
+            checked_types.append(name, validated_depth);
+            break :child validated_depth;
+        };
+        depth = @max(depth, 1 + child_depth);
+        // A memoized subtree can be reached through a longer branch. Recheck
+        // its remaining depth against this path's budget on every use.
+        if (path.len - 1 + depth > core.max_autofix_passes) return null;
     }
     var simple = true;
     for (text) |byte| {
         if (!std.ascii.isAlphanumeric(byte) and byte != '_' and byte != '$' and byte != '.') simple = false;
     }
+    remaining_depth.* = depth;
     return if (simple) try allocator.dupe(u8, text) else try std.fmt.allocPrint(allocator, "({s})", .{text});
 }
 
@@ -206,18 +217,20 @@ const CheckedFixTypes = struct {
     count: usize = 0,
     names: [core.max_typescript_eslint_ban_type_entries + 8][core.max_typescript_eslint_ban_type_name_len]u8 = undefined,
     lengths: [core.max_typescript_eslint_ban_type_entries + 8]usize = undefined,
+    depths: [core.max_typescript_eslint_ban_type_entries + 8]usize = undefined,
 
-    fn contains(self: *const CheckedFixTypes, name: []const u8) bool {
+    fn depthFor(self: *const CheckedFixTypes, name: []const u8) ?usize {
         for (0..self.count) |index| {
-            if (std.mem.eql(u8, self.names[index][0..self.lengths[index]], name)) return true;
+            if (std.mem.eql(u8, self.names[index][0..self.lengths[index]], name)) return self.depths[index];
         }
-        return false;
+        return null;
     }
 
-    fn append(self: *CheckedFixTypes, name: []const u8) void {
+    fn append(self: *CheckedFixTypes, name: []const u8, depth: usize) void {
         if (self.count >= self.names.len or name.len > core.max_typescript_eslint_ban_type_name_len) return;
         @memcpy(self.names[self.count][0..name.len], name);
         self.lengths[self.count] = name.len;
+        self.depths[self.count] = depth;
         self.count += 1;
     }
 };

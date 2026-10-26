@@ -194,3 +194,27 @@ test "ban-types respects the fix pass budget for replacement chains" {
         try std.testing.expect(!second.fixed);
     }
 }
+
+test "ban-types memoized branches retain their remaining chain depth" {
+    var options = lint.Options.allDisabled();
+    options.typescript_eslint_ban_types = true;
+    try options.typescript_eslint_ban_types_config.custom.appendWithFix("T0", "Use replacement", "T10 | T1");
+    for (1..11) |index| {
+        var name_buf: [8]u8 = undefined;
+        var next_buf: [8]u8 = undefined;
+        const name = try std.fmt.bufPrint(&name_buf, "T{d}", .{index});
+        const replacement = if (index == 10) "number" else try std.fmt.bufPrint(&next_buf, "T{d}", .{index + 1});
+        try options.typescript_eslint_ban_types_config.custom.appendWithFix(name, "Use replacement", replacement);
+    }
+    for ([_]struct { source: []const u8, output: []const u8 }{
+        .{ .source = "export type A = T0;", .output = "export type A = T0;" },
+        .{ .source = "export type A = T1;", .output = "export type A = number;" },
+    }) |case| {
+        var result = try lint.lintSourceAndFix(std.testing.allocator, case.source, "fixture.ts", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqualStrings(case.output, result.output);
+        var second = try lint.lintSourceAndFix(std.testing.allocator, result.output, "fixture.ts", options);
+        defer second.deinit(std.testing.allocator);
+        try std.testing.expect(!second.fixed);
+    }
+}
