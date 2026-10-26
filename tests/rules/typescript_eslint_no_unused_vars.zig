@@ -2,6 +2,74 @@ const std = @import("std");
 const lint = @import("utoo_lint");
 const helpers = @import("../helpers.zig");
 
+test "reports recursive-only TypeScript declarations independently of rule options" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "type Node = { next: Node }; export {};", .count = 1 },
+        .{ .source = "interface Node { next: Node } export {};", .count = 1 },
+        .{ .source = "interface Node { next: Node } interface Node { prev: Node } export {};", .count = 1 },
+        .{ .source = "type Node<T> = { next: Node<T> }; export {};", .count = 1 },
+        .{ .source = "type Node = { next: Node }; export type Root = Node;", .count = 0 },
+        .{ .source = "interface Node { next: Node } export function read(node: Node) { return node; }", .count = 0 },
+        .{ .source = "export type Node = { next: Node };", .count = 0 },
+        .{ .source = "type Node = { next: Node }; export function read(Node: number) { return Node; }", .count = 1 },
+    };
+    for ([_][]const u8{ "\"error\"", "[\"error\",{\"ignoreRestSiblings\":true}]" }) |config_source| {
+        var config = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, config_source, .{});
+        defer config.deinit();
+        var options = lint.Options.allDisabled();
+        try options.setByRuleConfigValue("@typescript-eslint/no-unused-vars", config.value);
+        for (cases) |case| {
+            var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.ts", options);
+            defer result.deinit(std.testing.allocator);
+            try std.testing.expectEqual(case.count, result.diagnostics.len);
+            if (case.count != 0) {
+                try std.testing.expectEqualStrings("'Node' is declared but never used.", result.diagnostics[0].message);
+                try std.testing.expectEqualStrings(lint.rules.typescript_eslint_no_unused_vars.id, result.diagnostics[0].rule_id);
+            }
+        }
+    }
+}
+
+test "reports update-only TypeScript variables but preserves consumed updates" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "let count = 0; count++;", .count = 1 },
+        .{ .source = "let count = 0; ++count; --count; count--;", .count = 1 },
+        .{ .source = "let count = 0; (count++);", .count = 1 },
+        .{ .source = "let count = 0; count++, run();", .count = 1 },
+        .{ .source = "for (let count = 0; active; count++) {}", .count = 1 },
+        .{ .source = "let count = 0; count++; consume(count);", .count = 0 },
+        .{ .source = "let count = 0; consume(count++);", .count = 0 },
+        .{ .source = "let count = 0; if (++count) run();", .count = 0 },
+        .{ .source = "for (let count = 0; count++ < 3;) {}", .count = 0 },
+        .{ .source = "let count = 0; export function next() { return count++; }", .count = 0 },
+        .{ .source = "let count = 0; consume((run(), count++));", .count = 0 },
+        .{ .source = "const state = { count: 0 }; state.count++;", .count = 0 },
+        .{ .source = "export let count = 0; count++;", .count = 0 },
+    };
+    for ([_][]const u8{ "\"error\"", "[\"error\",{\"ignoreRestSiblings\":true}]" }) |config_source| {
+        var config = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, config_source, .{});
+        defer config.deinit();
+        var options = lint.Options.allDisabled();
+        try options.setByRuleConfigValue("@typescript-eslint/no-unused-vars", config.value);
+        for (cases) |case| {
+            var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.ts", options);
+            defer result.deinit(std.testing.allocator);
+            try std.testing.expectEqual(case.count, result.diagnostics.len);
+            if (case.count != 0) try std.testing.expectEqualStrings("'count' is declared but never used.", result.diagnostics[0].message);
+        }
+    }
+}
+
+test "reports both unused declarations from issue 1298" {
+    var options = lint.Options.allDisabled();
+    try options.setByRuleConfigValue("@typescript-eslint/no-unused-vars", .{ .string = "error" });
+    var result = try lint.lintSource(std.testing.allocator, "type Node = { next: Node }; export {}; let count = 0; count++;", "fixture.ts", options);
+    defer result.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 2), result.diagnostics.len);
+    try std.testing.expectEqualStrings("'Node' is declared but never used.", result.diagnostics[0].message);
+    try std.testing.expectEqualStrings("'count' is declared but never used.", result.diagnostics[1].message);
+}
+
 test "treats TypeScript constructor parameter properties as implicitly used" {
     const source =
         \\export class Message {
