@@ -2741,6 +2741,33 @@ test("strict parse failures skip ESM and CJS custom rule and parser listeners", 
   }
 });
 
+test("ESM and CJS preserve native suppression metadata with fatal semantic errors", async (t) => {
+  const cwd = createProject(t);
+  const previousBinary = process.env.UTOO_LINT_BIN;
+  process.env.UTOO_LINT_BIN = testBinary();
+  t.after(() => {
+    if (previousBinary === undefined) delete process.env.UTOO_LINT_BIN;
+    else process.env.UTOO_LINT_BIN = previousBinary;
+  });
+  const source = "/* eslint-disable no-debugger -- intentional debug */\nlet value; let value; debugger;";
+  const config = { rules: { "no-debugger": "error", "no-array-constructor": "error" } };
+  const native = lintText(source, { cwd, binary: testBinary(), noConfig: true, overrideConfig: config, filePath: "invalid.js" });
+  assert.deepEqual(native.diagnostics.map(({ ruleId }) => ruleId), ["parse"]);
+  assert.deepEqual(native.suppressedDiagnostics.map(({ ruleId }) => ruleId), ["no-debugger"]);
+  for (const [SyncLinter, Engine] of [[Linter, ESLint], [CommonJSLinter, CommonJSESLint]]) {
+    const engine = new Engine({ cwd, binary: testBinary(), overrideConfigFile: true, overrideConfig: config });
+    const [result] = await engine.lintText(source, { filePath: "invalid.js" });
+    assert.equal(result.fatalErrorCount, 1);
+    assert.deepEqual(result.suppressedMessages.map(({ ruleId }) => ruleId), ["no-debugger"]);
+    const linter = new SyncLinter();
+    const messages = linter.verify(source, config, { cwd, filename: "invalid.js" });
+    assert.deepEqual(messages.map(({ ruleId }) => ruleId), ["parse"]);
+    assert.equal(messages[0].fatal, true);
+    assert.deepEqual(linter.getSuppressedMessages(), result.suppressedMessages);
+    assert.equal(linter.getSuppressedMessages()[0].suppressions[0].justification, "intentional debug");
+  }
+});
+
 test("registered custom definitions are filtered before fatal semantic parse results", (t) => {
   const cwd = createProject(t);
   const previousBinary = process.env.UTOO_LINT_BIN;

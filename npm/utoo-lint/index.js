@@ -691,7 +691,8 @@ export class Linter {
       .map((diagnostic) => diagnosticToESLintMessage(diagnostic, ruleSeverities));
     if (nativeMessages.some((message) => message.fatal)) {
       this.sourceCode = null;
-      this.suppressedMessages = [];
+      this.suppressedMessages = (report.suppressedDiagnostics ?? [])
+        .map((diagnostic) => suppressedDiagnosticToESLintMessage(diagnostic, ruleSeverities));
       this.times = { passes: [] };
       this.fixPassCount = 0;
       return sortLintMessages(nativeMessages);
