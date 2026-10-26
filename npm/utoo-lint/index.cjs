@@ -1774,7 +1774,7 @@ function lintText(code, options = {}) {
 
   const tmp = mkdtempSync(join(tmpdir(), "utoo-lint-"));
   const requestedPath = textFilePathForOptions(options, "text.js");
-  const extension = extname(requestedPath) || ".js";
+  const extension = requestedPath.match(/\.d\.(?:ts|mts|cts)$/)?.[0] ?? (extname(requestedPath) || ".js");
   const tempFile = join(tmp, `input${extension}`);
   const discoveredConfig =
     !options.noConfig && !options.config && !options.overrideConfig

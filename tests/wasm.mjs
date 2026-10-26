@@ -72,12 +72,13 @@ test("no-namespace defaults reject declarations while preserving explicit and ex
     [[2, { allowDefinitionFiles: false }], 1, 1],
     [[2, { allowDeclarations: true, allowDefinitionFiles: false }], 0, 0],
   ]) {
-    for (const [filePath, expected] of [["case.ts", count], ["case.d.ts", definitionCount]]) {
+    for (const [filePath, expected] of [["case.ts", count], ["case.d.ts", definitionCount], ["case.d.mts", definitionCount], ["case.d.cts", definitionCount]]) {
       const options = { filePath, rules: { [rule]: setting } };
       const result = linter.lint(source, options);
       assert.equal(result.diagnostics.length, expected, `${JSON.stringify(setting)}: ${filePath}`);
       assert.ok(result.diagnostics.every((item) => item.ruleId === rule && item.severity === "error"));
-      const external = linter.lint("export {}; declare module 'foo' { export const value: number; }", options);
+      const externalSource = "declare module 'foo' { export const value: number; }";
+      const external = linter.lint(filePath.endsWith(".cts") ? externalSource : `export {}; ${externalSource}`, options);
       assert.deepEqual(external.diagnostics, []);
     }
   }

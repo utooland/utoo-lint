@@ -12,7 +12,7 @@ const builtBinary = resolve(dirname(fileURLToPath(import.meta.url)), "../../../z
 const binary = existsSync(builtBinary) ? builtBinary : esm.resolveBinary();
 const rule = "@typescript-eslint/no-namespace";
 const declared = "declare namespace API { const value: number; }";
-const external = "export {}; declare module 'foo' { export const value: number; } declare module 'hast' { interface Element { extra?: string; } }";
+const external = "declare module 'foo' { export const value: number; } declare module 'hast' { interface Element { extra?: string; } }";
 
 for (const [format, api] of [["ESM", esm], ["CJS", cjs]]) {
   test(`${format} no-namespace reports declarations by default and preserves explicit allowances`, async (t) => {
@@ -30,15 +30,15 @@ for (const [format, api] of [["ESM", esm], ["CJS", cjs]]) {
     ]) {
       const engine = new api.ESLint({
         cwd, binary, overrideConfigFile: true,
-        overrideConfig: [{ files: ["**/*.ts"], rules: { [rule]: setting } }],
+        overrideConfig: [{ files: ["**/*.{ts,mts,cts}"], rules: { [rule]: setting } }],
       });
       const [runtime] = await engine.lintText("namespace Runtime { export const value = 1; }", { filePath: "runtime.ts" });
       assert.deepEqual(runtime.messages.map((message) => message.ruleId), [rule]);
-      for (const [filePath, expected] of [["case.ts", count], ["case.d.ts", definitionCount]]) {
+      for (const [filePath, expected] of [["case.ts", count], ["case.d.ts", definitionCount], ["case.d.mts", definitionCount], ["case.d.cts", definitionCount]]) {
         const [result] = await engine.lintText(declared, { filePath });
         assert.equal(result.messages.length, expected, `${JSON.stringify(setting)}: ${filePath}`);
         assert.ok(result.messages.every((message) => message.ruleId === rule && message.severity === 2));
-        const [allowed] = await engine.lintText(external, { filePath });
+        const [allowed] = await engine.lintText(filePath.endsWith(".cts") ? external : `export {}; ${external}`, { filePath });
         assert.deepEqual(allowed.messages, []);
       }
     }
@@ -49,11 +49,14 @@ for (const [format, api] of [["ESM", esm], ["CJS", cjs]]) {
     t.after(() => rmSync(cwd, { recursive: true, force: true }));
     const filePath = join(cwd, "case.ts");
     writeFileSync(filePath, `${declared}\n`);
+    const definitionPath = join(cwd, "case.d.ts");
+    writeFileSync(definitionPath, `${declared}\n`);
     for (const setting of [2, [2, { allowDeclarations: false }]]) {
       writeFileSync(join(cwd, "utlint.config.json"), JSON.stringify({ rules: { [rule]: setting } }));
       const report = api.lintFiles([filePath], { cwd, binary });
       assert.deepEqual(report.diagnostics.map(({ ruleId, severity }) => ({ ruleId, severity })), [{ ruleId: rule, severity: "error" }]);
       assert.equal(report.exitCode, 1);
+      assert.deepEqual(api.lintFiles([definitionPath], { cwd, binary }).diagnostics, []);
     }
   });
 }
