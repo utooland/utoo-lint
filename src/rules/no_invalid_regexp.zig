@@ -81,7 +81,8 @@ const Visitor = struct {
         }
 
         const pattern = stringLiteralValue(tree, arguments[0]) orelse return;
-        const message = validatePattern(pattern) orelse return;
+        const unicode_sets = if (flags) |value| std.mem.indexOfScalar(u8, value, 'v') != null else false;
+        const message = (try validatePattern(self.allocator, pattern, unicode_sets)) orelse return;
         try self.addDiagnostic(tree, index, message);
     }
 
@@ -127,9 +128,9 @@ fn validateFlags(flags: []const u8, allow_constructor_flags: core.NoInvalidRegex
     return null;
 }
 
-fn validatePattern(pattern: []const u8) ?[]const u8 {
+fn validatePattern(allocator: Allocator, pattern: []const u8, unicode_sets: bool) Allocator.Error!?[]const u8 {
     var group_depth: usize = 0;
-    var in_class = false;
+    var class_depth: usize = 0;
     var escaped = false;
 
     for (pattern) |char| {
@@ -143,13 +144,14 @@ fn validatePattern(pattern: []const u8) ?[]const u8 {
             continue;
         }
 
-        if (in_class) {
-            if (char == ']') in_class = false;
+        if (class_depth != 0) {
+            if (char == ']') class_depth -= 1;
+            if (unicode_sets and char == '[') class_depth += 1;
             continue;
         }
 
         switch (char) {
-            '[' => in_class = true,
+            '[' => class_depth = 1,
             '(' => group_depth += 1,
             ')' => {
                 if (group_depth == 0) return "unmatched ')'";
@@ -160,10 +162,137 @@ fn validatePattern(pattern: []const u8) ?[]const u8 {
     }
 
     if (escaped) return "trailing escape";
-    if (in_class) return "unterminated character class";
+    if (class_depth != 0) return "unterminated character class";
     if (group_depth != 0) return "unterminated group";
 
+    return validateCaptureNames(allocator, pattern, unicode_sets);
+}
+
+// Paths are immutable: starting another alternative creates a new path entry,
+// so captures retain the alternative in which they were declared.
+const DisjunctionPath = struct {
+    parent: ?usize,
+    depth: usize,
+    disjunction: usize,
+    alternative: usize,
+};
+
+const NamedCapture = struct {
+    path: usize,
+    previous: ?usize,
+};
+
+fn validateCaptureNames(allocator: Allocator, pattern: []const u8, unicode_sets: bool) Allocator.Error!?[]const u8 {
+    if (std.mem.indexOf(u8, pattern, "(?<") == null) return null;
+
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const scratch = arena.allocator();
+    var paths: std.ArrayList(DisjunctionPath) = .empty;
+    try paths.append(scratch, .{ .parent = null, .depth = 0, .disjunction = 0, .alternative = 0 });
+    var captures: std.ArrayList(NamedCapture) = .empty;
+    var names: std.StringHashMapUnmanaged(usize) = .empty;
+    var current: usize = 0;
+    var class_depth: usize = 0;
+    var index: usize = 0;
+    while (index < pattern.len) : (index += 1) {
+        const char = pattern[index];
+        if (char == '\\') {
+            index += 1;
+            continue;
+        }
+        if (class_depth != 0) {
+            if (char == ']') class_depth -= 1;
+            if (unicode_sets and char == '[') class_depth += 1;
+            continue;
+        }
+        switch (char) {
+            '[' => class_depth = 1,
+            '(' => {
+                if (std.mem.startsWith(u8, pattern[index..], "(?<") and index + 3 < pattern.len and
+                    pattern[index + 3] != '=' and pattern[index + 3] != '!')
+                {
+                    const name_start = index + 3;
+                    const name_end = std.mem.indexOfScalarPos(u8, pattern, name_start, '>') orelse return "invalid capture group name";
+                    const name = (try decodeCaptureName(scratch, pattern[name_start..name_end])) orelse return "invalid capture group name";
+                    if (!parser.lexical.isIdentifierName(name)) return "invalid capture group name";
+                    const entry = try names.getOrPut(scratch, name);
+                    const previous = if (entry.found_existing) entry.value_ptr.* else null;
+                    var earlier = previous;
+                    while (earlier) |capture| {
+                        if (mightBothParticipate(paths.items, captures.items[capture].path, current)) return "duplicate capture group name";
+                        earlier = captures.items[capture].previous;
+                    }
+                    entry.value_ptr.* = captures.items.len;
+                    try captures.append(scratch, .{ .path = current, .previous = previous });
+                    index = name_end;
+                }
+                const child = paths.items.len;
+                try paths.append(scratch, .{ .parent = current, .depth = paths.items[current].depth + 1, .disjunction = child, .alternative = 0 });
+                current = child;
+            },
+            ')' => current = paths.items[current].parent orelse return "unmatched ')'",
+            '|' => {
+                var next = paths.items[current];
+                next.alternative += 1;
+                current = paths.items.len;
+                try paths.append(scratch, next);
+            },
+            else => {},
+        }
+    }
     return null;
+}
+
+fn mightBothParticipate(paths: []const DisjunctionPath, lhs: usize, rhs: usize) bool {
+    var left = lhs;
+    var right = rhs;
+    while (paths[left].depth > paths[right].depth) left = paths[left].parent.?;
+    while (paths[right].depth > paths[left].depth) right = paths[right].parent.?;
+    while (true) {
+        if (paths[left].disjunction == paths[right].disjunction and paths[left].alternative != paths[right].alternative) return false;
+        left = paths[left].parent orelse return true;
+        right = paths[right].parent.?;
+    }
+}
+
+fn decodeCaptureName(allocator: Allocator, raw: []const u8) Allocator.Error!?[]const u8 {
+    if (raw.len == 0) return null;
+    if (std.mem.indexOfScalar(u8, raw, '\\') == null) return raw;
+    var name: std.ArrayList(u8) = .empty;
+    var index: usize = 0;
+    while (index < raw.len) {
+        if (raw[index] != '\\') {
+            try name.append(allocator, raw[index]);
+            index += 1;
+            continue;
+        }
+        var code_point = parseNameEscape(raw, &index) orelse return null;
+        if (code_point >= 0xd800 and code_point <= 0xdbff) {
+            const trail = parseNameEscape(raw, &index) orelse return null;
+            if (trail < 0xdc00 or trail > 0xdfff) return null;
+            code_point = 0x10000 + ((code_point - 0xd800) << 10) + trail - 0xdc00;
+        }
+        var bytes: [4]u8 = undefined;
+        const length = std.unicode.utf8Encode(code_point, &bytes) catch return null;
+        try name.appendSlice(allocator, bytes[0..length]);
+    }
+    return name.items;
+}
+
+fn parseNameEscape(raw: []const u8, index: *usize) ?u21 {
+    if (!std.mem.startsWith(u8, raw[index.*..], "\\u")) return null;
+    index.* += 2;
+    if (index.* >= raw.len) return null;
+    const braced = raw[index.*] == '{';
+    if (braced) index.* += 1;
+    const start = index.*;
+    const end = if (braced) std.mem.indexOfScalarPos(u8, raw, start, '}') orelse return null else start + 4;
+    if (end > raw.len or end == start) return null;
+    const value = std.fmt.parseInt(u21, raw[start..end], 16) catch return null;
+    if (value > 0x10ffff) return null;
+    index.* = end + @intFromBool(braced);
+    return value;
 }
 
 fn isRegExpReferenceName(tree: *const ast.Tree, index: ast.NodeIndex) bool {

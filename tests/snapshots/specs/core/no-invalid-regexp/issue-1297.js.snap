@@ -1,0 +1,30 @@
+---
+fixture: "tests/snapshots/specs/core/no-invalid-regexp/issue-1297.js"
+rule: "no-invalid-regexp"
+---
+
+# Input
+
+```js
+RegExp("(?<a>x)(?<a>y)");
+```
+
+# Diagnostics
+
+count: 1
+
+## Diagnostic 1
+
+- rule: "no-invalid-regexp"
+- severity: "warning"
+- message: "Invalid regular expression: duplicate capture group name."
+- byte span: 0..24
+- start: 1:1
+- end: 1:25
+- source: "RegExp(\"(?<a>x)(?<a>y)\")"
+- fixes: 0
+
+# First fix pass
+
+- fixed: false
+- applied diagnostics: 0
