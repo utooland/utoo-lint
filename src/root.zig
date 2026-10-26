@@ -172,6 +172,9 @@ fn lintSourceInternal(
     defer tree.deinit();
 
     const needs_semantic = needsSemanticModel(effective_options);
+    // Semantic diagnostics also use the parse rule ID. Preserve their existing
+    // lint/suppression behavior; only actual syntax failures stop directives.
+    const syntax_fatal = hasParserSyntaxError(&tree, effective_options);
 
     var strict_fatal = false;
     if (needs_semantic) {
@@ -198,7 +201,7 @@ fn lintSourceInternal(
     }
 
     // Fatal syntax prevents lint comment validation as well as suppression.
-    if (!hasFatalParseDiagnostic(diagnostics.items)) {
+    if (!syntax_fatal and !strict_fatal) {
         try suppressions.apply(allocator, &diagnostics, &suppressed_diagnostics, &tree);
     }
 
@@ -482,9 +485,9 @@ fn appendParserDiagnostics(
     return strict_fatal;
 }
 
-fn hasFatalParseDiagnostic(diagnostics: []const Diagnostic) bool {
-    for (diagnostics) |diagnostic| {
-        if (diagnostic.severity == .@"error" and std.mem.eql(u8, diagnostic.rule_id, "parse")) return true;
+fn hasParserSyntaxError(tree: *const ast.Tree, options: Options) bool {
+    for (tree.diagnostics.items) |diagnostic| {
+        if (diagnostic.severity == .@"error" and !reactNoUnescapedEntitiesCoversParserDiagnostic(tree, diagnostic, options)) return true;
     }
     return false;
 }

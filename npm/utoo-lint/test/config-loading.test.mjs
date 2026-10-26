@@ -2749,6 +2749,10 @@ test("strict parse failures precede unknown disable directive validation", async
   const native = spawnSync(testBinary(), [`--config=${config}`, "--format=json", path], { cwd, encoding: "utf8" });
   assert.equal(native.status, 1, native.stderr);
   assert.deepEqual(JSON.parse(native.stdout).diagnostics.map(({ ruleId }) => ruleId), ["parse"]);
+  const malformed = write(join(cwd, "malformed.js"), "// eslint-disable-next-line unknown-rule\nconst = ;");
+  const syntax = spawnSync(testBinary(), [`--config=${config}`, "--format=json", malformed], { cwd, encoding: "utf8" });
+  assert.equal(syntax.status, 1, syntax.stderr);
+  assert.ok(JSON.parse(syntax.stdout).diagnostics.every(({ ruleId }) => ruleId === "parse"));
   for (const Engine of [ESLint, CommonJSESLint]) {
     const engine = new Engine({ cwd, binary: testBinary(), overrideConfigFile: true, overrideConfig: { rules: {} } });
     const [result] = await engine.lintText(source, { filePath: "invalid.js" });
