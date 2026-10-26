@@ -4522,7 +4522,7 @@ function reportToESLintResults(report, textOptions = {}) {
       byFile.set(filePath, emptyESLintResult(filePath, textOptions.source));
     }
     const ruleSeverities = textOptions.ruleSeverityForFile?.(filePath) ?? textOptions.ruleSeverities;
-    if (diagnostic.ruleId && ruleSeverities?.get(diagnostic.ruleId) === 0) {
+    if (!isRuleDefinitionError(diagnostic) && diagnostic.ruleId && ruleSeverities?.get(diagnostic.ruleId) === 0) {
       continue;
     }
     byFile.get(filePath).messages.push(diagnosticToESLintMessage(diagnostic, ruleSeverities));
@@ -4534,7 +4534,7 @@ function reportToESLintResults(report, textOptions = {}) {
       byFile.set(filePath, emptyESLintResult(filePath, textOptions.source));
     }
     const ruleSeverities = textOptions.ruleSeverityForFile?.(filePath) ?? textOptions.ruleSeverities;
-    if (diagnostic.ruleId && ruleSeverities?.get(diagnostic.ruleId) === 0) {
+    if (!isRuleDefinitionError(diagnostic) && diagnostic.ruleId && ruleSeverities?.get(diagnostic.ruleId) === 0) {
       continue;
     }
     byFile.get(filePath).suppressedMessages.push(suppressedDiagnosticToESLintMessage(diagnostic, ruleSeverities));
@@ -5324,7 +5324,9 @@ function emptyESLintResult(filePath, source) {
 function diagnosticToESLintMessage(diagnostic, ruleSeverities) {
   const message = {
     ruleId: diagnostic.ruleId,
-    severity: ruleSeverities?.get(diagnostic.ruleId) ?? (diagnostic.severity === "error" ? 2 : 1),
+    severity: isRuleDefinitionError(diagnostic)
+      ? 2
+      : ruleSeverities?.get(diagnostic.ruleId) ?? (diagnostic.severity === "error" ? 2 : 1),
     message: diagnostic.message,
     line: diagnostic.line,
     column: diagnostic.column,

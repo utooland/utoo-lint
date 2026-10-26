@@ -68,6 +68,40 @@ for (const [name, api] of [["ESM", esm], ["CommonJS", commonJS]]) {
     assert.deepEqual(linter.verify("// utlint-ignore unknown-rule\nvoid 0;", { rules: {} }), []);
   });
 
+  test(`${name} definition errors stay errors when the unknown rule is configured off`, async (t) => {
+    withBinary(t);
+    const cwd = project(t);
+    const code = "// eslint-disable-next-line unknown-rule\nvoid 0;";
+    const filePath = join(cwd, "case.js");
+    writeFileSync(filePath, code);
+    for (const off of ["off", 0, ["off"], [0]]) {
+      const config = { rules: { "unknown-rule": off } };
+      const linter = new api.Linter();
+      const messages = linter.verify(code, config);
+      assert.equal(messages.length, 1);
+      assertUnknown(messages[0]);
+      assert.equal(messages[0].severity, 2);
+      const fixed = linter.verifyAndFix(code, config);
+      assert.equal(fixed.fixed, false);
+      assert.equal(fixed.messages[0].severity, 2);
+
+      const eslint = new api.ESLint({ binary, cwd, noConfig: true, overrideConfig: config });
+      const engine = new api.CLIEngine({ binary, cwd, useEslintrc: false, baseConfig: config });
+      const results = [
+        ...(await eslint.lintText(code, { filePath })),
+        ...engine.executeOnText(code, filePath).results
+      ];
+      for (const result of results) {
+        assert.equal(result.errorCount, 1);
+        assert.equal(result.warningCount, 0);
+        assert.equal(result.messages.length, 1);
+        assertUnknown(result.messages[0]);
+        assert.equal(result.messages[0].severity, 2);
+        assert.deepEqual(result.suppressedMessages, []);
+      }
+    }
+  });
+
   test(`${name} mounted JS plugin rules stay known when disabled or silent and remain file scoped`, async (t) => {
     withBinary(t);
     const cwd = project(t);
