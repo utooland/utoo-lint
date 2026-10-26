@@ -1,5 +1,20 @@
 # utoo-lint benchmark
 
+The CodSpeed workflow measures walltime on the fixed
+`codspeed-macro-arm64-graviton-ubuntu-22-04` runner label. Standard GitHub
+`ubuntu-latest` jobs can use different CPU models, making their elapsed times
+unsuitable as a stable regression baseline. Keep the runner label the same for
+the default branch and pull requests; see the
+[CodSpeed runner documentation](https://codspeed.io/docs/features/macro-runners).
+
+When changing runner hardware, the first successful default-branch run becomes
+the new baseline. Compare subsequent pull requests against that baseline rather
+than attributing the hardware transition's timing changes to source code. This
+runner change does not change the workload, measurement mode or regression
+thresholds. The CodSpeed GitHub App must already have Macro Runner access for
+the repository; see the
+[GitHub Actions setup](https://codspeed.io/docs/integrations/ci/github-actions/macro-runners).
+
 This directory benchmarks the current local `@utoo/lint` binary against Oxlint,
 Biome, ESLint, and optionally Bun lint on the same generated TypeScript corpus
 and the same shared lint rule set.

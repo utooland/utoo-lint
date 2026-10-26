@@ -33,7 +33,8 @@ env:
 jobs:
   codspeed:
     name: CodSpeed
-    runs-on: ubuntu-latest
+    # Walltime comparisons require the same hardware for main and PR runs.
+    runs-on: codspeed-macro-arm64-graviton-ubuntu-22-04
     permissions:
       contents: read
       id-token: write
