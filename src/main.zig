@@ -2169,7 +2169,7 @@ fn lintFiles(
     const worker_count = @min(files.len, thread_count_override orelse (std.Thread.getCpuCount() catch 1));
     if (worker_count <= 1) {
         if (files.len == 1) {
-            try lintFile(std.heap.smp_allocator, io, files[0], &options, rule_severities, config, fix_mode, use_color, stats, null);
+            try lintFile(std.heap.smp_allocator, io, files[0], options, rule_severities, config, fix_mode, use_color, stats, null);
             return;
         }
         var arena = std.heap.ArenaAllocator.init(std.heap.smp_allocator);
@@ -2177,7 +2177,7 @@ fn lintFiles(
         for (files) |file| {
             // The previous file's borrows are gone; reset only when more work follows.
             _ = arena.reset(.{ .retain_with_limit = worker_arena_retained_limit });
-            try lintFile(arena.allocator(), io, file, &options, rule_severities, config, fix_mode, use_color, stats, null);
+            try lintFile(arena.allocator(), io, file, options, rule_severities, config, fix_mode, use_color, stats, null);
         }
         return;
     }
@@ -2244,7 +2244,7 @@ fn lintFilesJson(
     json_outputs: *JsonOutputList,
 ) !void {
     for (files) |file| {
-        try lintFileJson(allocator, io, file, &options, rule_severities, config, fix_mode, stats, json_diagnostics, json_suppressed_diagnostics, json_outputs);
+        try lintFileJson(allocator, io, file, options, rule_severities, config, fix_mode, stats, json_diagnostics, json_suppressed_diagnostics, json_outputs);
     }
 }
 
@@ -2261,7 +2261,7 @@ fn lintWorker(queue: *WorkQueue, result: *WorkerResult) void {
             arena.allocator(),
             queue.io,
             queue.files[index],
-            &queue.options,
+            queue.options,
             queue.rule_severities,
             queue.config,
             queue.fix_mode,
@@ -2279,7 +2279,7 @@ fn lintFileJson(
     allocator: std.mem.Allocator,
     io: std.Io,
     path: []const u8,
-    options: *const lint.Options,
+    options: lint.Options,
     rule_severities: *const RuleSeverityMap,
     config: ?*const flat_config.FlatConfig,
     fix_mode: FixMode,
@@ -2290,19 +2290,21 @@ fn lintFileJson(
 ) !void {
     var resolved_config = if (config) |loaded| try loaded.resolveForFile(allocator, path) else null;
     defer if (resolved_config) |*resolved| resolved.deinit(allocator);
-    // Borrow the common configurations: Options contains large inline buffers.
-    // Only explicit CLI rule selection needs a mutable language-mode override.
-    var overridden_options: lint.Options = undefined;
-    var effective_rule_severities = rule_severities;
-    const effective_options: *const lint.Options = if (resolved_config) |*resolved| blk: {
+    if (resolved_config) |*resolved| {
         if (config.?.rules_overridden) {
-            overridden_options = options.*;
-            overridden_options.source_type = resolved.options.source_type;
-            break :blk &overridden_options;
+            // This payload belongs to the current file. Preserve its language
+            // mode while applying the explicitly selected CLI rules.
+            const source_type = resolved.options.source_type;
+            resolved.options = options;
+            resolved.options.source_type = source_type;
         }
-        effective_rule_severities = &resolved.rule_severities;
-        break :blk &resolved.options;
-    } else options;
+    }
+    // Keep this value immutable so calls can borrow the existing large buffers.
+    const effective_options = if (resolved_config) |*resolved| resolved.options else options;
+    const effective_rule_severities = if (resolved_config) |*resolved|
+        if (config.?.rules_overridden) rule_severities else &resolved.rule_severities
+    else
+        rule_severities;
 
     const source = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(max_file_size)) catch |err| {
         const message = try std.fmt.allocPrint(allocator, "unable to read file: {s}", .{@errorName(err)});
@@ -2317,13 +2319,13 @@ fn lintFileJson(
     stats.files += 1;
 
     if (fix_mode == .none) {
-        var result = try lint.lintSourceWithIo(allocator, io, source, path, effective_options.*);
+        var result = try lint.lintSourceWithIo(allocator, io, source, path, effective_options);
         defer result.deinit(allocator);
         try appendJsonResultDiagnostics(allocator, json_diagnostics, path, source, result, effective_rule_severities, stats);
         return appendJsonResultSuppressedDiagnostics(allocator, json_suppressed_diagnostics, path, source, result, effective_rule_severities);
     }
 
-    var fixed = try lint.lintSourceAndFixWithIo(allocator, io, source, path, effective_options.*);
+    var fixed = try lint.lintSourceAndFixWithIo(allocator, io, source, path, effective_options);
     defer fixed.deinit(allocator);
 
     if (fixed.fixed) {
@@ -2342,7 +2344,7 @@ fn lintFile(
     allocator: std.mem.Allocator,
     io: std.Io,
     path: []const u8,
-    options: *const lint.Options,
+    options: lint.Options,
     rule_severities: *const RuleSeverityMap,
     config: ?*const flat_config.FlatConfig,
     fix_mode: FixMode,
@@ -2352,19 +2354,21 @@ fn lintFile(
 ) !void {
     var resolved_config = if (config) |loaded| try loaded.resolveForFile(allocator, path) else null;
     defer if (resolved_config) |*resolved| resolved.deinit(allocator);
-    // Borrow the common configurations: Options contains large inline buffers.
-    // Only explicit CLI rule selection needs a mutable language-mode override.
-    var overridden_options: lint.Options = undefined;
-    var effective_rule_severities = rule_severities;
-    const effective_options: *const lint.Options = if (resolved_config) |*resolved| blk: {
+    if (resolved_config) |*resolved| {
         if (config.?.rules_overridden) {
-            overridden_options = options.*;
-            overridden_options.source_type = resolved.options.source_type;
-            break :blk &overridden_options;
+            // This payload belongs to the current file. Preserve its language
+            // mode while applying the explicitly selected CLI rules.
+            const source_type = resolved.options.source_type;
+            resolved.options = options;
+            resolved.options.source_type = source_type;
         }
-        effective_rule_severities = &resolved.rule_severities;
-        break :blk &resolved.options;
-    } else options;
+    }
+    // Keep this value immutable so calls can borrow the existing large buffers.
+    const effective_options = if (resolved_config) |*resolved| resolved.options else options;
+    const effective_rule_severities = if (resolved_config) |*resolved|
+        if (config.?.rules_overridden) rule_severities else &resolved.rule_severities
+    else
+        rule_severities;
 
     const source = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(max_file_size)) catch |err| {
         printLocked(io, print_mutex, "{s}: unable to read file: {s}\n", .{ path, @errorName(err) });
@@ -2377,12 +2381,12 @@ fn lintFile(
     stats.files += 1;
 
     if (fix_mode == .none) {
-        var result = try lint.lintSourceWithIo(allocator, io, source, path, effective_options.*);
+        var result = try lint.lintSourceWithIo(allocator, io, source, path, effective_options);
         defer result.deinit(allocator);
         return printResultDiagnostics(allocator, io, print_mutex, path, source, result, effective_rule_severities, use_color, stats);
     }
 
-    var fixed = try lint.lintSourceAndFixWithIo(allocator, io, source, path, effective_options.*);
+    var fixed = try lint.lintSourceAndFixWithIo(allocator, io, source, path, effective_options);
     defer fixed.deinit(allocator);
 
     if (fixed.fixed) {
