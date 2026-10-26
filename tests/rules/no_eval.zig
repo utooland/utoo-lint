@@ -46,6 +46,52 @@ test "reports no-eval for eval references outside call callees" {
     try std.testing.expectEqual(@as(usize, 6), helpers.countRule(result, lint.rules.no_eval.id));
 }
 
+test "reports no-eval for unshadowed browser window calls" {
+    const source =
+        \\window.eval("code");
+        \\window["eval"]("code");
+        \\window[`eval`]("code");
+        \\(window.eval)("code");
+        \\window?.eval("code");
+        \\window.eval?.("code");
+    ;
+
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.js", .{
+        .no_unused_vars = false,
+        .no_undef = false,
+        .parser_semantic_errors = false,
+    });
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 6), helpers.countRule(result, lint.rules.no_eval.id));
+}
+
+test "does not report no-eval for shadowed browser window or dynamic members" {
+    const source =
+        \\function callSandbox(window) {
+        \\    window.eval("code");
+        \\    window["eval"]("code");
+        \\    window?.eval("code");
+        \\}
+        \\{
+        \\    const window = sandbox;
+        \\    window.eval("code");
+        \\}
+        \\window[method]("code");
+        \\window[`ev${suffix}`]("code");
+        \\window.other("code");
+    ;
+
+    var result = try lint.lintSource(std.testing.allocator, source, "fixture.js", .{
+        .no_unused_vars = false,
+        .no_undef = false,
+        .parser_semantic_errors = false,
+    });
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expect(!helpers.hasRule(result, lint.rules.no_eval.id));
+}
+
 test "does not report no-eval for non-global eval members" {
     const source =
         \\const object = { eval() {} };
@@ -97,6 +143,11 @@ test "supports configured no-eval allowIndirect option" {
         \\(0, eval)("code");
         \\globalThis["eval"]("code");
         \\globalThis[`eval`]("code");
+        \\window.eval("code");
+        \\window["eval"]("code");
+        \\window[`eval`]("code");
+        \\window?.eval("code");
+        \\window.eval?.("code");
         \\var evalAlias = eval;
         \\foo(eval);
     ;
