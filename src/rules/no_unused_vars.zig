@@ -158,7 +158,7 @@ pub fn runWithOptions(
         const decls = symbol_table.symbolDecls(entry.id);
         if (decls.len == 0) continue;
 
-        if (symbol_table.isReferenced(entry.id) or isParameterProperty(tree, symbol_table, decls[0])) {
+        if (isUsedSymbol(tree, symbol_table, entry.id) or isParameterProperty(tree, symbol_table, decls[0])) {
             if (options.report_used_ignore_pattern and isReportedUsedIgnoredName(name, flags, decls, &destructured_array_ignored_decls, options)) {
                 try core.addDiagnosticFmt(
                     allocator,
@@ -188,6 +188,73 @@ pub fn runWithOptions(
             .{name},
         );
     }
+}
+
+fn isUsedSymbol(tree: *const ast.Tree, symbols: traverser.semantic.SymbolTable, symbol_id: SymbolId) bool {
+    const flags = symbols.getSymbol(symbol_id).flags;
+    for (symbols.model.uses(symbol_id)) |reference_id| {
+        const reference = symbols.model.reference(reference_id);
+        // Recursive references describe a type's shape without consuming it.
+        if ((flags.type_alias or flags.interface) and isSelfTypeReference(tree, symbols, symbol_id, reference.node)) continue;
+        if (!reference.flags.write or writeValueIsUsed(tree, symbols, reference.node)) return true;
+    }
+    return false;
+}
+
+fn isSelfTypeReference(
+    tree: *const ast.Tree,
+    symbols: traverser.semantic.SymbolTable,
+    symbol_id: SymbolId,
+    node: ast.NodeIndex,
+) bool {
+    var current = node;
+    while (symbols.parentOf(current)) |parent| {
+        const declaration_id = switch (tree.data(parent)) {
+            .ts_type_alias_declaration => |declaration| declaration.id,
+            .ts_interface_declaration => |declaration| declaration.id,
+            else => .null,
+        };
+        if (declaration_id != .null and symbols.symbolOf(declaration_id) == symbol_id) return true;
+        current = parent;
+    }
+    return false;
+}
+
+fn writeValueIsUsed(tree: *const ast.Tree, symbols: traverser.semantic.SymbolTable, node: ast.NodeIndex) bool {
+    var current = node;
+    while (symbols.parentOf(current)) |parent| {
+        switch (tree.data(parent)) {
+            .parenthesized_expression, .ts_as_expression, .ts_satisfies_expression, .ts_non_null_expression, .ts_type_assertion => {},
+            .update_expression => return !isDiscardedExpression(tree, symbols, parent),
+            .assignment_expression => |expression| return switch (expression.operator) {
+                .assign => false,
+                // The old value controls whether a logical assignment evaluates its RHS.
+                .logical_or_assign, .logical_and_assign, .nullish_assign => true,
+                else => !isDiscardedExpression(tree, symbols, parent),
+            },
+            else => return false,
+        }
+        current = parent;
+    }
+    return false;
+}
+
+fn isDiscardedExpression(tree: *const ast.Tree, symbols: traverser.semantic.SymbolTable, node: ast.NodeIndex) bool {
+    var current = node;
+    while (symbols.parentOf(current)) |parent| {
+        switch (tree.data(parent)) {
+            .parenthesized_expression, .ts_as_expression, .ts_satisfies_expression, .ts_non_null_expression, .ts_type_assertion => {},
+            .expression_statement => return true,
+            .sequence_expression => |sequence| {
+                const expressions = tree.extra(sequence.expressions);
+                if (expressions.len == 0 or expressions[expressions.len - 1] != current) return true;
+            },
+            .for_statement => |statement| return statement.init == current or statement.update == current,
+            else => return false,
+        }
+        current = parent;
+    }
+    return false;
 }
 
 fn isReportedUsedIgnoredName(
@@ -285,7 +352,7 @@ fn collectParameters(
             .symbol_id = entry.id,
             .scope = symbol.scope,
             .start = tree.span(decls[0]).start,
-            .used = symbol_table.isReferenced(entry.id) or isParameterProperty(tree, symbol_table, decls[0]),
+            .used = isUsedSymbol(tree, symbol_table, entry.id) or isParameterProperty(tree, symbol_table, decls[0]),
         });
     }
 }

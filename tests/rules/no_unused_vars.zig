@@ -2,6 +2,38 @@ const std = @import("std");
 const lint = @import("utoo_lint");
 const helpers = @import("../helpers.zig");
 
+test "no-unused-vars distinguishes writes and discarded updates from reads" {
+    const cases = [_]struct { source: []const u8, count: usize }{
+        .{ .source = "let count = 0; count++;", .count = 1 },
+        .{ .source = "let count = 0; ++count; count--;", .count = 1 },
+        .{ .source = "let count = 0; count = 1;", .count = 1 },
+        .{ .source = "let count = 0; count += 1;", .count = 1 },
+        .{ .source = "let count = 0; count ||= load();", .count = 0 },
+        .{ .source = "let count = 0; consume(count++);", .count = 0 },
+        .{ .source = "let count = 0; consume(count += 1);", .count = 0 },
+        .{ .source = "let count = 0; count++; consume(count);", .count = 0 },
+        .{ .source = "const state = { count: 0 }; state.count++;", .count = 0 },
+    };
+    var options = lint.Options.allDisabled();
+    try options.setByRuleConfigValue("no-unused-vars", .{ .string = "error" });
+    for (cases) |case| {
+        var result = try lint.lintSource(std.testing.allocator, case.source, "fixture.js", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(case.count, result.diagnostics.len);
+        if (case.count != 0) try std.testing.expectEqualStrings("'count' is declared but never used.", result.diagnostics[0].message);
+    }
+}
+
+test "discarded parameter updates do not count as the last used argument" {
+    var options = lint.Options.allDisabled();
+    try options.setByRuleConfigValue("no-unused-vars", .{ .string = "error" });
+    options.no_unused_vars_args = .after_used;
+    var result = try lint.lintSource(std.testing.allocator, "export function run(used, count) { consume(used); count++; }", "fixture.js", options);
+    defer result.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 1), result.diagnostics.len);
+    try std.testing.expectEqualStrings("'count' is declared but never used.", result.diagnostics[0].message);
+}
+
 test "reports no-unused-vars for unused declarations" {
     const source =
         \\const unused = 1;
