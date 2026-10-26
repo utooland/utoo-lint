@@ -61,3 +61,10 @@ suppressed diagnostic's fix is not applied by `--fix` or `--fix-dry-run`.
 Native JSON and the `lintFiles()` / `lintText()` APIs expose suppressed items
 in `suppressedDiagnostics`. The ESLint-compatible API exposes them in
 `suppressedMessages`, including the directive explanation in `suppressions`.
+
+ESLint disable/enable directives validate named rules even when `rules: {}` is
+configured or no lint rule reports a problem. Unknown names produce an error at
+the comment span: `Definition for rule 'unknown-rule' was not found.` This error
+cannot be suppressed. Registered native rules and JS plugin rules mounted for
+the file remain known even when disabled. This validation does not apply to
+`utlint-ignore` directives.

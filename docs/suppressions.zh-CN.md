@@ -48,3 +48,5 @@ debugger;
 抑制会应用于 lint 规则诊断，包括兼容 ESLint 的自定义规则所产生的诊断。解析错误永远不会被抑制。被抑制诊断对应的修复不会由 `--fix` 或 `--fix-dry-run` 应用。
 
 原生 JSON 以及 `lintFiles()` / `lintText()` API 会在 `suppressedDiagnostics` 中暴露被抑制的项目。兼容 ESLint 的 API 会在 `suppressedMessages` 中暴露这些项目，并在 `suppressions` 中包含指令说明。
+
+ESLint 的 disable/enable 指令会检查命名规则，即使配置了 `rules: {}` 或没有 lint 规则报告问题也会检查。未知名称会在注释范围内产生 `Definition for rule 'unknown-rule' was not found.` 错误，且不能被抑制。已注册的原生规则和当前文件挂载的 JS 插件规则，即使关闭，也视为已知规则。这项检查不适用于 `utlint-ignore` 指令。

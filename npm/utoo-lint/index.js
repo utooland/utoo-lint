@@ -698,7 +698,9 @@ export class Linter {
       config: calculatedConfig({ cwd: verifyOptions.cwd, noConfig: true, overrideConfig: config }, normalizedFilePath)
     });
     const nativeRuleFilter = applyDisableDirectives(
-      (report.diagnostics ?? []).map((diagnostic) => diagnosticToESLintMessage(diagnostic, ruleSeverities)),
+      (report.diagnostics ?? [])
+        .filter((diagnostic) => !isRuleDefinitionError(diagnostic) || !customRuleMap.has(diagnostic.ruleId))
+        .map((diagnostic) => diagnosticToESLintMessage(diagnostic, ruleSeverities)),
       sourceCode
     );
     const customRuleFilter = applyDisableDirectives(customRuleMessages, sourceCode);
@@ -1285,7 +1287,7 @@ function applyDisableDirectives(messages, sourceCode) {
   const kept = [];
   const suppressed = [];
   for (const message of messages) {
-    if (!message.ruleId || message.ruleId === "parse" || message.ruleId === "io") {
+    if (!message.ruleId || message.ruleId === "parse" || message.ruleId === "io" || isRuleDefinitionError(message)) {
       kept.push(message);
       continue;
     }
@@ -4591,8 +4593,19 @@ function applyCompatibilityDisableDirectives(result, textOptions) {
   result.suppressedMessages.push(...filtered.suppressedMessages);
 }
 
+function isRuleDefinitionError(diagnostic) {
+  return typeof diagnostic?.ruleId === "string"
+    && diagnostic.message === `Definition for rule '${diagnostic.ruleId}' was not found.`;
+}
+
 function normalizeReportDiagnostics(diagnostics, options = {}) {
   return (diagnostics ?? []).flatMap((diagnostic) => {
+    if (isRuleDefinitionError(diagnostic)) {
+      // Native cannot see JS plugin definitions. A mounted rule is known even
+      // when it is disabled or emits no messages for this file.
+      const filePath = options.pluginTextFilePath ?? diagnostic.filePath;
+      return jsPluginRuleMapForFile(options, filePath).has(diagnostic.ruleId) ? [] : [diagnostic];
+    }
     if (!diagnostic?.ruleId) {
       return [diagnostic];
     }

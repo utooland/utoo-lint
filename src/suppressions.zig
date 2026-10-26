@@ -1,6 +1,7 @@
 const std = @import("std");
 const parser = @import("parser");
 const core = @import("core.zig");
+const native_rules = @import("rules/root.zig");
 
 const ast = parser.ast;
 const Allocator = std.mem.Allocator;
@@ -45,11 +46,79 @@ pub fn apply(
     suppressed_diagnostics: *core.DiagnosticList,
     tree: *const ast.Tree,
 ) Allocator.Error!void {
-    if (diagnostics.items.len == 0 or tree.comments.len == 0) return;
+    if (tree.comments.len == 0) return;
 
     var directives = try collectDirectives(allocator, tree);
     defer directives.deinit(allocator);
     if (directives.items.len == 0) return;
+
+    try suppressDiagnostics(allocator, diagnostics, suppressed_diagnostics, tree, directives.items);
+    try reportUnknownEslintRules(allocator, diagnostics, directives.items);
+}
+
+fn reportUnknownEslintRules(
+    allocator: Allocator,
+    diagnostics: *core.DiagnosticList,
+    directives: []const Directive,
+) Allocator.Error!void {
+    // Disabled rules are still defined. Keep this lookup independent of the
+    // file's enabled rules and of whether any rule produced diagnostics.
+    for (directives) |directive| {
+        switch (directive.kind) {
+            .eslint_disable, .eslint_enable, .eslint_disable_line, .eslint_disable_next_line => {},
+            else => continue,
+        }
+        const rule_id = directive.target.rule_id orelse continue;
+        if (isKnownRule(rule_id)) continue;
+
+        const owned_rule_id = try allocator.dupe(u8, rule_id);
+        errdefer allocator.free(owned_rule_id);
+        try core.addDiagnosticFmt(
+            allocator,
+            diagnostics,
+            .@"error",
+            owned_rule_id,
+            .{ .start = directive.span_start, .end = directive.span_end },
+            "Definition for rule '{s}' was not found.",
+            .{rule_id},
+        );
+        diagnostics.items[diagnostics.items.len - 1].owned_rule_id = true;
+    }
+}
+
+const known_rule_ids = blk: {
+    @setEvalBranchQuota(100000);
+    const declarations = @typeInfo(native_rules).@"struct".decl_names;
+    var entries: [declarations.len]struct { []const u8, void } = undefined;
+    var count: usize = 0;
+    for (declarations) |name| {
+        // Only rule modules have an enable flag. Do not resolve dispatch
+        // functions here: their native I/O bodies are unavailable on WASM.
+        if (@hasField(core.Options, name)) {
+            if (@FieldType(core.Options, name) == bool) {
+                const rule = @field(native_rules, name);
+                entries[count] = .{ rule.id, {} };
+                count += 1;
+            }
+        }
+    }
+    break :blk std.StaticStringMap(void).initComptime(entries[0..count]);
+};
+
+fn isKnownRule(rule_id: []const u8) bool {
+    // These existing native pseudo-rules are accepted outside the rule modules.
+    return known_rule_ids.has(rule_id) or std.mem.eql(u8, rule_id, "parse") or
+        std.mem.eql(u8, rule_id, "semantic-errors") or std.mem.eql(u8, rule_id, "prettier/prettier");
+}
+
+fn suppressDiagnostics(
+    allocator: Allocator,
+    diagnostics: *core.DiagnosticList,
+    suppressed_diagnostics: *core.DiagnosticList,
+    tree: *const ast.Tree,
+    directives: []const Directive,
+) Allocator.Error!void {
+    if (diagnostics.items.len == 0) return;
 
     var line_starts = try collectLineStarts(allocator, tree.source);
     defer line_starts.deinit(allocator);
@@ -66,18 +135,18 @@ pub fn apply(
     for (diagnostics.items, 0..) |diagnostic, index| {
         decisions[index] = .empty;
         initialized_decisions += 1;
-        if (suppressionDirectiveIndexFor(directives.items, line_starts.items, diagnostic)) |primary_directive_index| {
+        if (suppressionDirectiveIndexFor(directives, line_starts.items, diagnostic)) |primary_directive_index| {
             try appendEslintSuppressionIndicesFor(
                 allocator,
                 &decisions[index],
-                directives.items,
+                directives,
                 line_starts.items,
                 diagnostic,
             );
             try appendUtlintSuppressionIndicesFor(
                 allocator,
                 &decisions[index],
-                directives.items,
+                directives,
                 line_starts.items,
                 diagnostic,
             );
@@ -124,7 +193,7 @@ pub fn apply(
         }
         for (decision.items, 0..) |directive_index, suppression_index| {
             owned[suppression_index] = .{
-                .justification = try allocator.dupe(u8, directives.items[directive_index].target.justification),
+                .justification = try allocator.dupe(u8, directives[directive_index].target.justification),
             };
             initialized_suppressions += 1;
         }

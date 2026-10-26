@@ -10517,6 +10517,7 @@ pub fn configuredGlobalState(value: std.json.Value) ConfiguredGlobalsError!Confi
 
 pub const Diagnostic = struct {
     rule_id: []const u8,
+    owned_rule_id: bool = false,
     message: []const u8,
     span: ast.Span,
     severity: Severity,
@@ -10760,6 +10761,7 @@ fn freeSuggestions(allocator: Allocator, suggestions: []Suggestion) void {
 }
 
 pub fn freeDiagnostic(allocator: Allocator, diagnostic: Diagnostic) void {
+    if (diagnostic.owned_rule_id) allocator.free(diagnostic.rule_id);
     allocator.free(diagnostic.message);
     freeFixes(allocator, diagnostic.fixes);
     freeSuggestions(allocator, diagnostic.suggestions);

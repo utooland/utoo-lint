@@ -105,6 +105,24 @@ test("returns every overlapping ESLint suppression", () => {
   assert.equal(result.suppressedDiagnostics[0].suppression.justification, "intentional");
 });
 
+test("validates unknown ESLint disable rules independently of enabled rules", () => {
+  const source = "// eslint-disable-next-line unknown-rule\ndebugger;";
+  for (const rules of [{ "no-debugger": "error" }, {}]) {
+    const result = linter.lint(source, { filePath: "unknown-disable.js", rules });
+    const unknown = result.diagnostics.find((item) => item.ruleId === "unknown-rule");
+    assert.equal(unknown.message, "Definition for rule 'unknown-rule' was not found.");
+    assert.equal(unknown.severity, "error");
+    assert.deepEqual([unknown.line, unknown.column, unknown.endLine, unknown.endColumn], [1, 1, 1, 41]);
+    assert.equal(result.diagnostics.length, Object.keys(rules).length + 1);
+    assert.deepEqual(result.suppressedDiagnostics, []);
+  }
+  const known = linter.lint("// eslint-disable-next-line no-debugger\ndebugger;", {
+    filePath: "known-disable.js", rules: { "no-debugger": "error" },
+  });
+  assert.deepEqual(known.diagnostics, []);
+  assert.equal(known.suppressedDiagnostics.length, 1);
+});
+
 test("parses JS, TS, JSX, and TSX by file name", () => {
   const fixtures = [
     ["input.js", "export const value = 1;"],
