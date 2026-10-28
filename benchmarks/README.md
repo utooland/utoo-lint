@@ -159,7 +159,53 @@ shared linear scale starting at zero; shorter is better. Relative figures use
 each profile's fastest median as the denominator. Archive the raw JSON beside
 the chart when publishing a dated result.
 
-## Recorded comparisons
+## Recorded comparison: 2026-10-28
+
+The release comparison used the published `@utoo/lint@0.4.13` npm CLI on an
+Apple M4 Pro (12 logical cores, 48 GiB), macOS arm64, Node.js 22.23.1. The
+1,000-file corpus contains 239,000 lines / 4,576,311 bytes. Both profiles used
+five warmups followed by 20 rotated, interleaved samples per tool.
+
+| CLI | Version | 12 rules median (ms) | 49 rules median (ms) |
+| --- | --- | ---: | ---: |
+| utoo-lint | 0.4.13 | 482.667 | 541.272 |
+| Bun lint | 1.4.4 canary | 137.746 | 141.381 |
+| Oxlint | 1.90.0 | 190.195 | 194.734 |
+| Biome | 2.6.3 | 373.972 | 406.116 |
+| ESLint | 10.13.0 | 2690.676 | 2801.086 |
+
+ESLint's median elapsed time divided by utoo-lint's was 5.57x for 12 rules and
+5.18x for 49 rules. These are ratios for this synthetic common-rule workload.
+The local desktop host was shared with other processes; the snapshots retain
+every sample, timing ranges, standard deviations, and host load averages.
+Directory discovery is excluded equally for all tools; config loading and
+fresh process startup are included. No type checking, formatting, fixes, or
+lint-result caching is measured.
+
+Bun was installed as `1.4.4-canary.20261027.1+9b8347a`; its binary reports
+`1.4.4-canary.1+a0cc096ce` via `--revision`. The stable `1.4.4` binary did not
+expose `bun lint` when checked. The TypeScript parser is `typescript-eslint`
+8.72.1 with TypeScript 6.0.3. The full-profile fixture directory and isolated
+rule controls passed for all five tools; every tool checked all 1,000 corpus
+files with zero diagnostics. This validates the selected common cases, without
+establishing complete semantic equivalence between rule implementations.
+
+Both raw snapshots were captured at clean benchmark commit `8fa585d`:
+
+- [12-rule samples and provenance](snapshots/2026-10-28-release-cli-12-rules.json)
+- [49-rule samples and provenance](snapshots/2026-10-28-release-cli-49-rules.json)
+- [PNG chart](../assets/utoo-lint-benchmark-2026-10-28.png) / [SVG chart](../assets/utoo-lint-benchmark-2026-10-28.svg)
+
+Regenerate the published chart from the repository root:
+
+```bash
+benchmarks/.tools/chart-venv/bin/python benchmarks/scripts/render-release-chart.py \
+  --input benchmarks/snapshots/2026-10-28-release-cli-12-rules.json \
+  --input benchmarks/snapshots/2026-10-28-release-cli-49-rules.json \
+  --output assets/utoo-lint-benchmark-2026-10-28 --title 'utoo-lint · Lint Performance'
+```
+
+## Earlier recorded comparisons
 
 The October 13, 2026 local runs used an Apple M4 Pro, 1,000 generated TypeScript
 files with 30 statement blocks each, 5 warmups, and 20 measured runs per tool.
