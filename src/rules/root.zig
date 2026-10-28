@@ -809,6 +809,18 @@ pub fn runSemanticWithIo(
     semantic_result: traverser.semantic.Result,
     options: core.Options,
 ) Allocator.Error!void {
+    return runSemanticWithIoWithOptionsPtr(allocator, diagnostics, tree, io, file_path, semantic_result, &options);
+}
+
+pub fn runSemanticWithIoWithOptionsPtr(
+    allocator: Allocator,
+    diagnostics: *core.DiagnosticList,
+    tree: *const ast.Tree,
+    io: std.Io,
+    file_path: []const u8,
+    semantic_result: traverser.semantic.Result,
+    options: *const core.Options,
+) Allocator.Error!void {
     if (options.alipay_ant_no_phantom_dependencies) {
         try alipay_ant_no_phantom_dependencies.runWithOptions(
             allocator,
@@ -822,9 +834,7 @@ pub fn runSemanticWithIo(
     }
 
     // The filesystem-aware pass handles imported operand types for this rule.
-    var local_options = options;
-    local_options.typescript_eslint_restrict_plus_operands = false;
-    try runSemanticBeforeIo(allocator, diagnostics, tree, semantic_result, local_options);
+    try runSemanticBeforeIo(allocator, diagnostics, tree, semantic_result, options, true);
 
     if (options.typescript_eslint_restrict_plus_operands) {
         try typescript_eslint_restrict_plus_operands.runWithIo(allocator, io, diagnostics, tree, file_path, semantic_result.symbol_table, .{
@@ -846,7 +856,17 @@ pub fn runSemantic(
     semantic_result: traverser.semantic.Result,
     options: core.Options,
 ) Allocator.Error!void {
-    try runSemanticBeforeIo(allocator, diagnostics, tree, semantic_result, options);
+    return runSemanticWithOptionsPtr(allocator, diagnostics, tree, semantic_result, &options);
+}
+
+pub fn runSemanticWithOptionsPtr(
+    allocator: Allocator,
+    diagnostics: *core.DiagnosticList,
+    tree: *const ast.Tree,
+    semantic_result: traverser.semantic.Result,
+    options: *const core.Options,
+) Allocator.Error!void {
+    try runSemanticBeforeIo(allocator, diagnostics, tree, semantic_result, options, false);
     try runSemanticAfterIo(allocator, diagnostics, tree, semantic_result, options);
 }
 
@@ -855,7 +875,8 @@ fn runSemanticBeforeIo(
     diagnostics: *core.DiagnosticList,
     tree: *const ast.Tree,
     semantic_result: traverser.semantic.Result,
-    options: core.Options,
+    options: *const core.Options,
+    comptime skip_restrict_plus_operands: bool,
 ) Allocator.Error!void {
     if (options.react_prop_types) {
         try react_prop_types.run(allocator, diagnostics, tree, semantic_result.symbol_table, options.react_prop_types_skip_undeclared, &options.react_prop_types_ignore, &options.react_prop_types_custom_validators);
@@ -864,7 +885,7 @@ fn runSemanticBeforeIo(
         try react_no_unused_prop_types.run(allocator, diagnostics, tree, semantic_result.symbol_table, options.react_no_unused_prop_types_skip_shape_props, &options.react_no_unused_prop_types_ignore, &options.react_no_unused_prop_types_custom_validators);
     }
 
-    if (options.typescript_eslint_restrict_plus_operands) {
+    if (!skip_restrict_plus_operands and options.typescript_eslint_restrict_plus_operands) {
         try typescript_eslint_restrict_plus_operands.run(allocator, diagnostics, tree, semantic_result.symbol_table, .{
             .allow_number_and_string = options.typescript_eslint_restrict_plus_operands_allow_number_and_string,
             .allow_any = options.typescript_eslint_restrict_plus_operands_allow_any,
@@ -947,7 +968,7 @@ fn runIoSemantic(
     io: std.Io,
     file_path: []const u8,
     semantic_result: traverser.semantic.Result,
-    options: core.Options,
+    options: *const core.Options,
 ) Allocator.Error!void {
     if (options.alipay_ant_prefer_import_from_stdlib) {
         try alipay_ant_prefer_import_from_stdlib.runWithOptions(
@@ -1050,7 +1071,7 @@ fn runSemanticAfterIo(
     diagnostics: *core.DiagnosticList,
     tree: *const ast.Tree,
     semantic_result: traverser.semantic.Result,
-    options: core.Options,
+    options: *const core.Options,
 ) Allocator.Error!void {
     if (options.jest_no_deprecated_functions) {
         try jest_no_deprecated_functions.run(
@@ -1287,8 +1308,8 @@ fn runSemanticAfterIo(
         });
     }
 
-    if (reassignment_rules.shouldRun(options)) {
-        try reassignment_rules.run(allocator, diagnostics, tree, semantic_result, options);
+    if (reassignment_rules.shouldRun(options.*)) {
+        try reassignment_rules.run(allocator, diagnostics, tree, semantic_result, options.*);
     }
 
     if (options.no_global_assign) {
