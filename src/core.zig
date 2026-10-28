@@ -666,6 +666,78 @@ pub const ImportNoUnresolvedIgnorePatterns = struct {
     }
 };
 
+pub const max_dependency_rule_names = 16;
+pub const max_dependency_rule_name_len = 256;
+pub const max_stdlib_external_packages = 16;
+
+/// Owns names because resolved Options may outlive their parsed JSON config.
+pub const DependencyRuleNameList = struct {
+    count: usize = 0,
+    lengths: [max_dependency_rule_names]usize = undefined,
+    storage: [max_dependency_rule_names][max_dependency_rule_name_len]u8 = undefined,
+
+    pub fn at(self: *const DependencyRuleNameList, index: usize) []const u8 {
+        return self.storage[index][0..self.lengths[index]];
+    }
+
+    pub fn append(self: *DependencyRuleNameList, name: []const u8) bool {
+        if (name.len == 0 or name.len > max_dependency_rule_name_len) return false;
+        if (self.count >= max_dependency_rule_names) return false;
+        @memcpy(self.storage[self.count][0..name.len], name);
+        self.lengths[self.count] = name.len;
+        self.count += 1;
+        return true;
+    }
+};
+
+pub const NoPhantomDependenciesConfig = struct {
+    external_alias: DependencyRuleNameList = .{},
+    external_dependencies: DependencyRuleNameList = .{},
+};
+
+pub const StdlibExternalPackageEntry = struct {
+    name_length: usize = 0,
+    name_storage: [max_dependency_rule_name_len]u8 = undefined,
+    stdlib_path_length: usize = 0,
+    stdlib_path_storage: [max_dependency_rule_name_len]u8 = undefined,
+    version: u32 = 1,
+
+    pub fn name(self: *const StdlibExternalPackageEntry) []const u8 {
+        return self.name_storage[0..self.name_length];
+    }
+
+    pub fn stdlibPath(self: *const StdlibExternalPackageEntry) []const u8 {
+        return self.stdlib_path_storage[0..self.stdlib_path_length];
+    }
+};
+
+pub const StdlibExternalPackages = struct {
+    count: usize = 0,
+    entries: [max_stdlib_external_packages]StdlibExternalPackageEntry = undefined,
+
+    pub fn at(self: *const StdlibExternalPackages, index: usize) *const StdlibExternalPackageEntry {
+        return &self.entries[index];
+    }
+
+    pub fn append(self: *StdlibExternalPackages, name: []const u8, stdlib_path: []const u8, version: u32) bool {
+        if (self.count >= max_stdlib_external_packages) return false;
+        if (name.len == 0 or name.len > max_dependency_rule_name_len) return false;
+        if (stdlib_path.len == 0 or stdlib_path.len > max_dependency_rule_name_len or version == 0) return false;
+        const entry = &self.entries[self.count];
+        @memcpy(entry.name_storage[0..name.len], name);
+        entry.name_length = name.len;
+        @memcpy(entry.stdlib_path_storage[0..stdlib_path.len], stdlib_path);
+        entry.stdlib_path_length = stdlib_path.len;
+        entry.version = version;
+        self.count += 1;
+        return true;
+    }
+};
+
+pub const PreferImportFromStdlibConfig = struct {
+    external_packages: StdlibExternalPackages = .{},
+};
+
 pub const max_typescript_eslint_no_require_imports_allow_patterns = 32;
 pub const max_typescript_eslint_no_require_imports_allow_pattern_len = 256;
 
@@ -2753,6 +2825,7 @@ pub const Options = struct {
     alipay_ant_no_negative_conditionals: bool = true,
     alipay_ant_no_import_src: bool = true,
     alipay_ant_no_phantom_dependencies: bool = true,
+    alipay_ant_no_phantom_dependencies_config: NoPhantomDependenciesConfig = .{},
     alipay_ant_no_too_large_file: bool = true,
     alipay_ant_prefer_elseif_end_with_else: bool = true,
     alipay_ant_prefer_catch_unsafe_func_call: bool = true,
@@ -2762,6 +2835,7 @@ pub const Options = struct {
     alipay_ant_prefer_managed_resource: bool = true,
     alipay_ant_prefer_safe_image_renderer: bool = true,
     alipay_ant_prefer_import_from_stdlib: bool = true,
+    alipay_ant_prefer_import_from_stdlib_config: PreferImportFromStdlibConfig = .{},
     alipay_spmlint_use_labeled_spm: bool = true,
     alipay_spmlint_valid_manual_click: bool = true,
     alipay_spmlint_valid_manual_expo: bool = true,
@@ -3477,6 +3551,12 @@ pub const Options = struct {
     pub fn setByRuleConfigValue(self: *Options, cli_name: []const u8, value: std.json.Value) RuleConfigError!void {
         const enabled = try ruleConfigValueToBool(value);
         if (!self.setByCliName(cli_name, enabled)) return error.UnknownRule;
+        if (std.mem.eql(u8, cli_name, "@alipay/ant/no-phantom-dependencies")) {
+            self.alipay_ant_no_phantom_dependencies_config = try noPhantomDependenciesFromConfig(value);
+        }
+        if (std.mem.eql(u8, cli_name, "@alipay/ant/prefer-import-from-stdlib")) {
+            self.alipay_ant_prefer_import_from_stdlib_config = try preferImportFromStdlibFromConfig(value);
+        }
         if (std.mem.eql(u8, cli_name, "@alipay/ant/no-deprecated-dependence")) {
             self.alipay_ant_no_deprecated_dependence_profile = deprecatedDependenceProfileFromConfig(value);
         }
@@ -4876,6 +4956,78 @@ pub const Options = struct {
         if (std.mem.eql(u8, variant, "classic")) return .classic;
         if (std.mem.eql(u8, variant, "modified")) return .modified;
         return error.UnsupportedRuleConfigValue;
+    }
+
+    fn dependencyRuleObjectFromConfig(value: std.json.Value) RuleConfigError!?std.json.ObjectMap {
+        const items = switch (value) {
+            .array => |array| array.items,
+            else => return null,
+        };
+        if (items.len < 2) return null;
+        return switch (items[1]) {
+            .object => |object| object,
+            else => error.UnsupportedRuleConfigValue,
+        };
+    }
+
+    fn dependencyRuleNamesFromValue(value: std.json.Value) RuleConfigError!DependencyRuleNameList {
+        const items = switch (value) {
+            .array => |array| array.items,
+            else => return error.UnsupportedRuleConfigValue,
+        };
+        var result = DependencyRuleNameList{};
+        for (items) |item| {
+            const name = switch (item) {
+                .string => |name| name,
+                .object => |object| switch (object.get("name") orelse return error.UnsupportedRuleConfigValue) {
+                    .string => |name| name,
+                    else => return error.UnsupportedRuleConfigValue,
+                },
+                else => return error.UnsupportedRuleConfigValue,
+            };
+            if (!result.append(name)) return error.UnsupportedRuleConfigValue;
+        }
+        return result;
+    }
+
+    fn noPhantomDependenciesFromConfig(value: std.json.Value) RuleConfigError!NoPhantomDependenciesConfig {
+        const object = (try dependencyRuleObjectFromConfig(value)) orelse return .{};
+        var result = NoPhantomDependenciesConfig{};
+        if (object.get("externalAlias")) |aliases| {
+            result.external_alias = try dependencyRuleNamesFromValue(aliases);
+            for (0..result.external_alias.count) |index| {
+                if (std.mem.eql(u8, result.external_alias.at(index), "$")) return error.UnsupportedRuleConfigValue;
+            }
+        }
+        if (object.get("externalDependencies")) |dependencies| result.external_dependencies = try dependencyRuleNamesFromValue(dependencies);
+        return result;
+    }
+
+    fn preferImportFromStdlibFromConfig(value: std.json.Value) RuleConfigError!PreferImportFromStdlibConfig {
+        const object = (try dependencyRuleObjectFromConfig(value)) orelse return .{};
+        const packages = switch (object.get("externalPackages") orelse return .{}) {
+            .object => |packages| packages,
+            else => return error.UnsupportedRuleConfigValue,
+        };
+        var result = PreferImportFromStdlibConfig{};
+        var iter = packages.iterator();
+        while (iter.next()) |entry| {
+            const mapping = switch (entry.value_ptr.*) {
+                .object => |mapping| mapping,
+                else => return error.UnsupportedRuleConfigValue,
+            };
+            const stdlib_path = switch (mapping.get("stdlibPath") orelse return error.UnsupportedRuleConfigValue) {
+                .string => |path| path,
+                else => return error.UnsupportedRuleConfigValue,
+            };
+            const version = switch (mapping.get("version") orelse return error.UnsupportedRuleConfigValue) {
+                .integer => |version| version,
+                else => return error.UnsupportedRuleConfigValue,
+            };
+            if (version <= 0 or version > std.math.maxInt(u32)) return error.UnsupportedRuleConfigValue;
+            if (!result.external_packages.append(entry.key_ptr.*, stdlib_path, @intCast(version))) return error.UnsupportedRuleConfigValue;
+        }
+        return result;
     }
 
     fn deprecatedDependenceProfileFromConfig(value: std.json.Value) DeprecatedDependenceProfile {
@@ -13275,4 +13427,118 @@ test "Options parses ESLint-style rule severities" {
     defer array.deinit();
     try array.append(.{ .string = "warn" });
     try std.testing.expectEqual(Severity.warning, try Options.severityFromRuleConfigValue(.{ .array = array }));
+}
+
+test "dependency rule options own configured names after JSON is released" {
+    var options = Options.allDisabled();
+    {
+        var config = try std.json.parseFromSlice(std.json.Value, std.testing.allocator,
+            \\["warn",{"externalAlias":["@example/runtime/",{"name":"virtualAlias$","type":"framework"}],"externalDependencies":["@example/runtime",{"name":"@example/helper","type":"framework"}]}]
+        , .{});
+        defer config.deinit();
+        try options.setByRuleConfigValue("@alipay/ant/no-phantom-dependencies", config.value);
+    }
+    const copied = options.alipay_ant_no_phantom_dependencies_config;
+    options.alipay_ant_no_phantom_dependencies_config = .{};
+    try std.testing.expectEqual(@as(usize, 2), copied.external_alias.count);
+    try std.testing.expectEqualStrings("@example/runtime/", copied.external_alias.at(0));
+    try std.testing.expectEqualStrings("virtualAlias$", copied.external_alias.at(1));
+    try std.testing.expectEqualStrings("@example/runtime", copied.external_dependencies.at(0));
+    try std.testing.expectEqualStrings("@example/helper", copied.external_dependencies.at(1));
+
+    {
+        var config = try std.json.parseFromSlice(std.json.Value, std.testing.allocator,
+            \\["warn",{"externalPackages":{"@example/custom-request":{"stdlibPath":"request/client","version":2}}}]
+        , .{});
+        defer config.deinit();
+        try options.setByRuleConfigValue("@alipay/ant/prefer-import-from-stdlib", config.value);
+    }
+    const packages = &options.alipay_ant_prefer_import_from_stdlib_config.external_packages;
+    try std.testing.expectEqual(@as(usize, 1), packages.count);
+    try std.testing.expectEqualStrings("@example/custom-request", packages.at(0).name());
+    try std.testing.expectEqualStrings("request/client", packages.at(0).stdlibPath());
+    try std.testing.expectEqual(@as(u32, 2), packages.at(0).version);
+}
+
+test "dependency rule options reject invalid names and mappings" {
+    const phantom_configs = [_][]const u8{
+        \\["warn",true]
+        ,
+        \\["warn",{"externalAlias":"@example/runtime/"}]
+        ,
+        \\["warn",{"externalAlias":[""]}]
+        ,
+        \\["warn",{"externalAlias":["$"]}]
+        ,
+        \\["warn",{"externalAlias":[{}]}]
+        ,
+        \\["warn",{"externalAlias":[false]}]
+        ,
+        \\["warn",{"externalDependencies":[{"name":3}]}]
+        ,
+        \\["warn",{"externalDependencies":[{"name":""}]}]
+        ,
+    };
+    for (phantom_configs) |source| {
+        var config = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, source, .{});
+        defer config.deinit();
+        var options = Options.allDisabled();
+        try std.testing.expectError(error.UnsupportedRuleConfigValue, options.setByRuleConfigValue("@alipay/ant/no-phantom-dependencies", config.value));
+    }
+
+    const stdlib_configs = [_][]const u8{
+        \\["warn",{"externalPackages":[]}]
+        ,
+        \\["warn",{"externalPackages":{"@example/request":false}}]
+        ,
+        \\["warn",{"externalPackages":{"":{"stdlibPath":"request","version":1}}}]
+        ,
+        \\["warn",{"externalPackages":{"@example/request":{"stdlibPath":"","version":1}}}]
+        ,
+        \\["warn",{"externalPackages":{"@example/request":{"stdlibPath":"request"}}}]
+        ,
+        \\["warn",{"externalPackages":{"@example/request":{"stdlibPath":"request","version":0}}}]
+        ,
+        \\["warn",{"externalPackages":{"@example/request":{"stdlibPath":"request","version":-1}}}]
+        ,
+        \\["warn",{"externalPackages":{"@example/request":{"stdlibPath":"request","version":1.5}}}]
+        ,
+        \\["warn",{"externalPackages":{"@example/request":{"stdlibPath":"request","version":"1"}}}]
+        ,
+        \\["warn",{"externalPackages":{"@example/request":{"stdlibPath":"request","version":4294967296}}}]
+        ,
+    };
+    for (stdlib_configs) |source| {
+        var config = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, source, .{});
+        defer config.deinit();
+        var options = Options.allDisabled();
+        try std.testing.expectError(error.UnsupportedRuleConfigValue, options.setByRuleConfigValue("@alipay/ant/prefer-import-from-stdlib", config.value));
+    }
+}
+
+test "dependency rule options bound owned storage and reset without overrides" {
+    var names = DependencyRuleNameList{};
+    for (0..max_dependency_rule_names) |_| try std.testing.expect(names.append("@example/package"));
+    try std.testing.expect(!names.append("@example/overflow"));
+    var too_long: [max_dependency_rule_name_len + 1]u8 = undefined;
+    @memset(&too_long, 'x');
+    var empty_names = DependencyRuleNameList{};
+    try std.testing.expect(!empty_names.append(&too_long));
+    try std.testing.expect(!empty_names.append(""));
+
+    var packages = StdlibExternalPackages{};
+    for (0..max_stdlib_external_packages) |_| try std.testing.expect(packages.append("@example/package", "package", 1));
+    try std.testing.expect(!packages.append("@example/overflow", "overflow", 1));
+    var empty_packages = StdlibExternalPackages{};
+    try std.testing.expect(!empty_packages.append(&too_long, "package", 1));
+    try std.testing.expect(!empty_packages.append("@example/package", &too_long, 1));
+    try std.testing.expect(!empty_packages.append("@example/package", "package", 0));
+
+    var options = Options.allDisabled();
+    options.alipay_ant_no_phantom_dependencies_config.external_alias = names;
+    options.alipay_ant_prefer_import_from_stdlib_config.external_packages = packages;
+    try options.setByRuleConfigValue("@alipay/ant/no-phantom-dependencies", .{ .string = "warn" });
+    try options.setByRuleConfigValue("@alipay/ant/prefer-import-from-stdlib", .{ .string = "warn" });
+    try std.testing.expectEqual(@as(usize, 0), options.alipay_ant_no_phantom_dependencies_config.external_alias.count);
+    try std.testing.expectEqual(@as(usize, 0), options.alipay_ant_prefer_import_from_stdlib_config.external_packages.count);
 }

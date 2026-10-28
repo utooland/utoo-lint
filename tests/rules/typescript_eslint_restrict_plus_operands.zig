@@ -594,3 +594,17 @@ test "destructured any sources retain their type through defaults and callback c
         try std.testing.expectEqual(case.count, helpers.countRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id));
     }
 }
+
+test "restrict-plus-operands reports once in either semantic dispatch path" {
+    const source = "export function example(value:any){return value+1;}";
+    var options = lint.Options.allDisabled();
+    options.typescript_eslint_restrict_plus_operands = true;
+    options.typescript_eslint_restrict_plus_operands_allow_any = false;
+    for ([_]?std.Io{ null, std.testing.io }) |io| {
+        var result = try lint.lintSourceWithIo(std.testing.allocator, io, source, "fixture.ts", options);
+        defer result.deinit(std.testing.allocator);
+        try std.testing.expectEqual(@as(usize, 1), helpers.countRule(result, lint.rules.typescript_eslint_restrict_plus_operands.id));
+        try std.testing.expect(options.typescript_eslint_restrict_plus_operands);
+        try std.testing.expect(!options.typescript_eslint_restrict_plus_operands_allow_any);
+    }
+}

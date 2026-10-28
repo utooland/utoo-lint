@@ -53,7 +53,7 @@ pub fn lintSourceAndFix(
     path: []const u8,
     options: Options,
 ) Allocator.Error!LintAndFixResult {
-    return lintSourceAndFixInternal(false, allocator, {}, source, path, options);
+    return lintSourceAndFixInternal(false, allocator, {}, source, path, &options);
 }
 
 pub fn lintSourceAndFixWithIo(
@@ -64,9 +64,9 @@ pub fn lintSourceAndFixWithIo(
     options: Options,
 ) Allocator.Error!LintAndFixResult {
     if (io) |actual_io| {
-        return lintSourceAndFixInternal(true, allocator, actual_io, source, path, options);
+        return lintSourceAndFixInternal(true, allocator, actual_io, source, path, &options);
     }
-    return lintSourceAndFixInternal(false, allocator, {}, source, path, options);
+    return lintSourceAndFixInternal(false, allocator, {}, source, path, &options);
 }
 
 fn lintSourceAndFixInternal(
@@ -75,7 +75,7 @@ fn lintSourceAndFixInternal(
     io: if (with_io) std.Io else void,
     source: []const u8,
     path: []const u8,
-    options: Options,
+    options: *const Options,
 ) Allocator.Error!LintAndFixResult {
     var output = try allocator.dupe(u8, source);
     errdefer allocator.free(output);
@@ -123,7 +123,7 @@ pub fn lintSource(
     path: []const u8,
     options: Options,
 ) Allocator.Error!Result {
-    return lintSourceInternal(false, allocator, {}, source, path, options);
+    return lintSourceInternal(false, allocator, {}, source, path, &options);
 }
 
 pub fn lintSourceWithIo(
@@ -134,9 +134,9 @@ pub fn lintSourceWithIo(
     options: Options,
 ) Allocator.Error!Result {
     if (io) |actual_io| {
-        return lintSourceInternal(true, allocator, actual_io, source, path, options);
+        return lintSourceInternal(true, allocator, actual_io, source, path, &options);
     }
-    return lintSourceInternal(false, allocator, {}, source, path, options);
+    return lintSourceInternal(false, allocator, {}, source, path, &options);
 }
 
 fn lintSourceInternal(
@@ -145,28 +145,35 @@ fn lintSourceInternal(
     io: if (with_io) std.Io else void,
     source: []const u8,
     path: []const u8,
-    options: Options,
+    options: *const Options,
 ) Allocator.Error!Result {
     var diagnostics: core.DiagnosticList = .empty;
     errdefer core.freeDiagnostics(allocator, &diagnostics);
     var suppressed_diagnostics: core.DiagnosticList = .empty;
     errdefer core.freeDiagnostics(allocator, &suppressed_diagnostics);
 
-    var effective_options = options;
-    if (isDefinitionFile(path) and effective_options.typescript_eslint_no_namespace_allow_definition_files) {
-        effective_options.typescript_eslint_no_namespace = false;
-    }
-    if (effective_options.jest_no_deprecated_functions and effective_options.jest_version == 0) {
-        if (comptime with_io) {
-            effective_options.jest_version = (try rules.jest_no_deprecated_functions.detectJestVersion(
-                allocator,
-                io,
-                path,
-            )) orelse rules.jest_no_deprecated_functions.latest_jest_version;
-        } else {
-            effective_options.jest_version = rules.jest_no_deprecated_functions.latest_jest_version;
+    const allow_definition_namespaces = isDefinitionFile(path) and
+        options.typescript_eslint_no_namespace and options.typescript_eslint_no_namespace_allow_definition_files;
+    const detect_jest_version = options.jest_no_deprecated_functions and options.jest_version == 0;
+    // Most files can borrow the caller's configuration. Only file-dependent
+    // defaults need a private copy of the owned option buffers.
+    var adjusted_options: Options = undefined;
+    const effective_options: *const Options = if (allow_definition_namespaces or detect_jest_version) adjusted: {
+        adjusted_options = options.*;
+        if (allow_definition_namespaces) adjusted_options.typescript_eslint_no_namespace = false;
+        if (detect_jest_version) {
+            if (comptime with_io) {
+                adjusted_options.jest_version = (try rules.jest_no_deprecated_functions.detectJestVersion(
+                    allocator,
+                    io,
+                    path,
+                )) orelse rules.jest_no_deprecated_functions.latest_jest_version;
+            } else {
+                adjusted_options.jest_version = rules.jest_no_deprecated_functions.latest_jest_version;
+            }
         }
-    }
+        break :adjusted &adjusted_options;
+    } else options;
 
     var tree = try parseSource(allocator, source, path, effective_options.source_type);
     defer tree.deinit();
@@ -181,13 +188,13 @@ fn lintSourceInternal(
         const semantic_model = try parser.semantic.analyze(&tree, .{ .check = true });
         var semantic_result = semantic_compat.Result.init(&tree, semantic_model);
         try semantic_result.symbol_table.resolveAll(semantic_result.scope_tree);
-        strict_fatal = try appendParserDiagnostics(allocator, &diagnostics, &tree, &effective_options);
+        strict_fatal = try appendParserDiagnostics(allocator, &diagnostics, &tree, effective_options);
         if (!strict_fatal) {
-            try rules.runBasicWithOptionsPtr(allocator, &diagnostics, &tree, path, &effective_options);
+            try rules.runBasicWithOptionsPtr(allocator, &diagnostics, &tree, path, effective_options);
             if (with_io) {
-                try rules.runSemanticWithIo(allocator, &diagnostics, &tree, io, path, semantic_result, effective_options);
+                try rules.runSemanticWithIoWithOptionsPtr(allocator, &diagnostics, &tree, io, path, semantic_result, effective_options);
             } else {
-                try rules.runSemantic(allocator, &diagnostics, &tree, semantic_result, effective_options);
+                try rules.runSemanticWithOptionsPtr(allocator, &diagnostics, &tree, semantic_result, effective_options);
             }
         }
     } else {
@@ -196,8 +203,8 @@ fn lintSourceInternal(
         } else {
             strict_fatal = try strict_syntax.appendDiagnostics(allocator, &diagnostics, &tree);
         }
-        strict_fatal = (try appendParserDiagnostics(allocator, &diagnostics, &tree, &effective_options)) or strict_fatal;
-        if (!strict_fatal) try rules.runBasicWithOptionsPtr(allocator, &diagnostics, &tree, path, &effective_options);
+        strict_fatal = (try appendParserDiagnostics(allocator, &diagnostics, &tree, effective_options)) or strict_fatal;
+        if (!strict_fatal) try rules.runBasicWithOptionsPtr(allocator, &diagnostics, &tree, path, effective_options);
     }
 
     // Fatal syntax prevents lint comment validation as well as suppression.
@@ -273,7 +280,7 @@ fn isDefinitionFile(path: []const u8) bool {
         std.mem.endsWith(u8, path, ".d.cts");
 }
 
-fn needsSemanticModel(options: Options) bool {
+fn needsSemanticModel(options: *const Options) bool {
     return options.react_prop_types or
         options.react_no_unused_prop_types or
         options.typescript_eslint_restrict_plus_operands or
@@ -470,7 +477,7 @@ fn appendParserDiagnostics(
 ) Allocator.Error!bool {
     var strict_fatal = false;
     for (tree.diagnostics.items) |diagnostic| {
-        if (reactNoUnescapedEntitiesCoversParserDiagnostic(tree, diagnostic, options.*)) continue;
+        if (reactNoUnescapedEntitiesCoversParserDiagnostic(tree, diagnostic, options)) continue;
         strict_fatal = strict_fatal or strict_syntax.isDiagnostic(diagnostic);
 
         try core.addDiagnostic(
@@ -485,7 +492,7 @@ fn appendParserDiagnostics(
     return strict_fatal;
 }
 
-fn hasParserSyntaxError(tree: *const ast.Tree, options: Options) bool {
+fn hasParserSyntaxError(tree: *const ast.Tree, options: *const Options) bool {
     for (tree.diagnostics.items) |diagnostic| {
         if (diagnostic.severity == .@"error" and !reactNoUnescapedEntitiesCoversParserDiagnostic(tree, diagnostic, options)) return true;
     }
@@ -495,7 +502,7 @@ fn hasParserSyntaxError(tree: *const ast.Tree, options: Options) bool {
 fn reactNoUnescapedEntitiesCoversParserDiagnostic(
     tree: *const ast.Tree,
     diagnostic: ast.Diagnostic,
-    options: Options,
+    options: *const Options,
 ) bool {
     if (!options.react_no_unescaped_entities) return false;
 

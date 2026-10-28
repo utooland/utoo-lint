@@ -168,9 +168,18 @@ test "detects the closest installed Jest version and honors explicit settings" {
     });
     defer std.testing.allocator.free(file_path);
 
-    var detected = try lint.lintSourceWithIo(std.testing.allocator, std.testing.io, source_all, file_path, optionsFor(0));
+    const automatic_options = optionsFor(0);
+    var detected = try lint.lintSourceWithIo(std.testing.allocator, std.testing.io, source_all, file_path, automatic_options);
     defer detected.deinit(std.testing.allocator);
     try std.testing.expectEqual(@as(usize, 4), helpers.countRule(detected, lint.rules.jest_no_deprecated_functions.id));
+    try std.testing.expectEqual(@as(u32, 0), automatic_options.jest_version);
+
+    // Reusing the same options without filesystem access falls back to the
+    // latest version rather than retaining the prior project's detected version.
+    var local = try lint.lintSource(std.testing.allocator, source_all, file_path, automatic_options);
+    defer local.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 6), helpers.countRule(local, lint.rules.jest_no_deprecated_functions.id));
+    try std.testing.expectEqual(@as(u32, 0), automatic_options.jest_version);
 
     var explicit = try lint.lintSourceWithIo(std.testing.allocator, std.testing.io, source_all, file_path, optionsFor(14));
     defer explicit.deinit(std.testing.allocator);

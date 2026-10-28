@@ -13,6 +13,7 @@ const max_config_file_size = 1024 * 1024;
 const ProjectType = enum {
     appfw,
     appmini,
+    smallfish,
     other,
 };
 
@@ -40,6 +41,18 @@ pub fn run(
     tree: *const ast.Tree,
     file_path: []const u8,
 ) Allocator.Error!void {
+    const config: core.PreferImportFromStdlibConfig = .{};
+    return runWithOptions(allocator, io, diagnostics, tree, file_path, &config);
+}
+
+pub fn runWithOptions(
+    allocator: Allocator,
+    io: std.Io,
+    diagnostics: *core.DiagnosticList,
+    tree: *const ast.Tree,
+    file_path: []const u8,
+    options: *const core.PreferImportFromStdlibConfig,
+) Allocator.Error!void {
     const project_root = try findProjectRoot(allocator, io, file_path);
     defer allocator.free(project_root);
 
@@ -47,6 +60,7 @@ pub fn run(
     const stdlib_package = switch (project_type) {
         .appfw => "appfw:stdlib",
         .appmini => "@example/stdlib",
+        .smallfish => "smallfish:stdlib",
         .other => return,
     };
 
@@ -59,6 +73,7 @@ pub fn run(
         .diagnostics = diagnostics,
         .versions = &versions,
         .stdlib_package = stdlib_package,
+        .external_packages = &options.external_packages,
     };
     try traverser.basic.traverse(Visitor, tree, &visitor);
 }
@@ -68,6 +83,7 @@ const Visitor = struct {
     diagnostics: *core.DiagnosticList,
     versions: *const VersionMap,
     stdlib_package: []const u8,
+    external_packages: *const core.StdlibExternalPackages,
 
     pub fn enter_program(
         self: *Visitor,
@@ -93,7 +109,7 @@ const Visitor = struct {
     ) Allocator.Error!void {
         const import_source = source orelse return;
         const package_name = parsePackageNameFromImport(import_source) orelse return;
-        const stdlib = stdlibPackage(package_name) orelse return;
+        const stdlib = stdlibPackage(package_name, self.external_packages) orelse return;
         const version = self.versions.get(package_name) orelse return;
         if (version != stdlib.version) return;
 
@@ -116,7 +132,13 @@ fn importSource(tree: *const ast.Tree, declaration: ast.ImportDeclaration) ?[]co
     };
 }
 
-fn stdlibPackage(package_name: []const u8) ?StdlibPackage {
+fn stdlibPackage(package_name: []const u8, external_packages: *const core.StdlibExternalPackages) ?StdlibPackage {
+    for (0..external_packages.count) |index| {
+        const package = external_packages.at(index);
+        if (std.mem.eql(u8, package.name(), package_name)) {
+            return .{ .name = package.name(), .stdlib_path = package.stdlibPath(), .version = package.version };
+        }
+    }
     for (stdlib_packages) |package| {
         if (std.mem.eql(u8, package.name, package_name)) return package;
     }
@@ -134,6 +156,8 @@ fn parsePackageNameFromImport(source: []const u8) ?[]const u8 {
         std.mem.startsWith(u8, source, "@appfw/") or
         std.mem.startsWith(u8, source, "appfw:") or
         std.mem.startsWith(u8, source, "appmini:") or
+        std.mem.startsWith(u8, source, "@smallfish/") or
+        std.mem.startsWith(u8, source, "smallfish:") or
         std.mem.startsWith(u8, source, "@example-fw/") or
         std.mem.eql(u8, source, "@example-runtime") or
         std.mem.startsWith(u8, source, "@example-runtime/"))
@@ -250,6 +274,14 @@ fn detectProjectType(allocator: Allocator, io: std.Io, project_root: []const u8)
     const appmini_ts = try std.fs.path.join(allocator, &.{ project_root, "appmini.config.ts" });
     defer allocator.free(appmini_ts);
     if (exists(io, appmini_ts)) return .appmini;
+
+    const smallfish_js = try std.fs.path.join(allocator, &.{ project_root, "smallfish.config.js" });
+    defer allocator.free(smallfish_js);
+    if (exists(io, smallfish_js)) return .smallfish;
+
+    const smallfish_ts = try std.fs.path.join(allocator, &.{ project_root, "smallfish.config.ts" });
+    defer allocator.free(smallfish_ts);
+    if (exists(io, smallfish_ts)) return .smallfish;
 
     return .other;
 }

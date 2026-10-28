@@ -38,6 +38,19 @@ pub fn run(
     file_path: []const u8,
     symbol_table: traverser.semantic.SymbolTable,
 ) Allocator.Error!void {
+    const config: core.NoPhantomDependenciesConfig = .{};
+    return runWithOptions(allocator, io, diagnostics, tree, file_path, symbol_table, &config);
+}
+
+pub fn runWithOptions(
+    allocator: Allocator,
+    io: std.Io,
+    diagnostics: *core.DiagnosticList,
+    tree: *const ast.Tree,
+    file_path: []const u8,
+    symbol_table: traverser.semantic.SymbolTable,
+    options: *const core.NoPhantomDependenciesConfig,
+) Allocator.Error!void {
     const project_root = try findProjectRoot(allocator, io, file_path);
     defer allocator.free(project_root);
 
@@ -45,7 +58,7 @@ pub fn run(
     defer allocator.free(lerna_path);
     if (exists(io, lerna_path)) return;
 
-    var config = try readDependencyConfig(allocator, io, project_root);
+    var config = try readDependencyConfig(allocator, io, project_root, options);
     defer config.deinit();
 
     var reference_lookup = try buildReferenceLookup(allocator, symbol_table);
@@ -132,6 +145,7 @@ fn readDependencyConfig(
     allocator: Allocator,
     io: std.Io,
     project_root: []const u8,
+    options: *const core.NoPhantomDependenciesConfig,
 ) Allocator.Error!DependencyConfig {
     var dependencies = std.StringHashMap(void).init(allocator);
     errdefer dependencies.deinit();
@@ -143,6 +157,12 @@ fn readDependencyConfig(
         try addDependency(allocator, &dependencies, dependency);
     }
     try addDependency(allocator, &dependencies, "@example/page-runtime");
+    for (0..options.external_dependencies.count) |index| {
+        try addDependency(allocator, &dependencies, options.external_dependencies.at(index));
+    }
+    for (0..options.external_alias.count) |index| {
+        try addAlias(allocator, &aliases, options.external_alias.at(index));
+    }
 
     const package_path = try std.fs.path.join(allocator, &.{ project_root, "package.json" });
     defer allocator.free(package_path);
@@ -152,7 +172,8 @@ fn readDependencyConfig(
     defer allocator.free(tsconfig_path);
     try readTsConfigAliases(allocator, io, tsconfig_path, &aliases);
 
-    try readAppfwConfig(allocator, io, project_root, &dependencies, &aliases);
+    try readFrameworkConfig(allocator, io, project_root, "appfw", &dependencies, &aliases);
+    try readFrameworkConfig(allocator, io, project_root, "smallfish", &dependencies, &aliases);
 
     return .{
         .allocator = allocator,
@@ -253,16 +274,21 @@ fn readTsConfigAliases(
     }
 }
 
-fn readAppfwConfig(
+fn readFrameworkConfig(
     allocator: Allocator,
     io: std.Io,
     project_root: []const u8,
+    framework: []const u8,
     dependencies: *std.StringHashMap(void),
     aliases: *std.ArrayList([]const u8),
 ) Allocator.Error!void {
-    const js_path = try std.fs.path.join(allocator, &.{ project_root, "appfw.config.js" });
+    const js_name = try std.fmt.allocPrint(allocator, "{s}.config.js", .{framework});
+    defer allocator.free(js_name);
+    const ts_name = try std.fmt.allocPrint(allocator, "{s}.config.ts", .{framework});
+    defer allocator.free(ts_name);
+    const js_path = try std.fs.path.join(allocator, &.{ project_root, js_name });
     defer allocator.free(js_path);
-    const ts_path = try std.fs.path.join(allocator, &.{ project_root, "appfw.config.ts" });
+    const ts_path = try std.fs.path.join(allocator, &.{ project_root, ts_name });
     defer allocator.free(ts_path);
 
     var source: ?[]u8 = readConfigFile(allocator, io, js_path);
@@ -375,6 +401,8 @@ fn parsePackageNameFromImport(import_string: []const u8) ?[]const u8 {
         std.mem.startsWith(u8, import_string, "@appfw/") or
         std.mem.startsWith(u8, import_string, "appfw:") or
         std.mem.startsWith(u8, import_string, "appmini:") or
+        std.mem.startsWith(u8, import_string, "@smallfish/") or
+        std.mem.startsWith(u8, import_string, "smallfish:") or
         std.mem.startsWith(u8, import_string, "@example-fw/") or
         std.mem.eql(u8, import_string, "@example-runtime") or
         std.mem.startsWith(u8, import_string, "@example-runtime/") or
@@ -561,4 +589,8 @@ test "alipay ant no phantom dependencies parses package names like legacy lint" 
     try std.testing.expect(parsePackageNameFromImport("./local") == null);
     try std.testing.expect(parsePackageNameFromImport("@example-fw/foo") == null);
     try std.testing.expect(parsePackageNameFromImport("@example-runtime/router") == null);
+    try std.testing.expect(parsePackageNameFromImport("@smallfish/router") == null);
+    try std.testing.expect(parsePackageNameFromImport("smallfish:stdlib/lodash") == null);
+    try std.testing.expectEqualStrings("smallfish-package", parsePackageNameFromImport("smallfish-package").?);
+    try std.testing.expectEqualStrings("@smallfish-other/pkg", parsePackageNameFromImport("@smallfish-other/pkg").?);
 }

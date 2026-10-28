@@ -138,21 +138,24 @@ test "allows external modules and augmentations with both namespace allowances d
     }
 }
 
-test "allows namespaces in definition files" {
+test "definition-file namespace allowance preserves reusable caller options" {
     const source =
         \\namespace Internal {
         \\  export const value: number;
         \\}
     ;
+    var options = lint.Options.allDisabled();
+    options.typescript_eslint_no_namespace = true;
+    options.typescript_eslint_no_namespace_allow_definition_files = true;
 
-    var result = try lint.lintSource(std.testing.allocator, source, "fixture.d.ts", .{
-        .no_unused_vars = false,
-        .typescript_eslint_prefer_namespace_keyword = false,
-        .parser_semantic_errors = false,
-    });
-    defer result.deinit(std.testing.allocator);
+    var definition = try lint.lintSource(std.testing.allocator, source, "fixture.d.ts", options);
+    defer definition.deinit(std.testing.allocator);
+    try std.testing.expect(!helpers.hasRule(definition, lint.rules.typescript_eslint_no_namespace.id));
+    try std.testing.expect(options.typescript_eslint_no_namespace);
 
-    try std.testing.expect(!helpers.hasRule(result, lint.rules.typescript_eslint_no_namespace.id));
+    var implementation = try lint.lintSource(std.testing.allocator, source, "fixture.ts", options);
+    defer implementation.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 1), helpers.countRule(implementation, lint.rules.typescript_eslint_no_namespace.id));
 }
 
 test "reports namespaces in definition files when allowDefinitionFiles is false" {

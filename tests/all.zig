@@ -177,6 +177,10 @@ comptime {
 }
 
 comptime {
+    _ = @import("rules/alipay_ant_no_phantom_dependencies.zig");
+}
+
+comptime {
     _ = @import("rules/alipay_ant_prefer_import_from_stdlib.zig");
 }
 
