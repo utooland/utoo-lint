@@ -810,13 +810,14 @@ pub fn runSemanticWithIo(
     options: core.Options,
 ) Allocator.Error!void {
     if (options.alipay_ant_no_phantom_dependencies) {
-        try alipay_ant_no_phantom_dependencies.run(
+        try alipay_ant_no_phantom_dependencies.runWithOptions(
             allocator,
             io,
             diagnostics,
             tree,
             file_path,
             semantic_result.symbol_table,
+            &options.alipay_ant_no_phantom_dependencies_config,
         );
     }
 
@@ -949,12 +950,13 @@ fn runIoSemantic(
     options: core.Options,
 ) Allocator.Error!void {
     if (options.alipay_ant_prefer_import_from_stdlib) {
-        try alipay_ant_prefer_import_from_stdlib.run(
+        try alipay_ant_prefer_import_from_stdlib.runWithOptions(
             allocator,
             io,
             diagnostics,
             tree,
             file_path,
+            &options.alipay_ant_prefer_import_from_stdlib_config,
         );
     }
 
