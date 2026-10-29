@@ -15,3 +15,8 @@ export default defineConfig({
     ...frontend.rules,
   },
 });
+
+// A resolved package path can be inherited directly, or mixed with objects.
+const resolvedPresetPath: string = "/example/preset.cjs";
+defineConfig({ extends: resolvedPresetPath, rules: { "no-console": "off" } });
+defineConfig({ extends: [resolvedPresetPath, { rules: { "no-debugger": "error" } }] });

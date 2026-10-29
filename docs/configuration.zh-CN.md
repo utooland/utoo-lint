@@ -73,6 +73,22 @@ export default defineConfig({
 });
 ```
 
+### 继承共享配置
+
+使用 `extends` 引用导出配置对象或数组的文件。`require.resolve()` 返回的绝对路径可直接传入，项目规则仍写在 `rules`：
+
+```ts
+import { defineConfig } from "@utoo/lint/config";
+
+export default defineConfig({
+  files: ["src/**/*.{js,jsx,ts,tsx}"],
+  extends: require.resolve("@example/lint-preset"),
+  rules: { "no-console": "warn" }
+});
+```
+
+`extends` 也接受路径、配置对象和插件配置名组成的数组，按顺序继承，项目规则最后覆盖。共享配置中的 `files`、`ignores` 相对于项目配置目录解析；纯忽略配置保持全局生效。相对路径请先用 `require.resolve("./lint-preset.cjs")` 解析。函数型 preset 仍需手动调用，加载器不会自动执行导出的函数。
+
 ### 全局忽略与配置项级忽略
 
 使用 `globalIgnores()` 可以从所有配置项中排除文件或整个目录。该辅助函数返回一个仅包含忽略规则的配置项，因此应将它作为单独的 `defineConfig()` 参数或数组项传入：

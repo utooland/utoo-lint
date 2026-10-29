@@ -102,7 +102,7 @@ export interface ConfigObject {
   parserOptions?: Record<string, unknown>;
   globals?: Record<string, unknown>;
   env?: Record<string, unknown>;
-  extends?: Array<string | ConfigObject | ConfigObject[]>;
+  extends?: string | Array<string | ConfigObject | ConfigObject[]>;
   basePath?: string;
   [key: string]: unknown;
 }
