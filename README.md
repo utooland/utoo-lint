@@ -40,10 +40,12 @@ lint engine with familiar configuration, CLI, and JavaScript APIs.
 
 ## Performance
 
-The benchmark suite compares fresh CLI runs of utoo-lint, Oxlint, Biome, and
-ESLint on the same generated TypeScript corpus and shared rule set.
+The benchmark suite compares the published CLIs of utoo-lint, Bun lint
+(canary), Oxlint, Biome, and ESLint on 1,000 generated TypeScript files under
+12-rule and 49-rule shared profiles. The utoo-lint measurements include npm
+launcher and TypeScript config loading costs.
 
-![utoo-lint benchmark](assets/utoo-lint-benchmark.png)
+![utoo-lint benchmark](assets/utoo-lint-benchmark-2026-10-28.png)
 
 See the [benchmark methodology](benchmarks/README.md) to reproduce the results
 and understand what is included in the comparison.
