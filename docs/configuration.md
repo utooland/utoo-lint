@@ -88,6 +88,22 @@ export default defineConfig({
 });
 ```
 
+### Extending Shared Configs
+
+Use `extends` with an absolute path to a module exporting a config object or array. A path returned by `require.resolve()` works directly; application overrides stay in `rules`:
+
+```ts
+import { defineConfig } from "@utoo/lint/config";
+
+export default defineConfig({
+  files: ["src/**/*.{js,jsx,ts,tsx}"],
+  extends: require.resolve("@example/lint-preset"),
+  rules: { "no-console": "warn" }
+});
+```
+
+`extends` also accepts an array mixing paths, config objects, and plugin config names. Entries apply in order, followed by the application's own rules. Shared `files` and `ignores` remain relative to the application config directory; ignore-only entries remain global. Resolve relative files with `require.resolve("./lint-preset.cjs")`. Function presets must still be called explicitly; exported functions are never invoked automatically.
+
 ### Global and Entry-Scoped Ignores
 
 Use `globalIgnores()` to exclude files or whole directories from every config

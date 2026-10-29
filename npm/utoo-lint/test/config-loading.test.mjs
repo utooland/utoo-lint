@@ -2955,6 +2955,42 @@ test("utlint.config.ts can import defineConfig and provide default files", (t) =
   assert.equal(result.status, 0, result.stderr);
 });
 
+test("TypeScript config inherits a resolved package path and preserves scopes, ignores, and overrides", (t) => {
+  const project = createProject(t);
+  const packageLinkDirectory = join(project, "node_modules", "@utoo");
+  mkdirSync(packageLinkDirectory, { recursive: true });
+  symlinkSync(packageDirectory, join(packageLinkDirectory, "lint"), "dir");
+  write(join(project, "node_modules", "lint-policy", "package.json"), '{"main":"index.cjs"}');
+  write(join(project, "node_modules", "lint-policy", "index.cjs"), `module.exports = [
+    { ignores: ["src/generated/**"] },
+    { files: ["src/**/*.ts"], rules: { "no-debugger": "error" } },
+    { files: ["src/**/*.test.ts"], rules: { "no-debugger": "off" } }
+  ];`);
+  write(join(project, "src", "index.ts"), "debugger; console.log(1);\n");
+  write(join(project, "src", "index.test.ts"), "debugger;\n");
+  write(join(project, "src", "generated", "index.ts"), "debugger;\n");
+  write(join(project, "scripts", "index.ts"), "debugger;\n");
+  write(join(project, "utlint.config.ts"), `
+    import { defineConfig } from "@utoo/lint/config";
+    export default defineConfig({
+      files: ["src/**/*.ts"],
+      extends: require.resolve("lint-policy"),
+      rules: { "no-console": "error" }
+    });
+  `);
+
+  for (const execute of [runCli, commonJSRunCli]) {
+    const result = execute(["--format=json"], {
+      cwd: project, binary: testBinary(), encoding: "utf8"
+    });
+    assert.equal(result.status, 1, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.files, 2);
+    assert.deepEqual(report.diagnostics.map((entry) => entry.ruleId).sort(), ["no-console", "no-debugger"]);
+    assert.ok(report.diagnostics.every((entry) => entry.filePath.replaceAll("\\", "/").endsWith("src/index.ts")));
+  }
+});
+
 test("globalIgnores prunes default targets while config-entry ignores stay scoped", (t) => {
   const project = createProject(t);
   const packageLinkDirectory = join(project, "node_modules", "@utoo");

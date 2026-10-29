@@ -1,3 +1,5 @@
+const { isConfigPath, withConfigPath } = require("./lib/config-path.cjs");
+
 let globalIgnoreCount = 0;
 
 function defineConfig(...args) {
@@ -39,11 +41,12 @@ function expandConfigExtends(config, baseConfigName) {
   if (!("extends" in config)) {
     return [config];
   }
-  if (!Array.isArray(config.extends)) {
-    throw new TypeError("The `extends` property must be an array.");
+  if (typeof config.extends !== "string" && !Array.isArray(config.extends)) {
+    throw new TypeError("The `extends` property must be a string or an array.");
   }
 
-  const { extends: extendsList, ...baseConfig } = config;
+  const { extends: extensions, ...baseConfig } = config;
+  const extendsList = typeof extensions === "string" ? [extensions] : extensions;
   const expanded = [];
   for (const [index, extension] of flattenConfigArgs(resolveConfigExtends(config, extendsList)).entries()) {
     if ("basePath" in extension) {
@@ -64,6 +67,14 @@ function resolveConfigExtends(config, extendsList) {
   return extendsList.map((extension) => {
     if (typeof extension !== "string") {
       return extension;
+    }
+    if (isConfigPath(extension)) {
+      return withConfigPath(extension, (loaded) => {
+        const resolved = flattenConfigArgs([loaded]).flatMap((entry, index) =>
+          expandConfigExtends(entry, `${extension}[${index}]`)
+        );
+        return withConfigNames(resolved, extension);
+      });
     }
     const pluginConfig = pluginConfigForName(config, extension);
     if (!pluginConfig) {
@@ -133,7 +144,7 @@ function extendConfigFiles(baseFiles = [], extensionFiles = []) {
 
 function isGlobalIgnores(config) {
   const keys = Object.keys(config);
-  return keys.includes("ignores") && keys.every((key) => key === "name" || key === "ignores");
+  return keys.includes("ignores") && keys.every((key) => key === "name" || key === "ignores" || key === "__utooLintConfigName");
 }
 
 function withConfigNames(config, name) {
