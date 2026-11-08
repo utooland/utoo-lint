@@ -1,0 +1,47 @@
+src/strict_syntax.zig
+  s_9005172efbbaa8::t_6f295eec6eaceb 9
+apps/playground/scripts/verify-yuku-wasm.mjs
+  s_9005172efbbaa8::t_b49818b8188f63 9-11
+src/rules/react_no_danger_with_children.zig
+  s_9005172efbbaa8::t_121efe163b92be 65,112,115,221,223
+apps/playground/scripts/verify-yuku-wasm.test.mjs
+  s_9005172efbbaa8::t_b49818b8188f63 12-14
+src/root.zig
+  s_9005172efbbaa8::t_6f295eec6eaceb 515,517
+build.zig
+  s_9005172efbbaa8::t_b5d08e41528d4f 9-10,50,133-162
+  s_9005172efbbaa8::t_b5609dc6b77e1d 163
+src/rules/react_self_closing_comp.zig
+  s_9005172efbbaa8::t_121efe163b92be 31,54,59-60
+npm/utoo-lint/package.json
+  s_9005172efbbaa8::t_583c1f0da2780a 95
+apps/playground/package.json
+  s_9005172efbbaa8::t_583c1f0da2780a 19
+  s_9005172efbbaa8::t_b49818b8188f63 25
+CONTRIBUTING.md
+  s_9005172efbbaa8::t_123b03f4f0ce84 42
+apps/playground/README.md
+  s_9005172efbbaa8::t_583c1f0da2780a 6
+apps/playground/scripts/lint-client.test.mjs
+  s_9005172efbbaa8::t_b49818b8188f63 12,382,385,406-407,434
+pnpm-lock.yaml
+  s_9005172efbbaa8::t_53a9871f800d06 56-57,68-70,142-143,2863-2895,7521-7522,7524-7528,10103-10122,15714-15722
+vendor/yuku
+  s_9005172efbbaa8::t_169f90553526cc 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "4ef53bf60786983ded1173a8ae7f1c0df733946a",
+  "prompts": {},
+  "sessions": {
+    "s_9005172efbbaa8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1ba87-97ed-70f2-a8bc-58e21d9f3137",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "zoomdong <1344492820@qq.com>"
+    }
+  }
+}
