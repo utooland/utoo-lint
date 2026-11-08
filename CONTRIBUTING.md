@@ -39,7 +39,7 @@ Use Zig 0.17.0, matching the version pinned in CI:
 zig version
 ```
 
-The vendored Yuku v0.22.1 requires Zig 0.17.0 or newer.
+The vendored Yuku v0.27.0 requires Zig 0.17.0 or newer.
 
 Initialize submodules before building:
 

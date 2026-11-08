@@ -9,7 +9,7 @@ import test from 'node:test';
 
 const run = promisify(execFile);
 const parserWasm = await WebAssembly.compile(
-  await readFile(new URL(import.meta.resolve('yuku/yuku.wasm'))),
+  await readFile(new URL(import.meta.resolve('@yuku-toolchain/wasm/yuku.wasm'))),
 );
 const playgroundDirectory = fileURLToPath(new URL('..', import.meta.url));
 const outputDirectory = await mkdtemp(join(tmpdir(), 'utoo-lint-client-'));
@@ -379,12 +379,12 @@ test('rejects oversized AST input before starting a worker', async () => {
 });
 
 test('keeps Yuku spans aligned with Monaco UTF-16 offsets', async () => {
-  const { parse } = await import('yuku');
+  const { Core, parse } = await import('yuku');
   const source = "const 前缀 = '🐰';\nfunction greet() {}";
   const { program } = parse(source, {
+    core: new Core({ wasm: parserWasm }),
     lang: 'ts',
     sourceType: 'module',
-    wasm: parserWasm,
   });
   const declaration = program.body[1];
   const expectedStart = source.indexOf('function');
@@ -403,7 +403,8 @@ test('keeps Yuku spans aligned with Monaco UTF-16 offsets', async () => {
 
 test('fixes every diagnostic in each default Playground fixture', async () => {
   const { createUtooLint } = await import('@utoo/lint-wasm');
-  const { parse } = await import('yuku');
+  const { Core, parse } = await import('yuku');
+  const core = new Core({ wasm: parserWasm });
   const linter = await createUtooLint();
 
   for (const [language, source] of Object.entries(INITIAL_SOURCES)) {
@@ -430,10 +431,10 @@ test('fixes every diagnostic in each default Playground fixture', async () => {
     );
 
     const ast = parse(source, {
+      core,
       path: options.filePath,
       preserveParens: true,
       sourceType: 'module',
-      wasm: parserWasm,
     });
     assert.equal(ast.program.type, 'Program');
     assert.equal(ast.program.start, 0);

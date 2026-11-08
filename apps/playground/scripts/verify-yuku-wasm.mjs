@@ -6,7 +6,9 @@ import path from 'node:path';
 // decoded bytes against the installed package, just as external WASM assets
 // are checked, so a missing or changed parser cannot pass deployment checks.
 export async function verifyInlineParserWasm(files) {
-  const expected = await readFile(new URL(import.meta.resolve('yuku/yuku.wasm')));
+  const expected = await readFile(
+    new URL(import.meta.resolve('@yuku-toolchain/wasm/yuku.wasm')),
+  );
   if (!WebAssembly.validate(expected)) {
     throw new Error('installed Yuku parser WebAssembly is invalid');
   }

@@ -6,7 +6,7 @@ const ast = parser.ast;
 const scoped = parser.traverser.scoped;
 const Allocator = std.mem.Allocator;
 
-const delete_message = "Deleting a variable in strict mode is not allowed";
+const delete_message = "'delete' cannot be called on an identifier in strict mode";
 const with_message = "'with' statements are not allowed in strict mode";
 
 // Semantic analysis already performs these checks. Reuse its diagnostics when

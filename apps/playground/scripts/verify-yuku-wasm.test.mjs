@@ -9,7 +9,9 @@ test('requires exactly one unmodified inline Yuku WASM module', async (t) => {
   const directory = await mkdtemp(path.join(tmpdir(), 'utoo-lint-yuku-wasm-'));
   t.after(() => rm(directory, { force: true, recursive: true }));
   const file = path.join(directory, 'parser.js');
-  const wasm = await readFile(new URL(import.meta.resolve('yuku/yuku.wasm')));
+  const wasm = await readFile(
+    new URL(import.meta.resolve('@yuku-toolchain/wasm/yuku.wasm')),
+  );
   const moduleSource = `const wasm = "${wasm.toString('base64')}";`;
 
   await writeFile(file, moduleSource);

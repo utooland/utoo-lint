@@ -4,24 +4,10 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const util_module = b.createModule(.{
-        .root_source_file = b.path("vendor/yuku/src/util/root.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-
     const codegen_options = b.addOptions();
     codegen_options.addOption(bool, "source_maps", true);
-    const dialect_module = b.addOptions().createModule();
-
-    const parser_module = b.createModule(.{
-        .root_source_file = b.path("vendor/yuku/src/parser/root.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    parser_module.addImport("util", util_module);
-    parser_module.addImport("codegen_options", codegen_options.createModule());
-    parser_module.addImport("dialect", dialect_module);
+    const codegen_module = codegen_options.createModule();
+    const parser_module = createParserModule(b, target, optimize, codegen_module);
 
     const lint_module = b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
@@ -61,20 +47,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
-    const wasm_util_module = b.createModule(.{
-        .root_source_file = b.path("vendor/yuku/src/util/root.zig"),
-        .target = wasm_target,
-        .optimize = .small,
-    });
-
-    const wasm_parser_module = b.createModule(.{
-        .root_source_file = b.path("vendor/yuku/src/parser/root.zig"),
-        .target = wasm_target,
-        .optimize = .small,
-    });
-    wasm_parser_module.addImport("util", wasm_util_module);
-    wasm_parser_module.addImport("codegen_options", codegen_options.createModule());
-    wasm_parser_module.addImport("dialect", dialect_module);
+    const wasm_parser_module = createParserModule(b, wasm_target, .small, codegen_module);
 
     const wasm_lint_module = b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
@@ -156,4 +129,35 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run unit tests and rule snapshots");
     test_step.dependOn(&run_unit_tests.step);
     test_step.dependOn(&run_snapshot_tests.step);
+}
+
+fn createParserModule(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.lang.Optimize,
+    codegen_options: *std.Build.Module,
+) *std.Build.Module {
+    const util = b.createModule(.{
+        .root_source_file = b.path("vendor/yuku/src/util/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const spec = b.createModule(.{
+        .root_source_file = b.path("vendor/yuku/src/spec/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "util", .module = util }},
+    });
+    const parser = b.createModule(.{
+        .root_source_file = b.path("vendor/yuku/src/parser/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "util", .module = util },
+            .{ .name = "spec", .module = spec },
+            .{ .name = "codegen_options", .module = codegen_options },
+        },
+    });
+    spec.addImport("parser", parser);
+    return parser;
 }
