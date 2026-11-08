@@ -3,7 +3,7 @@
 The Playground runs utoo-lint entirely in the browser. It uses the public
 EVJS packages, Utoopack, Monaco Editor, a Web Worker, and the workspace
 `@utoo/lint-wasm` package. Its AST inspector uses the public
-`yuku` 0.22.1 package, matching the Yuku revision vendored by utoo-lint.
+`yuku` 0.27.0 package, matching the Yuku revision vendored by utoo-lint.
 
 No `@alipay/*` package, private registry, internal runtime, or server process
 is required. EVJS mounts the root `src/pages/page.tsx` as a CSR SPA at

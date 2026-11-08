@@ -53,8 +53,8 @@ importers:
         specifier: 18.3.1
         version: 18.3.1(react@18.3.1)
       yuku:
-        specifier: 0.22.1
-        version: 0.22.1
+        specifier: 0.27.0
+        version: 0.27.0(@yuku-toolchain/wasm@0.27.0)
     devDependencies:
       '@evjs/cli':
         specifier: 0.3.21
@@ -65,6 +65,9 @@ importers:
       '@types/react-dom':
         specifier: 18.3.7
         version: 18.3.7(@types/react@18.3.28)
+      '@yuku-toolchain/wasm':
+        specifier: 0.27.0
+        version: 0.27.0
       typescript:
         specifier: 7.x
         version: 7.0.2
@@ -136,8 +139,8 @@ importers:
         specifier: 2.7.0
         version: 2.7.0
       yuku:
-        specifier: 0.22.1
-        version: 0.22.1
+        specifier: 0.27.0
+        version: 0.27.0(@yuku-toolchain/wasm@0.27.0)
     devDependencies:
       typescript:
         specifier: 6.0.3
@@ -2856,6 +2859,39 @@ packages:
 
   '@xtuc/long@4.2.2':
     resolution: {integrity: sha512-NuHqBY1PB/D8xU6s/thBgOAiAP7HOYDQ32+BFZILJ8ivkUkAHQnWfn6WhL79Owj1qmUnoN/YPhktdIoucipkAQ==}
+
+  '@yuku-toolchain/darwin-arm64@0.27.0':
+    resolution: {integrity: sha512-A3v83rNyHWlnJeeMBsWggZ+RZDP2BEMHIiMk+j23LqtVch24MXwg8veflkQgZ2GtCtZOxcG+NkztnsSUS4rWEQ==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@yuku-toolchain/darwin-x64@0.27.0':
+    resolution: {integrity: sha512-u+fcqQw0uRj5irtO5f0xu5nGazYRxfBVBNIuhiONWX6Mh2izRONSNXhCwFDaYRqHunublzw2l2aQMB0n5n1t0Q==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@yuku-toolchain/linux-arm64@0.27.0':
+    resolution: {integrity: sha512-IPB+9LSC/sf8Sa8DtqapUgU4uTL/U94Vr5mgUsfRx59u8/4BT38cze+e5b96AlQynsdtuF4tgC0FW0TmJ2B75g==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@yuku-toolchain/linux-x64@0.27.0':
+    resolution: {integrity: sha512-fe1kN04JPBODrkRZOuI06jIqKyzcyn0ykx+tpiERDwqAh9ALWOtkgfhFjVaOQSu+guhakzY/89xjQdmfY7EJ7w==}
+    cpu: [x64]
+    os: [linux]
+
+  '@yuku-toolchain/wasm@0.27.0':
+    resolution: {integrity: sha512-mKycgNKnbdbjqfo7JF0YPIP6VXNL/jfzBkUEZhX7PFew3cGezAZZd/mFlUXE0aISTjrXgkBNwsxq7iQjmuFMNA==}
+
+  '@yuku-toolchain/win32-arm64@0.27.0':
+    resolution: {integrity: sha512-NZmiFTF7ee45Fhnsa0BGMCpElJGg8iGYt4N3UoKj/n1vNmACcgY6NI4najNr9Jc1ulIVVvtPbo934RMlZQakrA==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@yuku-toolchain/win32-x64@0.27.0':
+    resolution: {integrity: sha512-7LSviI8HtHga0g7G2oT7C/SP2IoLmrg8LYPeWZkp4ljFtaWKJoTRF0Iv0cVt0dR4rehoN/+TjN4r8SoArCKvlg==}
+    cpu: [x64]
+    os: [win32]
 
   accepts@1.3.8:
     resolution: {integrity: sha512-PYAthTa2m2VKxuvSD3DPC/Gy+U+sOA1LAuT8mkmRuvw+NACSaeXEQ+NHcVF7rONl6qcaxV3Uuemwawk+7+SJLw==}
@@ -7482,9 +7518,14 @@ packages:
   youch@4.1.0-beta.10:
     resolution: {integrity: sha512-rLfVLB4FgQneDr0dv1oddCVZmKjcJ6yX6mS4pU82Mq/Dt9a3cLZQ62pDBL4AUO+uVrCvtWz3ZFUL2HFAFJ/BXQ==}
 
-  yuku@0.22.1:
-    resolution: {integrity: sha512-aY9bJiNKR46RyulhwZxh1L6DlXuRWEub9uXjvrjhP/AKQFC5DwGdri4mJaQH9Jmv+ijnsduWoBTXtEfKy2aehw==}
+  yuku@0.27.0:
+    resolution: {integrity: sha512-YmSD4xYlESRi8egxzC4guegQdMhAcz1G9NUsMNrTABAIV9dQxoBzDC7ZyAG/dSG18o1Oxt4xDok2irvPy9FSJQ==}
     engines: {node: '>=16.4.0'}
+    peerDependencies:
+      '@yuku-toolchain/wasm': 0.27.0
+    peerDependenciesMeta:
+      '@yuku-toolchain/wasm':
+        optional: true
 
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
@@ -10058,6 +10099,26 @@ snapshots:
   '@xtuc/ieee754@1.2.0': {}
 
   '@xtuc/long@4.2.2': {}
+
+  '@yuku-toolchain/darwin-arm64@0.27.0':
+    optional: true
+
+  '@yuku-toolchain/darwin-x64@0.27.0':
+    optional: true
+
+  '@yuku-toolchain/linux-arm64@0.27.0':
+    optional: true
+
+  '@yuku-toolchain/linux-x64@0.27.0':
+    optional: true
+
+  '@yuku-toolchain/wasm@0.27.0': {}
+
+  '@yuku-toolchain/win32-arm64@0.27.0':
+    optional: true
+
+  '@yuku-toolchain/win32-x64@0.27.0':
+    optional: true
 
   accepts@1.3.8:
     dependencies:
@@ -15650,6 +15711,14 @@ snapshots:
       cookie: 1.1.1
       youch-core: 0.3.3
 
-  yuku@0.22.1: {}
+  yuku@0.27.0(@yuku-toolchain/wasm@0.27.0):
+    optionalDependencies:
+      '@yuku-toolchain/darwin-arm64': 0.27.0
+      '@yuku-toolchain/darwin-x64': 0.27.0
+      '@yuku-toolchain/linux-arm64': 0.27.0
+      '@yuku-toolchain/linux-x64': 0.27.0
+      '@yuku-toolchain/wasm': 0.27.0
+      '@yuku-toolchain/win32-arm64': 0.27.0
+      '@yuku-toolchain/win32-x64': 0.27.0
 
   zwitch@2.0.4: {}

@@ -512,9 +512,9 @@ fn reactNoUnescapedEntitiesCoversParserDiagnostic(
     const byte = tree.source[offset];
     return switch (byte) {
         '>' => options.react_no_unescaped_entities_forbid_gt and
-            std.mem.eql(u8, diagnostic.message, "Unexpected '>' in JSX text"),
+            std.mem.eql(u8, diagnostic.message, "Unexpected token '>' in JSX text"),
         '}' => options.react_no_unescaped_entities_forbid_closing_brace and
-            std.mem.eql(u8, diagnostic.message, "Unexpected '}' in JSX text"),
+            std.mem.eql(u8, diagnostic.message, "Unexpected token '}' in JSX text"),
         else => false,
     };
 }

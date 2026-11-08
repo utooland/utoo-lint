@@ -16,12 +16,13 @@
     "monaco-editor": "0.56.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "yuku": "0.22.1"
+    "yuku": "0.27.0"
   },
   "devDependencies": {
     "@evjs/cli": "0.3.21",
     "@types/react": "18.3.28",
     "@types/react-dom": "18.3.7",
+    "@yuku-toolchain/wasm": "0.27.0",
     "typescript": "7.x"
   },
   "engines": {
