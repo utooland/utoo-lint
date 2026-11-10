@@ -14,13 +14,13 @@
     "codspeed:severity-config": "node scripts/run-severity-config-codspeed.mjs"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.4.16",
+    "@biomejs/biome": "2.6.3",
     "@codspeed/tinybench-plugin": "5.5.0",
     "@eslint/js": "10.0.1",
-    "eslint": "10.4.1",
-    "oxlint": "1.69.0",
+    "eslint": "10.13.0",
+    "oxlint": "1.90.0",
     "tinybench": "4.1.0",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.61.0"
+    "typescript-eslint": "8.72.1"
   }
 }
