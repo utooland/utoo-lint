@@ -527,7 +527,11 @@ body {
 
 /* Dark theme */
 
-html[data-prefers-color='dark'] {
+/* Umi prefixes every overrides.css selector with `body`, so an attribute
+   selector on <html> compiles to `body html[data-prefers-color='dark']` and
+   never matches. Scope the dark tokens to <body> instead; they still cascade
+   through the whole theme. */
+body:where(html[data-prefers-color='dark'] *) {
   --utlint-brand: #55b9ed;
   --utlint-brand-strong: #64c2f2;
   --utlint-brand-soft: #1a303c;
@@ -539,11 +543,12 @@ html[data-prefers-color='dark'] {
   --utlint-surface-muted: #202a38;
   --utlint-line: #303b4c;
   --utlint-line-strong: #45566d;
-}
-
-body:where(html[data-prefers-color='dark'] *) {
   background: var(--utlint-paper);
   color: var(--utlint-ink);
+}
+
+body:where(html[data-prefers-color='dark'] *) .dumi-default-doc-layout {
+  background: var(--utlint-paper);
 }
 
 body:where(html[data-prefers-color='dark'] *)
