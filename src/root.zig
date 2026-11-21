@@ -228,6 +228,7 @@ fn parseSource(allocator: Allocator, source: []const u8, path: []const u8, confi
         .source_type = source_type,
         .lang = ast.Lang.fromPath(path),
     });
+    errdefer tree.deinit();
 
     const fallback_lang = jsxFallbackLang(path) orelse return tree;
     if (!tree.hasErrors()) return tree;

@@ -168,10 +168,10 @@ fn collectFileDependencies(
     const source = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(max_source_size)) catch return .empty;
     defer allocator.free(source);
 
-    var tree = parser.parse(allocator, source, .{
+    var tree = try parser.parse(allocator, source, .{
         .source_type = ast.SourceType.fromPath(path),
         .lang = ast.Lang.fromPath(path),
-    }) catch return .empty;
+    });
     defer tree.deinit();
     if (tree.hasErrors()) return .empty;
 

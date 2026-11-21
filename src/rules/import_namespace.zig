@@ -295,10 +295,10 @@ fn moduleHasExportSyntax(allocator: Allocator, io: std.Io, path: []const u8) All
     const source = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(max_source_size)) catch return false;
     defer allocator.free(source);
 
-    var tree = parser.parse(allocator, source, .{
+    var tree = try parser.parse(allocator, source, .{
         .source_type = ast.SourceType.fromPath(path),
         .lang = ast.Lang.fromPath(path),
-    }) catch return false;
+    });
     defer tree.deinit();
     if (tree.hasErrors()) return false;
 

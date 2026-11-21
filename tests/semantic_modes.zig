@@ -145,3 +145,13 @@ test "strict syntax follows configured source type instead of the file extension
     try std.testing.expectEqual(@as(usize, 2), module.diagnostics.len);
     for (module.diagnostics) |diagnostic| try std.testing.expectEqualStrings("parse", diagnostic.rule_id);
 }
+
+test "allocation failure during JSX fallback leaves no allocations behind" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, struct {
+        fn run(allocator: std.mem.Allocator) !void {
+            var result = try lint.lintSource(allocator, "const value = <div />;", "fixture.js", lint.Options.allDisabled());
+            defer result.deinit(allocator);
+            try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+        }
+    }.run, .{});
+}
