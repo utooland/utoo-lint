@@ -307,10 +307,10 @@ fn readFrameworkConfig(
     try addDependency(allocator, dependencies, "react-dom");
     try addDependency(allocator, dependencies, "antd-mobile");
 
-    var tree = parser.parse(allocator, config_source, .{
+    var tree = try parser.parse(allocator, config_source, .{
         .source_type = .script,
         .lang = ast.Lang.fromPath(source_path),
-    }) catch return;
+    });
     defer tree.deinit();
 
     var visitor = AppfwAliasVisitor{

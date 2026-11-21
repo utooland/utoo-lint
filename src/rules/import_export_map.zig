@@ -142,10 +142,10 @@ fn readExportMapInner(
     const source = readFile(allocator, io, path) orelse return null;
     defer allocator.free(source);
 
-    var tree = parser.parse(allocator, source, .{
+    var tree = try parser.parse(allocator, source, .{
         .source_type = ast.SourceType.fromPath(path),
         .lang = ast.Lang.fromPath(path),
-    }) catch return null;
+    });
     defer tree.deinit();
     if (tree.hasErrors()) return null;
 

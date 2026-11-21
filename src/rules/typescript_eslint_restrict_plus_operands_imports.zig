@@ -61,10 +61,10 @@ pub fn collect(
         };
         defer allocator.free(contents);
 
-        var remote = parser.parse(allocator, contents, .{
+        var remote = try parser.parse(allocator, contents, .{
             .source_type = ast.SourceType.fromPath(path),
             .lang = ast.Lang.fromPath(path),
-        }) catch return error.OutOfMemory;
+        });
         defer remote.deinit();
         if (remote.hasErrors()) continue;
 
