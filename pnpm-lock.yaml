@@ -18,7 +18,7 @@ importers:
     devDependencies:
       dumi:
         specifier: 2.4.49
-        version: 2.4.49(@babel/core@7.29.7)(@swc/helpers@0.5.15)(@types/node@26.5.1)(@types/react@18.3.28)(jiti@2.7.0)(lightningcss@1.22.1)(prettier@3.9.6)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rollup@4.63.1)(styled-jsx@5.1.7(@babel/core@7.29.7)(react@18.3.1))(type-fest@0.20.2)(typescript@7.0.2)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31))
+        version: 2.4.49(@babel/core@7.29.7)(@swc/helpers@0.5.23)(@types/node@26.5.1)(@types/react@18.3.28)(jiti@2.7.0)(lightningcss@1.22.1)(prettier@3.9.6)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rollup@4.63.1)(styled-jsx@5.1.7(@babel/core@7.29.7)(react@18.3.1))(type-fest@0.20.2)(typescript@7.0.2)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31))
       playwright:
         specifier: 1.62.1
         version: 1.62.1
@@ -35,8 +35,8 @@ importers:
   apps/playground:
     dependencies:
       '@evjs/ev':
-        specifier: 0.3.21
-        version: 0.3.21(@swc/helpers@0.5.15)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        specifier: 0.3.32
+        version: 0.3.32(@swc/helpers@0.5.23)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@monaco-editor/react':
         specifier: 4.7.0
         version: 4.7.0(monaco-editor@0.56.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -57,8 +57,8 @@ importers:
         version: 0.28.1(@yuku-toolchain/wasm@0.28.1)
     devDependencies:
       '@evjs/cli':
-        specifier: 0.3.21
-        version: 0.3.21(@swc/helpers@0.5.15)(postcss@8.4.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(resolve-url-loader@5.0.0)(sass-loader@16.0.8(sass@1.54.0)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31)))(sass@1.54.0)(styled-jsx@5.1.7(@babel/core@7.29.7)(react@18.3.1))(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31))
+        specifier: 0.3.32
+        version: 0.3.32(@swc/helpers@0.5.23)(postcss@8.4.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(resolve-url-loader@5.0.0)(sass-loader@16.0.8(sass@1.54.0)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31)))(sass@1.54.0)(styled-jsx@5.1.7(@babel/core@7.29.7)(react@18.3.1))(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31))
       '@types/react':
         specifier: 18.3.28
         version: 18.3.28
@@ -1030,15 +1030,15 @@ packages:
     resolution: {integrity: sha512-+CNAzxglkrpNf/kKywqQfk74QjtceuOE7Qm+AF8miRvPF/wmmK5+OJOgVh3AVTT3RP2mH3+FOaxlE5v72owk0A==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
 
-  '@evjs/bundler-utoopack@0.3.21':
-    resolution: {integrity: sha512-aznk+nXGcY4PLzLqutsXmPrKzQn5V9AR+EDotPnQNuTt0ZR1RNtFPwJYo6F9MFtjps+YtOYC+x+2LJO3ndEiCw==}
+  '@evjs/bundler-utoopack@0.3.32':
+    resolution: {integrity: sha512-q0BODPzSfl2TLfkjNqahyVLGDjraFZZ4VsPeCXqu31epaBGs6iWXMPHaN8ZBwhqG/3i6W6Jadz8xEyUQzIW+ew==}
 
-  '@evjs/cli@0.3.21':
-    resolution: {integrity: sha512-i3PgsdWU/WHsfnDVt7UP/oQZ8ngQejMV/pKWnD57WqWLx1M/G91g3+bd3deo1M6p1QiE4QsvKxk05CpK5IyzNw==}
+  '@evjs/cli@0.3.32':
+    resolution: {integrity: sha512-MfCIweLvgFHW4Gz0Glh8JHbfoSHGQie+o+e5cuJ8OW8z2LOe+SaZR/0+wh1qF/cSceGUQcK/tbjHwtg/hovadQ==}
     hasBin: true
 
-  '@evjs/client@0.3.21':
-    resolution: {integrity: sha512-3Rg8emRt3tMl1fUjA9EYqVbq8+VM7MemMHejkX17dquF+01jeI9XSeuY9ZrdXwpb1XZb4Ruh78i/h7LcRQnZ0g==}
+  '@evjs/client@0.3.32':
+    resolution: {integrity: sha512-84fYXGCrfBZlNRS1prXkDzUJ68A9IEh2kwAorewDaJETE8bFtZCHQF6Rk/v8t+qBskgasU7UvWqa8VIpHFjmRQ==}
     peerDependencies:
       react: '>=18.0.0'
       react-dom: '>=18.0.0'
@@ -1047,8 +1047,8 @@ packages:
       react-server-dom-webpack:
         optional: true
 
-  '@evjs/ev@0.3.21':
-    resolution: {integrity: sha512-0/QPmDuRUMuIbZ9GwbRAvDa7X/4qFttw7HY52Sx2UdGhNsmP/p7TI2s6fc69XloY0aozFjC6L0m7T7hYOWxtaA==}
+  '@evjs/ev@0.3.32':
+    resolution: {integrity: sha512-D7EFnxfg5CLnUzOG0oAku3/3hdkLoFbc8QQRN39VKv9DF6hgfhJ4P6fKZd4MMJC88yBJnUkDSKYnVUjz2ESUlA==}
     peerDependencies:
       react: '>=18.0.0'
       react-dom: '>=18.0.0'
@@ -1057,8 +1057,8 @@ packages:
       react-server-dom-webpack:
         optional: true
 
-  '@evjs/server@0.3.21':
-    resolution: {integrity: sha512-WqIoNLYD+YxIzSSzPVtI7QDXfAgNzU74cmJcY7oM/43h5tlgahF3tBBR0zppuRms5DxwYpQZ6rUbMpuUJ+jfWQ==}
+  '@evjs/server@0.3.32':
+    resolution: {integrity: sha512-7iFEQlFw+JK8K2zQYZikt4VG5XkoVgYBn7dndiTkbiSCjKR2SBaluj5dgWaPzTS7hX3D0VF1crC2Lco5017oog==}
     peerDependencies:
       react: '>=18.0.0'
       react-dom: '>=18.0.0'
@@ -1071,8 +1071,8 @@ packages:
       react-server-dom-webpack:
         optional: true
 
-  '@evjs/shared@0.3.21':
-    resolution: {integrity: sha512-BXfj0vFuxI7pl96J439FUVDQQN7XaTU0n4369QWKXa0KkWSl//34TFGoM9NgapbU8YzkK8TRqZrhtT9Bd5bAAQ==}
+  '@evjs/shared@0.3.32':
+    resolution: {integrity: sha512-GccGoQLmSvCw0odP2P4+GDH2S9k+/CObNxleD4WFMrgNvseF54DTxjqWxxHh/VHCNmfJ/DKBzQiYNEbU3lkvOA==}
 
   '@floating-ui/core@0.6.2':
     resolution: {integrity: sha512-jktYRmZwmau63adUG3GKOAVCofBXkk55S/zQ94XOorAHhwqFIOFAy1rSp2N0Wp6/tGbe9V3u/ExlGZypyY17rg==}
@@ -2195,6 +2195,9 @@ packages:
   '@swc/helpers@0.5.15':
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
 
+  '@swc/helpers@0.5.23':
+    resolution: {integrity: sha512-5lSsMOTXURePglDfvuAQUqkGek9Hg2kksOYay2m0+XR++b2NWYL/4sWyuvVBIs8oKnJaxkdi9whaL/sqN13afw==}
+
   '@swc/types@0.1.28':
     resolution: {integrity: sha512-V6Mnml8v09QALx6K0elJ7o9K/MkVDtW3t6L+7Ou/JcWtb3xwId2AH4FeOceySd2JaO87IMw4+6vSZxLm34LPbw==}
 
@@ -2685,8 +2688,8 @@ packages:
     cpu: [arm64]
     os: [darwin]
 
-  '@utoo/pack-darwin-arm64@1.5.18':
-    resolution: {integrity: sha512-fdypENo1FbbahOi7E8IcGr+eD0++MhXqxLRjs51LBgLweJJftnUaa3MlHiyj0FpBtWN0NoUgelGBEVpQLgbDIA==}
+  '@utoo/pack-darwin-arm64@1.6.6':
+    resolution: {integrity: sha512-U50av54sRhV6kq7Sp33FpvhdLGf7Z7BTRALwYne28UFGEnKPMtNhxRqj96mJuMvkFDHU+QpyuCUN/8UjiGCosA==}
     engines: {node: '>= 20'}
     cpu: [arm64]
     os: [darwin]
@@ -2697,8 +2700,8 @@ packages:
     cpu: [x64]
     os: [darwin]
 
-  '@utoo/pack-darwin-x64@1.5.18':
-    resolution: {integrity: sha512-A3J9CRE/0N99lvSMmj5IgtpKvPLgl4M5qhX+daBphJRI8ogGV0d7X2Y4h0HEkjkWws05F0a25iSi0XVo295sQg==}
+  '@utoo/pack-darwin-x64@1.6.6':
+    resolution: {integrity: sha512-pP2m80qvGeBuBRijTCy/FqbgbZF5HJdEdxNr4hzdNTHKmGuXUakZbFG0j/jS/Qc9q1kW2G8gr4ObCunrU3R8ng==}
     engines: {node: '>= 20'}
     cpu: [x64]
     os: [darwin]
@@ -2710,8 +2713,8 @@ packages:
     os: [linux]
     libc: [glibc]
 
-  '@utoo/pack-linux-arm64-gnu@1.5.18':
-    resolution: {integrity: sha512-XY+imJhpLjD+tyne7ehykos8phaJSpj1uGKZPqh/DpKnypz2SNzuMp7LUlXGbTxVTTGTGxekiVNoTvPtjza9mg==}
+  '@utoo/pack-linux-arm64-gnu@1.6.6':
+    resolution: {integrity: sha512-3RCcJrUbUg65JdTpmlTnxK48ytFTIW3GYT2harnH1xl704yYb1XCgxazAV/jFpAdWAEmswxCxOlCy7Axw046nQ==}
     engines: {node: '>= 20'}
     cpu: [arm64]
     os: [linux]
@@ -2724,8 +2727,8 @@ packages:
     os: [linux]
     libc: [musl]
 
-  '@utoo/pack-linux-arm64-musl@1.5.18':
-    resolution: {integrity: sha512-i+VE6zQNmlnukZ+wNsUMGRSalw27wzb5Rgu/NRLDpp9yv/uT74mDHHukv2UII7H9vav0uh7eZSAjFCpSXiwFkw==}
+  '@utoo/pack-linux-arm64-musl@1.6.6':
+    resolution: {integrity: sha512-dlB4ZP0EfgKNJxHqCnOB7MgU5uNUY2bzrjLrC7+hsvsR9HORCk9SgQf7RHvQYj+4VoWbmEieJVFHmCec/d4V2g==}
     engines: {node: '>= 20'}
     cpu: [arm64]
     os: [linux]
@@ -2738,8 +2741,8 @@ packages:
     os: [linux]
     libc: [glibc]
 
-  '@utoo/pack-linux-x64-gnu@1.5.18':
-    resolution: {integrity: sha512-CM1OiHgQknair0m66rbSxtRvE9kzVXfhyzngLILpnBRsL8nvSULM1b3rmX8+XPuxe8zHhUlDuulVmP8+NY6DpQ==}
+  '@utoo/pack-linux-x64-gnu@1.6.6':
+    resolution: {integrity: sha512-dzFhbF6oq6Ls2O5zgBaEosZSXm+JeHBLeB+kkZeIXZ0TvloExGTJrL03yxdK/pKsDb8LorD6Umx0OZ2qcMg/6w==}
     engines: {node: '>= 20'}
     cpu: [x64]
     os: [linux]
@@ -2752,8 +2755,8 @@ packages:
     os: [linux]
     libc: [musl]
 
-  '@utoo/pack-linux-x64-musl@1.5.18':
-    resolution: {integrity: sha512-naf/05rHh0XRXXfscUPHGSD+fvJ3ZnbPathC9WVwNMVbJwxPCfqwrIWFphOb9svP2IO7fNlDoY++db6GQ8D9+g==}
+  '@utoo/pack-linux-x64-musl@1.6.6':
+    resolution: {integrity: sha512-cFLbMFDRQEm88Uq8Wo/Z13kJCkA+VI7ToOX10dsaReeYoOByiNeMQlX2lnAav6HysRjPyXqOiIF6EB4u53pK6A==}
     engines: {node: '>= 20'}
     cpu: [x64]
     os: [linux]
@@ -2763,8 +2766,8 @@ packages:
     resolution: {integrity: sha512-iRA0sfulshAYbpdzH9TmhDzNSyGDJ4ij3Wu7A75xxgMSMeU5Kp3dJ5EqNTD5JM8gx3ME8fQPwdFMhrIKMKclvQ==}
     engines: {node: '>= 20'}
 
-  '@utoo/pack-shared@1.5.18':
-    resolution: {integrity: sha512-48DkQxVkyI0qOf7g/J2cLiKzMJ5dGZh+iySB0o1+apuwYn57+duWFX6ujseCNU9i2ADtqCd4j+HFWmnNWx40qw==}
+  '@utoo/pack-shared@1.6.6':
+    resolution: {integrity: sha512-UdenopOBtA4URKSgYoNB9RUPNrLDfS1SP/KBcuhAYPZLugrJTK8+DKtHQcyHvxR7gU2gfsJEJhwiKP4RjF7ELg==}
     engines: {node: '>= 20'}
 
   '@utoo/pack-win32-x64-msvc@1.5.11':
@@ -2773,8 +2776,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@utoo/pack-win32-x64-msvc@1.5.18':
-    resolution: {integrity: sha512-22kf2G/9KfPs5obaUk2zla1S92Cwe6uXwXXgNKfio7p2xe/rm+zaqD3RBGnRaeMP6gPzYCjS9RzCJ15Bf7oeBA==}
+  '@utoo/pack-win32-x64-msvc@1.6.6':
+    resolution: {integrity: sha512-hskzr9nLhl0mdhCz7IDLfaUhq7/ES2advWMVy4S3ICOb3LXf+H+IqOMUAyVGQXJbCDxXMXtbZ3Jo2QIt1ZOr4Q==}
     engines: {node: '>= 20'}
     cpu: [x64]
     os: [win32]
@@ -2791,8 +2794,8 @@ packages:
       sass-loader: ^13.2.0
       styled-jsx: ^5.1.6
 
-  '@utoo/pack@1.5.18':
-    resolution: {integrity: sha512-ilqvsvdmWaZd5ohQzLFg3zY7712g0m8ytZN6a9Rmb6Fc3erQFMM4y7A3r5Xbhoj//up6jdIxiOT/kxYD8mX8uw==}
+  '@utoo/pack@1.6.6':
+    resolution: {integrity: sha512-fEkqNCzDi/pANmH3xyKDGsSPRxWK/njQueQ5F4TjDRo3iMasx9eQ5usosCcEetvShvQUo0SC+UZ4ai1eh87SMw==}
     engines: {node: '>= 20'}
     peerDependencies:
       less: ^4.0.0
@@ -4633,6 +4636,7 @@ packages:
   image-size@0.5.5:
     resolution: {integrity: sha512-6TDAlDPZxUFCv+fuOkIoXT/V/f3Qbq8e37p+YOiYrUv3v9cc3/6x78VdfPgFVaB9dZYeLUfKgHRebpkm/oP2VQ==}
     engines: {node: '>=0.10.0'}
+    deprecated: Please migrate to image-size@2.x
     hasBin: true
 
   immutable@4.3.9:
@@ -8184,13 +8188,12 @@ snapshots:
       '@eslint/core': 1.2.1
       levn: 0.4.1
 
-  '@evjs/bundler-utoopack@0.3.21(@swc/helpers@0.5.15)(postcss@8.4.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(resolve-url-loader@5.0.0)(sass-loader@16.0.8(sass@1.54.0)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31)))(sass@1.54.0)(styled-jsx@5.1.7(@babel/core@7.29.7)(react@18.3.1))(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31))':
+  '@evjs/bundler-utoopack@0.3.32(@swc/helpers@0.5.23)(postcss@8.4.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(resolve-url-loader@5.0.0)(sass-loader@16.0.8(sass@1.54.0)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31)))(sass@1.54.0)(styled-jsx@5.1.7(@babel/core@7.29.7)(react@18.3.1))(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31))':
     dependencies:
-      '@evjs/ev': 0.3.21(@swc/helpers@0.5.15)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@evjs/shared': 0.3.21
+      '@evjs/ev': 0.3.32(@swc/helpers@0.5.23)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@evjs/shared': 0.3.32
       '@logtape/logtape': 2.3.5
-      '@utoo/pack': 1.5.18(less-loader@12.3.2(less@4.1.3)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31)))(less@4.1.3)(postcss@8.4.31)(resolve-url-loader@5.0.0)(sass-loader@16.0.8(sass@1.54.0)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31)))(sass@1.54.0)(styled-jsx@5.1.7(@babel/core@7.29.7)(react@18.3.1))
-      chokidar: 3.6.0
+      '@utoo/pack': 1.6.6(less-loader@12.3.2(less@4.1.3)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31)))(less@4.1.3)(postcss@8.4.31)(resolve-url-loader@5.0.0)(sass-loader@16.0.8(sass@1.54.0)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31)))(sass@1.54.0)(styled-jsx@5.1.7(@babel/core@7.29.7)(react@18.3.1))
       fast-glob: 3.3.3
       less: 4.1.3
       less-loader: 12.3.2(less@4.1.3)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31))
@@ -8206,14 +8209,13 @@ snapshots:
       - sass
       - sass-loader
       - styled-jsx
-      - supports-color
       - utf-8-validate
       - webpack
 
-  '@evjs/cli@0.3.21(@swc/helpers@0.5.15)(postcss@8.4.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(resolve-url-loader@5.0.0)(sass-loader@16.0.8(sass@1.54.0)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31)))(sass@1.54.0)(styled-jsx@5.1.7(@babel/core@7.29.7)(react@18.3.1))(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31))':
+  '@evjs/cli@0.3.32(@swc/helpers@0.5.23)(postcss@8.4.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(resolve-url-loader@5.0.0)(sass-loader@16.0.8(sass@1.54.0)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31)))(sass@1.54.0)(styled-jsx@5.1.7(@babel/core@7.29.7)(react@18.3.1))(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31))':
     dependencies:
-      '@evjs/bundler-utoopack': 0.3.21(@swc/helpers@0.5.15)(postcss@8.4.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(resolve-url-loader@5.0.0)(sass-loader@16.0.8(sass@1.54.0)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31)))(sass@1.54.0)(styled-jsx@5.1.7(@babel/core@7.29.7)(react@18.3.1))(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31))
-      '@evjs/ev': 0.3.21(@swc/helpers@0.5.15)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@evjs/bundler-utoopack': 0.3.32(@swc/helpers@0.5.23)(postcss@8.4.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(resolve-url-loader@5.0.0)(sass-loader@16.0.8(sass@1.54.0)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31)))(sass@1.54.0)(styled-jsx@5.1.7(@babel/core@7.29.7)(react@18.3.1))(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31))
+      '@evjs/ev': 0.3.32(@swc/helpers@0.5.23)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@logtape/logtape': 2.3.5
       commander: 12.1.0
     transitivePeerDependencies:
@@ -8228,26 +8230,25 @@ snapshots:
       - sass
       - sass-loader
       - styled-jsx
-      - supports-color
       - utf-8-validate
       - webpack
 
-  '@evjs/client@0.3.21(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+  '@evjs/client@0.3.32(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
-      '@evjs/shared': 0.3.21
+      '@evjs/shared': 0.3.32
       '@tanstack/react-query': 5.102.8(react@18.3.1)
       '@tanstack/react-router': 1.170.36(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
 
-  '@evjs/ev@0.3.21(@swc/helpers@0.5.15)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+  '@evjs/ev@0.3.32(@swc/helpers@0.5.23)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
-      '@evjs/client': 0.3.21(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@evjs/server': 0.3.21(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@evjs/shared': 0.3.21
+      '@evjs/client': 0.3.32(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@evjs/server': 0.3.32(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@evjs/shared': 0.3.32
       '@logtape/logtape': 2.3.5
       '@standard-schema/spec': 1.1.0
-      '@swc/core': 1.16.2(@swc/helpers@0.5.15)
+      '@swc/core': 1.16.2(@swc/helpers@0.5.23)
       '@tanstack/react-router': 1.170.36(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       core-js: 3.50.0
       domparser-rs: 0.1.1
@@ -8258,9 +8259,9 @@ snapshots:
     transitivePeerDependencies:
       - '@swc/helpers'
 
-  '@evjs/server@0.3.21(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+  '@evjs/server@0.3.32(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
-      '@evjs/shared': 0.3.21
+      '@evjs/shared': 0.3.32
       '@hono/node-server': 1.19.17(hono@4.13.8)
       '@logtape/logtape': 2.3.5
       hono: 4.13.8
@@ -8268,7 +8269,7 @@ snapshots:
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
 
-  '@evjs/shared@0.3.21': {}
+  '@evjs/shared@0.3.32': {}
 
   '@floating-ui/core@0.6.2': {}
 
@@ -9125,7 +9126,7 @@ snapshots:
   '@swc/core-win32-x64-msvc@1.9.2':
     optional: true
 
-  '@swc/core@1.16.2(@swc/helpers@0.5.15)':
+  '@swc/core@1.16.2(@swc/helpers@0.5.23)':
     dependencies:
       '@swc/counter': 0.1.3
       '@swc/types': 0.1.28
@@ -9142,9 +9143,9 @@ snapshots:
       '@swc/core-win32-arm64-msvc': 1.16.2
       '@swc/core-win32-ia32-msvc': 1.16.2
       '@swc/core-win32-x64-msvc': 1.16.2
-      '@swc/helpers': 0.5.15
+      '@swc/helpers': 0.5.23
 
-  '@swc/core@1.9.2(@swc/helpers@0.5.15)':
+  '@swc/core@1.9.2(@swc/helpers@0.5.23)':
     dependencies:
       '@swc/counter': 0.1.3
       '@swc/types': 0.1.28
@@ -9159,7 +9160,7 @@ snapshots:
       '@swc/core-win32-arm64-msvc': 1.9.2
       '@swc/core-win32-ia32-msvc': 1.9.2
       '@swc/core-win32-x64-msvc': 1.9.2
-      '@swc/helpers': 0.5.15
+      '@swc/helpers': 0.5.23
 
   '@swc/counter@0.1.3': {}
 
@@ -9168,6 +9169,10 @@ snapshots:
       tslib: 2.8.1
 
   '@swc/helpers@0.5.15':
+    dependencies:
+      tslib: 2.8.1
+
+  '@swc/helpers@0.5.23':
     dependencies:
       tslib: 2.8.1
 
@@ -9883,37 +9888,37 @@ snapshots:
   '@utoo/pack-darwin-arm64@1.5.11':
     optional: true
 
-  '@utoo/pack-darwin-arm64@1.5.18':
+  '@utoo/pack-darwin-arm64@1.6.6':
     optional: true
 
   '@utoo/pack-darwin-x64@1.5.11':
     optional: true
 
-  '@utoo/pack-darwin-x64@1.5.18':
+  '@utoo/pack-darwin-x64@1.6.6':
     optional: true
 
   '@utoo/pack-linux-arm64-gnu@1.5.11':
     optional: true
 
-  '@utoo/pack-linux-arm64-gnu@1.5.18':
+  '@utoo/pack-linux-arm64-gnu@1.6.6':
     optional: true
 
   '@utoo/pack-linux-arm64-musl@1.5.11':
     optional: true
 
-  '@utoo/pack-linux-arm64-musl@1.5.18':
+  '@utoo/pack-linux-arm64-musl@1.6.6':
     optional: true
 
   '@utoo/pack-linux-x64-gnu@1.5.11':
     optional: true
 
-  '@utoo/pack-linux-x64-gnu@1.5.18':
+  '@utoo/pack-linux-x64-gnu@1.6.6':
     optional: true
 
   '@utoo/pack-linux-x64-musl@1.5.11':
     optional: true
 
-  '@utoo/pack-linux-x64-musl@1.5.18':
+  '@utoo/pack-linux-x64-musl@1.6.6':
     optional: true
 
   '@utoo/pack-shared@1.5.11':
@@ -9921,7 +9926,7 @@ snapshots:
       '@babel/code-frame': 7.22.5
       picocolors: 1.1.1
 
-  '@utoo/pack-shared@1.5.18':
+  '@utoo/pack-shared@1.6.6':
     dependencies:
       '@babel/code-frame': 7.22.5
       picocolors: 1.1.1
@@ -9929,7 +9934,7 @@ snapshots:
   '@utoo/pack-win32-x64-msvc@1.5.11':
     optional: true
 
-  '@utoo/pack-win32-x64-msvc@1.5.18':
+  '@utoo/pack-win32-x64-msvc@1.6.6':
     optional: true
 
   '@utoo/pack@1.5.11(less-loader@11.1.0(less@4.1.3)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31)))(less@4.1.3)(postcss@8.4.31)(resolve-url-loader@5.0.0)(sass-loader@13.2.0(sass@1.54.0)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31)))(sass@1.54.0)(styled-jsx@5.1.7(@babel/core@7.29.7)(react@18.3.1))':
@@ -9970,14 +9975,14 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@utoo/pack@1.5.18(less-loader@12.3.2(less@4.1.3)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31)))(less@4.1.3)(postcss@8.4.31)(resolve-url-loader@5.0.0)(sass-loader@16.0.8(sass@1.54.0)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31)))(sass@1.54.0)(styled-jsx@5.1.7(@babel/core@7.29.7)(react@18.3.1))':
+  '@utoo/pack@1.6.6(less-loader@12.3.2(less@4.1.3)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31)))(less@4.1.3)(postcss@8.4.31)(resolve-url-loader@5.0.0)(sass-loader@16.0.8(sass@1.54.0)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31)))(sass@1.54.0)(styled-jsx@5.1.7(@babel/core@7.29.7)(react@18.3.1))':
     dependencies:
       '@babel/code-frame': 7.22.5
       '@hono/node-server': 1.19.17(hono@4.13.8)
       '@hono/node-ws': 1.3.1(@hono/node-server@1.19.17(hono@4.13.8))(hono@4.13.8)
       '@jridgewell/trace-mapping': 0.3.31
-      '@swc/helpers': 0.5.15
-      '@utoo/pack-shared': 1.5.18
+      '@swc/helpers': 0.5.23
+      '@utoo/pack-shared': 1.6.6
       browserslist: 4.28.9
       domparser-rs: 0.0.7
       find-up: 4.1.0
@@ -9992,20 +9997,18 @@ snapshots:
       sass: 1.54.0
       sass-loader: 16.0.8(sass@1.54.0)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31))
       semver: 7.8.5
-      send: 0.17.1
       styled-jsx: 5.1.7(@babel/core@7.29.7)(react@18.3.1)
       ws: 8.21.3
     optionalDependencies:
-      '@utoo/pack-darwin-arm64': 1.5.18
-      '@utoo/pack-darwin-x64': 1.5.18
-      '@utoo/pack-linux-arm64-gnu': 1.5.18
-      '@utoo/pack-linux-arm64-musl': 1.5.18
-      '@utoo/pack-linux-x64-gnu': 1.5.18
-      '@utoo/pack-linux-x64-musl': 1.5.18
-      '@utoo/pack-win32-x64-msvc': 1.5.18
+      '@utoo/pack-darwin-arm64': 1.6.6
+      '@utoo/pack-darwin-x64': 1.6.6
+      '@utoo/pack-linux-arm64-gnu': 1.6.6
+      '@utoo/pack-linux-arm64-musl': 1.6.6
+      '@utoo/pack-linux-x64-gnu': 1.6.6
+      '@utoo/pack-linux-x64-musl': 1.6.6
+      '@utoo/pack-win32-x64-msvc': 1.6.6
     transitivePeerDependencies:
       - bufferutil
-      - supports-color
       - utf-8-validate
 
   '@vitejs/plugin-react@5.2.0(vite@7.3.6(@types/node@26.5.1)(jiti@2.7.0)(less@4.1.3)(lightningcss@1.22.1)(sass@1.103.1)(terser@5.49.0))':
@@ -11132,12 +11135,12 @@ snapshots:
 
   dumi-assets-types@2.4.14: {}
 
-  dumi@2.4.49(@babel/core@7.29.7)(@swc/helpers@0.5.15)(@types/node@26.5.1)(@types/react@18.3.28)(jiti@2.7.0)(lightningcss@1.22.1)(prettier@3.9.6)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rollup@4.63.1)(styled-jsx@5.1.7(@babel/core@7.29.7)(react@18.3.1))(type-fest@0.20.2)(typescript@7.0.2)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31)):
+  dumi@2.4.49(@babel/core@7.29.7)(@swc/helpers@0.5.23)(@types/node@26.5.1)(@types/react@18.3.28)(jiti@2.7.0)(lightningcss@1.22.1)(prettier@3.9.6)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rollup@4.63.1)(styled-jsx@5.1.7(@babel/core@7.29.7)(react@18.3.1))(type-fest@0.20.2)(typescript@7.0.2)(webpack@5.109.2(lightningcss@1.22.1)(postcss@8.4.31)):
     dependencies:
       '@ant-design/icons-svg': 4.5.0
       '@makotot/ghostui': 2.0.0(react@18.3.1)
       '@stackblitz/sdk': 1.11.1
-      '@swc/core': 1.9.2(@swc/helpers@0.5.15)
+      '@swc/core': 1.9.2(@swc/helpers@0.5.23)
       '@types/hast': 2.3.10
       '@types/mdast': 3.0.15
       '@umijs/bundler-utils': 4.7.8
@@ -13887,7 +13890,7 @@ snapshots:
       cosmiconfig: 9.0.2(typescript@7.0.2)
       jiti: 2.7.0
       postcss: 8.4.31
-      semver: 7.8.4
+      semver: 7.8.5
     optionalDependencies:
       webpack: 5.109.2(lightningcss@1.22.1)(postcss@8.4.31)
     transitivePeerDependencies:
