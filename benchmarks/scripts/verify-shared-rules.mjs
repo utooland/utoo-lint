@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { readdirSync, statSync } from "node:fs";
 import { sharedRules } from "./shared-rules.mjs";
 
 const negativeSource = `import imported from "fixture-module";
@@ -83,6 +84,7 @@ export async function verifySharedRules(benchmarks, targetFiles, rules = sharedR
     if (legacyProfile) {
       await writeFile(negativePath, negativeSource);
     } else {
+      await writeFile(negativePath, negativeSource);
       for (const rule of rules) {
         const validation = rule.validation ?? sharedValidationSources[rule.name];
         const source = typeof validation === "string" ? validation : validation?.source;
@@ -99,6 +101,7 @@ export async function verifySharedRules(benchmarks, targetFiles, rules = sharedR
     for (const benchmark of benchmarks) {
       const ruleCounts = Object.fromEntries(rules.map((rule) => [rule.name, 0]));
       let negativeDiagnostics = 0;
+      let fullProfileDiagnostics;
       if (legacyProfile) {
         const negative = verifyFile(benchmark, negativePath, 1, rules);
         for (const rule of negative.rules) {
@@ -113,6 +116,18 @@ export async function verifySharedRules(benchmarks, targetFiles, rules = sharedR
         }
         negativeDiagnostics = negative.rules.length;
       } else {
+        // Exercise the complete config as well as the isolated-rule overrides.
+        // The npm wrapper can use a different execution path for --rules.
+        const fullProfile = verifyFile(benchmark, directory, fixtures.length + 2, rules);
+        for (const { rule, expectedCount } of fixtures) {
+          if (fullProfile.rules.filter((name) => name === rule.name).length < expectedCount) {
+            throw new Error(`${benchmark.name} full-profile validation did not run ${rule.name}`);
+          }
+        }
+        if (fullProfile.rules.some((name) => !Object.hasOwn(ruleCounts, name))) {
+          throw new Error(`${benchmark.name} full-profile validation reported an unselected rule`);
+        }
+        fullProfileDiagnostics = fullProfile.rules.length;
         for (const fixture of fixtures) {
           const isolated = isolateRule(benchmark, fixture.rule, rules);
           const negative = verifyFile(isolated, fixture.path, 1, rules);
@@ -131,6 +146,7 @@ export async function verifySharedRules(benchmarks, targetFiles, rules = sharedR
       tools.push({
         name: benchmark.name,
         negativeDiagnostics,
+        ...(fullProfileDiagnostics === undefined ? {} : { fullProfileDiagnostics, fullProfileFiles: fixtures.length + 2 }),
         cleanDiagnostics: 0,
         ruleCounts
       });
@@ -142,7 +158,7 @@ export async function verifySharedRules(benchmarks, targetFiles, rules = sharedR
   // Remove validation fixtures first, even when the target includes fixtures/.
   if (targetFiles !== undefined) {
     for (const [index, benchmark] of benchmarks.entries()) {
-      const target = verifyFile(benchmark, benchmark.args.at(-1), targetFiles, rules);
+      const target = verifyFile(benchmark, benchmark.targetInputs ?? benchmark.args.at(-1), targetFiles, rules);
       if (target.rules.length > 0 || target.status !== 0) {
         throw new Error(`${benchmark.name} reported diagnostics on the benchmark corpus: ${target.rules.join(", ")}`);
       }
@@ -154,8 +170,8 @@ export async function verifySharedRules(benchmarks, targetFiles, rules = sharedR
 }
 
 function isolateRule(benchmark, rule, rules) {
-  const target = benchmark.args.at(-1);
-  let args = benchmark.args.slice(0, -1);
+  const targets = benchmark.targetInputs ?? [benchmark.args.at(-1)];
+  let args = benchmark.baseArgs ?? benchmark.args.slice(0, -1);
   switch (benchmark.name) {
     case "utoo-lint":
       args = withoutOptions(args, ["--rules"]);
@@ -179,7 +195,7 @@ function isolateRule(benchmark, rule, rules) {
     default:
       throw new Error(`Cannot isolate validation rules for ${benchmark.name}`);
   }
-  return { ...benchmark, args: [...args, target] };
+  return { ...benchmark, baseArgs: args, args: [...args, ...targets] };
 }
 
 function withoutOptions(args, options) {
@@ -196,11 +212,12 @@ function withoutOptions(args, options) {
 }
 
 function verifyFile(benchmark, path, expectedFiles = 1, selectedRules = sharedRules) {
-  // The runner always supplies its target last. Reuse its exact rule/config flags.
-  const args = benchmark.args.slice(0, -1).filter((arg) =>
+  // Reuse the exact rule/config flags, replacing only the input file list.
+  const args = (benchmark.baseArgs ?? benchmark.args.slice(0, -1)).filter((arg) =>
     arg !== "--silent" && !arg.startsWith("--max-diagnostics=")
   );
-  args.push(...(benchmark.name === "biome" ? ["--reporter=json", "--max-diagnostics=none"] : ["--format=json"]), path);
+  const paths = Array.isArray(path) ? path : validationInputs(path);
+  args.push(...(benchmark.name === "biome" ? ["--reporter=json", "--max-diagnostics=none"] : ["--format=json"]), ...paths);
   const result = spawnSync(benchmark.command, args, {
     encoding: "utf8",
     timeout: 30000,
@@ -243,4 +260,13 @@ function verifyFile(benchmark, path, expectedFiles = 1, selectedRules = sharedRu
     throw new Error(`${benchmark.name} validation checked ${files ?? "an unknown number of"} files; expected ${expectedFiles}:\n${details}`);
   }
   return { rules, status: result.status };
+}
+
+function validationInputs(path) {
+  if (!statSync(path).isDirectory()) return [path];
+  return readdirSync(path, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name)).flatMap((entry) => {
+    const child = join(path, entry.name);
+    if (entry.isDirectory()) return validationInputs(child);
+    return entry.isFile() && /\.(?:[cm]?[jt]sx?)$/.test(entry.name) ? [child] : [];
+  });
 }

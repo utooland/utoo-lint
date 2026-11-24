@@ -15,9 +15,9 @@ thresholds. The CodSpeed GitHub App must already have Macro Runner access for
 the repository; see the
 [GitHub Actions setup](https://codspeed.io/docs/integrations/ci/github-actions/macro-runners).
 
-This directory benchmarks the current local `@utoo/lint` binary against Oxlint,
-Biome, ESLint, and optionally Bun lint on the same generated TypeScript corpus
-and the same shared lint rule set.
+This directory benchmarks the local `@utoo/lint` native binary or an installed
+published npm CLI against Oxlint, Biome, ESLint, and optionally Bun lint on the
+same generated TypeScript corpus and shared lint rule set.
 
 The runner, corpus generator, and rule configurations live in the repository
 so they can evolve with the linter and be reviewed together. Generated fixtures,
@@ -46,17 +46,17 @@ repository commit, the supplied `UTOO_LINT_BUILD_MODE`, and its SHA-256 digest.
 ## Bun lint
 
 Bun is opt-in: set `BUN_BIN` to a binary that supports `bun lint`, or pass
-`--bun` to use `bun` from `PATH`. The Bun 1.4.3 stable npm binary does not include
-the built-in lint command. This pinned canary package was verified to support
-it and can be installed independently:
+`--bun` to use `bun` from `PATH`. As checked on October 28, 2026, the Bun 1.4.4
+stable npm binary does not include the built-in lint command. This pinned canary
+package was verified to support it and can be installed independently:
 
 ```bash
 # Run from benchmarks/
-npm install --prefix .tools/bun-canary-20261012.1 --no-save --package-lock=false --no-audit --no-fund bun@1.4.3-canary.20261012.1
-BUN_BIN="$PWD/.tools/bun-canary-20261012.1/node_modules/.bin/bun" UTOO_LINT_BUILD_MODE=fast npm run bench -- --runs=20 --warmups=5
+npm install --prefix .tools/release --no-save --package-lock=false --no-audit --no-fund bun@1.4.4-canary.20261027.1
+BUN_BIN="$PWD/.tools/release/node_modules/.bin/bun" UTOO_LINT_BUILD_MODE=fast npm run bench -- --runs=20 --warmups=5
 ```
 
-The package reports runtime version `1.4.4-canary.1+b92e2f470`. The isolated
+The package reports runtime version/revision `1.4.4-canary.1+a0cc096ce`. The isolated
 installation leaves the system Bun unchanged. `--skip-bun` takes precedence over
 both `BUN_BIN` and `--bun`.
 
@@ -74,11 +74,138 @@ Compare both profiles on the same 1,000-file corpus:
 
 ```bash
 npm run generate -- --files=1000 --statements=30 --out=fixtures/bun-comparison
-BUN_BIN="$PWD/.tools/bun-canary-20261012.1/node_modules/.bin/bun" UTOO_LINT_BUILD_MODE=fast npm run bench -- --rule-set=shared --target=fixtures/bun-comparison --runs=20 --warmups=5
-BUN_BIN="$PWD/.tools/bun-canary-20261012.1/node_modules/.bin/bun" UTOO_LINT_BUILD_MODE=fast npm run bench -- --rule-set=extended --target=fixtures/bun-comparison --runs=20 --warmups=5
+BUN_BIN="$PWD/.tools/release/node_modules/.bin/bun" UTOO_LINT_BUILD_MODE=fast npm run bench -- --rule-set=shared --target=fixtures/bun-comparison --runs=20 --warmups=5
+BUN_BIN="$PWD/.tools/release/node_modules/.bin/bun" UTOO_LINT_BUILD_MODE=fast npm run bench -- --rule-set=extended --target=fixtures/bun-comparison --runs=20 --warmups=5
 ```
 
-## Recorded comparisons
+## Published npm CLI comparison
+
+Use this mode for a release comparison of the CLI users install. Unlike the
+default native mode, it includes the npm wrapper's process startup, TypeScript
+configuration loading, file selection, native delegation, and reporting. It
+uses the installed package's platform binary; no local build is required.
+
+The runner collects the input paths once and passes the same explicit file list
+to every tool. Directory discovery is excluded for all tools. This also avoids
+VCS-ignore differences: Oxlint 1.90.0 can skip an ignored directory even with
+`--no-ignore`, while explicit file arguments are checked. The generated fixture
+directory remains ignored by Git; validation confirms every tool checks every
+input file.
+
+From the repository root, with Node.js 22.13 or later:
+
+```bash
+pnpm install --frozen-lockfile
+cd benchmarks
+npm install --prefix .tools/release --no-save --package-lock=false --no-audit --no-fund @utoo/lint@0.4.13 bun@1.4.4-canary.20261027.1
+npm run generate -- --files=1000 --statements=30 --out=fixtures/release
+
+env -u UTOO_LINT_BIN BUN_BIN="$PWD/.tools/release/node_modules/.bin/bun" \
+  npm run bench -- --utoo-cli=.tools/release/node_modules/.bin/utlint \
+  --rule-set=shared --target=fixtures/release --warmups=5 --runs=20 \
+  --output=results/release-12.json
+
+env -u UTOO_LINT_BIN BUN_BIN="$PWD/.tools/release/node_modules/.bin/bun" \
+  npm run bench -- --utoo-cli=.tools/release/node_modules/.bin/utlint \
+  --rule-set=extended --target=fixtures/release --warmups=5 --runs=20 \
+  --output=results/release-49.json
+```
+
+The isolated prefix keeps the published `@utoo/lint` and Bun installations out of
+the workspace dependency graph. Oxlint, Biome, ESLint, and the TypeScript parser
+are pinned by `benchmarks/package.json` and the root `pnpm-lock.yaml`.
+`utlint.config.ts` enables exactly the selected profile. CLI mode rejects
+`UTOO_LINT_BIN` so an environment override cannot silently substitute a local
+native binary.
+
+Each profile uses the same 1,000 synthetic TypeScript files with 30 statement
+blocks per file, five warmups, and 20 measured samples per tool. Every sample
+starts a fresh process, with tools interleaved in rotating order. OS file caches
+and configuration-loader caches are warmed; no lint-result cache is enabled.
+This is not a cold-disk measurement or a benchmark of a running editor daemon.
+
+The 12-rule and 49-rule profiles contain common non-type-aware rules. Before
+timing, the runner verifies rule violations, the full-profile execution path,
+clean controls, and the actual corpus file count. These probes establish common
+case coverage, not complete semantic equivalence. The synthetic corpus does not
+represent every project's syntax, plugins, type-aware checks, or diagnostics.
+Report measured results with their versions, hardware, workload, and sampling
+method; do not present a synthetic speed ratio as a guarantee for all projects.
+
+`--utoo-cli=PATH` selects the published CLI entry or its `.bin/utlint` alias.
+`--output=PATH` chooses the raw JSON destination (default
+`results/latest.json`). `--timeout-ms=N` bounds each timed process (default
+`120000`). The JSON retains every sample, commands, versions, corpus byte/line
+counts and digest, configuration/runner hashes, validation results, and the
+installed wrapper and native binary digests.
+
+### Release chart
+
+Render a white-background SVG and PNG from both raw result files. From the
+repository root:
+
+```bash
+python3 -m venv benchmarks/.tools/chart-venv
+benchmarks/.tools/chart-venv/bin/python -m pip install -r benchmarks/chart-requirements.txt
+benchmarks/.tools/chart-venv/bin/python benchmarks/scripts/render-release-chart.py \
+  --input benchmarks/results/release-12.json \
+  --input benchmarks/results/release-49.json \
+  --output benchmarks/results/release-comparison
+```
+
+The chart dependency is pinned to Matplotlib 3.10.7. All five tools remain
+visible, including Bun's canary version. Bars show median wall-clock time on a
+shared linear scale starting at zero; shorter is better. Relative figures use
+each profile's fastest median as the denominator. Archive the raw JSON beside
+the chart when publishing a dated result.
+
+## Recorded comparison: 2026-10-28
+
+The release comparison used the published `@utoo/lint@0.4.13` npm CLI on an
+Apple M4 Pro (12 logical cores, 48 GiB), macOS arm64, Node.js 22.23.1. The
+1,000-file corpus contains 239,000 lines / 4,576,311 bytes. Both profiles used
+five warmups followed by 20 rotated, interleaved samples per tool.
+
+| CLI | Version | 12 rules median (ms) | 49 rules median (ms) |
+| --- | --- | ---: | ---: |
+| utoo-lint | 0.4.13 | 482.667 | 541.272 |
+| Bun lint | 1.4.4 canary | 137.746 | 141.381 |
+| Oxlint | 1.90.0 | 190.195 | 194.734 |
+| Biome | 2.6.3 | 373.972 | 406.116 |
+| ESLint | 10.13.0 | 2690.676 | 2801.086 |
+
+ESLint's median elapsed time divided by utoo-lint's was 5.57x for 12 rules and
+5.18x for 49 rules. These are ratios for this synthetic common-rule workload.
+The local desktop host was shared with other processes; the snapshots retain
+every sample, timing ranges, standard deviations, and host load averages.
+Directory discovery is excluded equally for all tools; config loading and
+fresh process startup are included. No type checking, formatting, fixes, or
+lint-result caching is measured.
+
+Bun was installed as `1.4.4-canary.20261027.1+9b8347a`; its binary reports
+`1.4.4-canary.1+a0cc096ce` via `--revision`. The stable `1.4.4` binary did not
+expose `bun lint` when checked. The TypeScript parser is `typescript-eslint`
+8.72.1 with TypeScript 6.0.3. The full-profile fixture directory and isolated
+rule controls passed for all five tools; every tool checked all 1,000 corpus
+files with zero diagnostics. This validates the selected common cases, without
+establishing complete semantic equivalence between rule implementations.
+
+Both raw snapshots were captured at clean benchmark commit `8fa585d`:
+
+- [12-rule samples and provenance](snapshots/2026-10-28-release-cli-12-rules.json)
+- [49-rule samples and provenance](snapshots/2026-10-28-release-cli-49-rules.json)
+- [PNG chart](../assets/utoo-lint-benchmark-2026-10-28.png) / [SVG chart](../assets/utoo-lint-benchmark-2026-10-28.svg)
+
+Regenerate the published chart from the repository root:
+
+```bash
+benchmarks/.tools/chart-venv/bin/python benchmarks/scripts/render-release-chart.py \
+  --input benchmarks/snapshots/2026-10-28-release-cli-12-rules.json \
+  --input benchmarks/snapshots/2026-10-28-release-cli-49-rules.json \
+  --output assets/utoo-lint-benchmark-2026-10-28 --title 'utoo-lint · Lint Performance'
+```
+
+## Earlier recorded comparisons
 
 The October 13, 2026 local runs used an Apple M4 Pro, 1,000 generated TypeScript
 files with 30 statement blocks each, 5 warmups, and 20 measured runs per tool.
@@ -102,7 +229,8 @@ The config-discovery benchmark models 1,000 lint inputs spread across 100
 package directories. It reports both uncached upward searches and the
 per-invocation directory cache used by the npm wrapper.
 
-The default `utoo-lint` command is `../zig-out/bin/utoo-lint fixtures/src`.
+The default `utoo-lint` command uses `../zig-out/bin/utoo-lint` with the
+explicit input file list collected from `fixtures/src`.
 Override it with:
 
 ```bash
@@ -126,13 +254,13 @@ npm run bench -- --skip-bun
 - The generated corpus is designed to be valid TypeScript with no intentional
   diagnostics. This keeps benchmark time focused on traversal and rule
   execution instead of terminal output.
-- The runner keeps tool comparisons aligned by applying the same target path to
+- The runner keeps tool comparisons aligned by applying the same explicit input file list to
   every tool and enabling only the shared rules defined in
   `scripts/shared-rules.mjs`.
 - Before timing, every tool checks the full profile's clean control and the
   actual target file count with zero corpus diagnostics. The shared profile uses
-  a combined violation fixture; the extended profile checks a separate violation
-  with each rule enabled in isolation. These probes check that the selected
+  a combined violation fixture; the extended profile checks the full profile on
+  a directory of violations as well as each rule enabled in isolation. These probes check that the selected
   rules run on common cases; they do not establish complete semantic equivalence.
 - Bun uses `lint --flavor=eslint --config=eslint.config.js --no-ignore --silent target`,
   reusing the same configuration as ESLint. That configuration
@@ -145,9 +273,9 @@ npm run bench -- --skip-bun
   `no-fallthrough`, `no-global-assign`, `no-import-assign`, and
   `no-unsafe-negation`.
 - The runner measures wall-clock time for fresh CLI processes, including process
-  startup and configuration loading. `utoo-lint` uses the native binary directly,
-  so the npm wrapper's
-  startup and config discovery costs are excluded. Editor daemon behavior,
+  startup and configuration loading. In the default mode, `utoo-lint` uses the
+  native binary directly, excluding npm wrapper startup and config discovery;
+  `--utoo-cli` instead measures the installed npm CLI and its TS config. Editor daemon behavior,
   type-aware rules, formatting, and automatic fixes are out of scope. Warmups
   prime the OS file cache; this is not a cold-disk benchmark.
 - Warmups and measured runs interleave the tools in rounds, rotating the first
